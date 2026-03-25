@@ -39,7 +39,7 @@ export default function ContactPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
           >
-            <span className="inline-block text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] font-mono mb-4">
+            <span className="inline-block text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
               Contact
             </span>
             <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-[0.95] mb-6 text-white">
@@ -73,7 +73,7 @@ export default function ContactPage() {
                         required
                         value={formData.firstName}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm"
+                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm"
                         placeholder="John"
                       />
                     </div>
@@ -85,7 +85,7 @@ export default function ContactPage() {
                         required
                         value={formData.lastName}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm"
+                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm"
                         placeholder="Smith"
                       />
                     </div>
@@ -99,7 +99,7 @@ export default function ContactPage() {
                       required
                       value={formData.email}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm"
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm"
                       placeholder="john@company.com"
                     />
                   </div>
@@ -113,7 +113,7 @@ export default function ContactPage() {
                         required
                         value={formData.company}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm"
+                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm"
                         placeholder="Acme Media"
                       />
                     </div>
@@ -124,7 +124,7 @@ export default function ContactPage() {
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm"
+                        className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm"
                         placeholder="VP of Sales"
                       />
                     </div>
@@ -136,13 +136,13 @@ export default function ContactPage() {
                       name="product"
                       value={formData.product}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm appearance-none"
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm appearance-none"
                     >
-                      <option value="" className="bg-futuri-black">Select a product...</option>
-                      <option value="data" className="bg-futuri-black">Futuri Data</option>
-                      <option value="content" className="bg-futuri-black">Futuri Content</option>
-                      <option value="sales" className="bg-futuri-black">Futuri Sales</option>
-                      <option value="platform" className="bg-futuri-black">Full Platform</option>
+                      <option value="" className="bg-futuri-navy">Select a product...</option>
+                      <option value="data" className="bg-futuri-navy">Futuri Data</option>
+                      <option value="content" className="bg-futuri-navy">Futuri Content</option>
+                      <option value="sales" className="bg-futuri-navy">Futuri Sales</option>
+                      <option value="platform" className="bg-futuri-navy">Full Platform</option>
                     </select>
                   </div>
 
@@ -153,14 +153,14 @@ export default function ContactPage() {
                       rows={4}
                       value={formData.message}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-red focus:ring-1 focus:ring-futuri-red transition-colors text-sm resize-none"
+                      className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-futuri-accent focus:ring-1 focus:ring-futuri-accent transition-colors text-sm resize-none"
                       placeholder="Tell us about your goals..."
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-red to-red-600 text-white hover:shadow-xl hover:shadow-futuri-red/25 transition-all duration-300 hover:-translate-y-0.5"
+                    className="w-full px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     Request Demo
                   </button>
@@ -186,17 +186,17 @@ export default function ContactPage() {
                   <h3 className="text-lg font-bold text-white mb-4">Quick links</h3>
                   <ul className="space-y-3">
                     <li>
-                      <a href="mailto:info@futurimedia.com" className="text-sm text-futuri-red hover:text-white transition-colors">
+                      <a href="mailto:info@futurimedia.com" className="text-sm text-futuri-cyan hover:text-white transition-colors">
                         info@futurimedia.com
                       </a>
                     </li>
                     <li>
-                      <a href="https://www.linkedin.com/company/futuri-media" target="_blank" rel="noopener noreferrer" className="text-sm text-futuri-red hover:text-white transition-colors">
+                      <a href="https://www.linkedin.com/company/futuri-media" target="_blank" rel="noopener noreferrer" className="text-sm text-futuri-cyan hover:text-white transition-colors">
                         LinkedIn
                       </a>
                     </li>
                     <li>
-                      <a href="https://x.com/fuaborz" target="_blank" rel="noopener noreferrer" className="text-sm text-futuri-red hover:text-white transition-colors">
+                      <a href="https://x.com/fuaborz" target="_blank" rel="noopener noreferrer" className="text-sm text-futuri-cyan hover:text-white transition-colors">
                         X (Twitter)
                       </a>
                     </li>

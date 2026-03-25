@@ -3,14 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #0A0A0F;
+  --background: #0B1437;
   --foreground: #F1F5F9;
-  --racing-red: #E10600;
-  --racing-carbon: #1A1A2E;
-  --racing-silver: #C0C0C8;
-  --pit-green: #00E676;
-  --telemetry-cyan: #00D4FF;
-  --flag-yellow: #FFD600;
 }
 
 * {
@@ -30,61 +24,61 @@ body {
   overflow-x: hidden;
 }
 
-/* Gradient text utility — racing inspired */
+/* Gradient text utilities */
 .gradient-text {
-  background: linear-gradient(135deg, #E10600, #FF4136, #FFD600);
+  background: linear-gradient(135deg, #4F7FFF, #00D4FF, #7C3AED);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.gradient-text-cool {
-  background: linear-gradient(135deg, #00D4FF, #4F7FFF);
+.gradient-text-warm {
+  background: linear-gradient(135deg, #4F7FFF, #00D4FF);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-data {
-  background: linear-gradient(135deg, #00E676, #00D4FF, #4F7FFF);
+  background: linear-gradient(135deg, #00D4FF, #4F7FFF, #7C3AED);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-content {
-  background: linear-gradient(135deg, #FF4136, #E10600, #FFD600);
+  background: linear-gradient(135deg, #7C3AED, #EC4899);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .gradient-text-sales {
-  background: linear-gradient(135deg, #4F7FFF, #7C3AED, #E10600);
+  background: linear-gradient(135deg, #4F7FFF, #10B981);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Glass morphism — carbon fiber feel */
+/* Glass morphism */
 .glass {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Glow effects */
-.glow-red {
-  box-shadow: 0 0 40px rgba(225, 6, 0, 0.15),
-    0 0 80px rgba(225, 6, 0, 0.05);
+.glow-blue {
+  box-shadow: 0 0 40px rgba(79, 127, 255, 0.15),
+    0 0 80px rgba(79, 127, 255, 0.05);
 }
 
 .glow-cyan {
@@ -92,72 +86,38 @@ body {
     0 0 80px rgba(0, 212, 255, 0.05);
 }
 
-.glow-green {
-  box-shadow: 0 0 40px rgba(0, 230, 118, 0.15),
-    0 0 80px rgba(0, 230, 118, 0.05);
-}
-
-.glow-blue {
-  box-shadow: 0 0 40px rgba(79, 127, 255, 0.15),
-    0 0 80px rgba(79, 127, 255, 0.05);
-}
-
-/* Racing stripe accent */
-.racing-stripe {
-  position: relative;
-}
-.racing-stripe::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #E10600, #FFD600, #00E676, #00D4FF);
-}
-
-/* Speed lines background */
-.speed-lines {
-  background-image:
-    linear-gradient(90deg, rgba(225, 6, 0, 0.03) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 120px 40px;
-}
-
-/* Carbon fiber pattern */
-.carbon-fiber {
-  background-image:
-    radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.02) 1px, transparent 1px),
-    radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 4px 4px;
-  background-position: 0 0, 2px 2px;
-}
-
-/* Telemetry grid */
-.telemetry-grid {
-  background-image:
-    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+.glow-violet {
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.15),
+    0 0 80px rgba(124, 58, 237, 0.05);
 }
 
 /* Mesh gradient background */
 .mesh-gradient {
   background: radial-gradient(
-      ellipse at 20% 30%,
-      rgba(225, 6, 0, 0.08) 0%,
+      ellipse at 20% 50%,
+      rgba(79, 127, 255, 0.12) 0%,
       transparent 50%
     ),
     radial-gradient(
       ellipse at 80% 20%,
-      rgba(0, 212, 255, 0.06) 0%,
+      rgba(0, 212, 255, 0.08) 0%,
       transparent 50%
     ),
     radial-gradient(
-      ellipse at 50% 80%,
-      rgba(0, 230, 118, 0.04) 0%,
+      ellipse at 60% 80%,
+      rgba(124, 58, 237, 0.08) 0%,
       transparent 50%
     );
+}
+
+/* Grid pattern overlay */
+.grid-pattern {
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
 }
 
 /* Data flow animation */
@@ -168,38 +128,32 @@ body {
 
 .data-flow-line {
   height: 2px;
-  background: linear-gradient(90deg, transparent, #00D4FF, #00E676, transparent);
+  background: linear-gradient(90deg, transparent, #00D4FF, #4F7FFF, transparent);
   background-size: 200% 100%;
   animation: dataFlow 3s linear infinite;
 }
 
-/* Pit board stats styling */
-.pit-board {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0A0A0F;
+  background: #0B1437;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(225, 6, 0, 0.4);
-  border-radius: 2px;
+  background: rgba(79, 127, 255, 0.3);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(225, 6, 0, 0.6);
+  background: rgba(79, 127, 255, 0.5);
 }
 
 /* Selection */
 ::selection {
-  background: rgba(225, 6, 0, 0.3);
+  background: rgba(79, 127, 255, 0.3);
   color: white;
 }
 

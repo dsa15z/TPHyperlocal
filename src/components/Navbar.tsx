@@ -33,7 +33,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <div className="relative">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-futuri-red to-futuri-yellow flex items-center justify-center font-bold text-white text-lg group-hover:shadow-lg group-hover:shadow-futuri-red/30 transition-shadow">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-futuri-accent to-futuri-cyan flex items-center justify-center font-bold text-white text-lg group-hover:shadow-lg group-hover:shadow-futuri-accent/30 transition-shadow">
               F
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function Navbar() {
                         href={product.href}
                         className="block p-3 rounded-lg hover:bg-white/5 transition-colors group/item"
                       >
-                        <div className="text-sm font-semibold text-white group-hover/item:text-futuri-red transition-colors">
+                        <div className="text-sm font-semibold text-white group-hover/item:text-futuri-cyan transition-colors">
                           {product.name}
                         </div>
                         <div className="text-xs text-white/50 mt-0.5">
@@ -103,7 +103,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           <Link
             href="/contact"
-            className="hidden sm:inline-flex px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-futuri-red to-futuri-yellow text-white hover:shadow-lg hover:shadow-futuri-red/25 transition-all duration-300 hover:-translate-y-0.5"
+            className="hidden sm:inline-flex px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white hover:shadow-lg hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
           >
             Request Demo
           </Link>
@@ -156,7 +156,7 @@ export default function Navbar() {
                 <Link
                   href="/contact"
                   onClick={() => setMobileOpen(false)}
-                  className="block w-full text-center px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-futuri-red to-futuri-yellow text-white"
+                  className="block w-full text-center px-5 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white"
                 >
                   Request Demo
                 </Link>
