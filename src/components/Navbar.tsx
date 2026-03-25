@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 
 const products = [
@@ -31,15 +32,15 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="relative">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-futuri-accent to-futuri-cyan flex items-center justify-center font-bold text-white text-lg group-hover:shadow-lg group-hover:shadow-futuri-accent/30 transition-shadow">
-              F
-            </div>
-          </div>
-          <span className="text-xl font-bold tracking-tight">
-            FUTURI
-          </span>
+        <Link href="/" className="flex items-center group">
+          <Image
+            src="/images/futuri-logo.svg"
+            alt="Futuri"
+            width={120}
+            height={36}
+            className="brightness-0 invert group-hover:opacity-80 transition-opacity"
+            priority
+          />
         </Link>
 
         {/* Desktop Nav */}
