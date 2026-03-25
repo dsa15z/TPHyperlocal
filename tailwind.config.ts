@@ -12,13 +12,15 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
         futuri: {
-          navy: "#0B1437",
-          blue: "#1B3A8C",
-          accent: "#4F7FFF",
+          black: "#0A0A0F",
+          carbon: "#1A1A2E",
+          red: "#E10600",
+          silver: "#C0C0C8",
           cyan: "#00D4FF",
+          green: "#00E676",
+          yellow: "#FFD600",
+          blue: "#4F7FFF",
           violet: "#7C3AED",
-          slate: "#1E293B",
-          charcoal: "#0F172A",
         },
       },
       fontFamily: {
@@ -28,9 +30,9 @@ const config: Config = {
       animation: {
         "fade-in": "fadeIn 0.6s ease-out forwards",
         "slide-up": "slideUp 0.6s ease-out forwards",
-        "gradient-x": "gradientX 6s ease infinite",
         float: "float 6s ease-in-out infinite",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "speed-in": "speedIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
       },
       keyframes: {
         fadeIn: {
@@ -41,13 +43,13 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(30px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        gradientX: {
-          "0%, 100%": { backgroundPosition: "0% 50%" },
-          "50%": { backgroundPosition: "100% 50%" },
-        },
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-20px)" },
+        },
+        speedIn: {
+          "0%": { opacity: "0", transform: "translateX(-20px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
         },
       },
     },

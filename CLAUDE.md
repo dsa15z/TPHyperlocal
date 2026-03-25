@@ -4,7 +4,7 @@
 Enterprise website for Futuri (futurimedia.com) — an AI-powered platform for media companies. The site positions Futuri as an enterprise sales enablement and data company with three consolidated products.
 
 ## Three Products
-- **Futuri Data** — Audience intelligence & predictive analytics (formerly TopicPulse analytics)
+- **Futuri Data (FDP)** — Purpose-built data lakehouse for media: entity resolution, CRM sync, AI agent tools, data products (formerly TopicPulse analytics)
 - **Futuri Content** — AI-powered content creation at scale (formerly AudioAI, TopicPulse content, POST, Prep+)
 - **Futuri Sales** — Sales enablement & revenue acceleration (formerly TopLine, SpotOn, LDR)
 
@@ -35,9 +35,10 @@ src/
 ```
 
 ## Design System
-- **Theme**: Dark (navy #0B1437 background)
+- **Theme**: Dark (black #0A0A0F background) with F1 racecar visual inspiration
 - **Glass morphism**: `glass` and `glass-strong` CSS classes for translucent cards
-- **Gradients**: `gradient-text` for gradient text, product-specific color gradients
+- **Gradients**: `gradient-text` (red/yellow), `gradient-text-data` (green/cyan), `gradient-text-content` (red/yellow), `gradient-text-sales` (blue/violet)
+- **Racing elements**: Speed lines, carbon fiber patterns, telemetry grids, data-flow animations, racing stripes, pit-board stat styling
 - **Colors**: See `tailwind.config.ts` for the `futuri` color palette
 - **Typography**: Geist Sans/Mono (local fonts)
 

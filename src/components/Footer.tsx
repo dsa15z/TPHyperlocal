@@ -27,7 +27,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-futuri-accent to-futuri-cyan flex items-center justify-center font-bold text-white text-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-futuri-red to-futuri-yellow flex items-center justify-center font-bold text-white text-sm">
                 F
               </div>
               <span className="text-lg font-bold tracking-tight">FUTURI</span>

@@ -44,6 +44,7 @@ const milestones = [
   { year: "2020", event: "BEACON selected exclusively by FEMA for emergency broadcast AI" },
   { year: "2023", event: "Surpassed 7,000 clients across 22 countries" },
   { year: "2024", event: "Consolidated platform into three enterprise products: Data, Content, Sales" },
+  { year: "2026", event: "Launched FuturiData Platform (FDP) — the industry's first purpose-built data lakehouse for media companies" },
 ];
 
 export default function AboutPage() {
@@ -52,6 +53,7 @@ export default function AboutPage() {
       {/* Hero */}
       <section className="relative pt-40 pb-24 overflow-hidden">
         <div className="absolute inset-0 mesh-gradient" />
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-futuri-red via-futuri-yellow to-futuri-green opacity-80" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6">
           <motion.div
@@ -60,7 +62,7 @@ export default function AboutPage() {
             transition={{ duration: 0.7 }}
             className="max-w-3xl"
           >
-            <span className="inline-block text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
+            <span className="inline-block text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] font-mono mb-4">
               About Futuri
             </span>
             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-[0.95] mb-6 text-white">
@@ -87,13 +89,16 @@ export default function AboutPage() {
               </h2>
               <p className="text-lg text-white/50 leading-relaxed mb-6">
                 Media companies face an impossible equation: audiences expect more content
-                across more platforms, while teams are smaller than ever. We exist to solve
+                across more platforms, while teams are smaller than ever — and fragmented
+                data stacks make it harder to see the full picture. We exist to solve
                 that equation.
               </p>
               <p className="text-lg text-white/50 leading-relaxed">
-                Futuri&apos;s enterprise AI platform transforms how media companies understand
-                their audiences, create content, and generate revenue. We don&apos;t replace
-                your team — we multiply them.
+                Futuri is not just a media tools company — we are an enterprise data
+                intelligence platform. Our technology consolidates fragmented data stacks
+                into a single purpose-built lakehouse, transforming how media companies
+                understand their audiences, create content, and generate revenue. We
+                don&apos;t replace your team — we multiply them.
               </p>
             </AnimatedSection>
             <AnimatedSection delay={0.2}>
@@ -129,7 +134,7 @@ export default function AboutPage() {
               <AnimatedSection key={m.year} delay={i * 0.1}>
                 <div className="flex gap-6 mb-8 last:mb-0">
                   <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 rounded-full glass flex items-center justify-center text-sm font-bold text-futuri-cyan shrink-0">
+                    <div className="w-12 h-12 rounded-full glass flex items-center justify-center text-sm font-bold text-futuri-red shrink-0">
                       {m.year}
                     </div>
                     {i < milestones.length - 1 && (
@@ -162,11 +167,11 @@ export default function AboutPage() {
             {leadership.map((person, i) => (
               <AnimatedSection key={person.name} delay={i * 0.1}>
                 <div className="glass rounded-2xl p-8 h-full hover:bg-white/[0.06] transition-all">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-futuri-accent to-futuri-cyan flex items-center justify-center text-white font-bold text-lg mb-4">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-futuri-red to-futuri-yellow flex items-center justify-center text-white font-bold text-lg mb-4">
                     {person.name.split(" ").map(n => n[0]).join("")}
                   </div>
                   <h3 className="text-lg font-bold text-white">{person.name}</h3>
-                  <p className="text-sm text-futuri-cyan mb-3">{person.title}</p>
+                  <p className="text-sm text-futuri-red mb-3">{person.title}</p>
                   <p className="text-sm text-white/40 leading-relaxed">{person.bio}</p>
                 </div>
               </AnimatedSection>
@@ -215,7 +220,7 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection>
             <div className="relative rounded-3xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-futuri-accent/20 via-futuri-navy to-futuri-cyan/20" />
+              <div className="absolute inset-0 bg-gradient-to-br from-futuri-red/15 via-futuri-black to-futuri-cyan/10" />
               <div className="relative z-10 px-8 py-20 md:px-16 md:py-24 text-center">
                 <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-4">
                   Join the team building the future of media
@@ -226,7 +231,7 @@ export default function AboutPage() {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <Link
                     href="/contact"
-                    className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
+                    className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-red to-futuri-yellow text-white hover:shadow-xl hover:shadow-futuri-red/25 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     Get in Touch
                   </Link>

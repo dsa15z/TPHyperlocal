@@ -9,17 +9,17 @@ const products = [
     name: "Futuri Data",
     tagline: "Know More",
     description:
-      "Predictive audience intelligence that tells you what your market wants before they know it. Real-time trend analysis across 250,000+ sources, localized insights, and audience behavior modeling.",
+      "A purpose-built data lakehouse that ingests audience and advertiser data from CRMs, enrichment providers, and web sources — then resolves, cleans, and surfaces enterprise-grade golden records.",
     features: [
-      "Real-time trend detection & prediction",
-      "Audience behavior analytics",
-      "Market intelligence dashboards",
-      "Predictive content scoring",
+      "Visual Data Journey — source to gold",
+      "Native entity resolution & matching",
+      "Bidirectional CRM sync",
+      "MCP Tool Registry for AI agents",
     ],
     href: "/products/futuri-data",
-    gradient: "from-futuri-cyan to-blue-500",
-    iconGradient: "from-cyan-400 to-blue-500",
-    glowClass: "glow-cyan",
+    gradient: "from-futuri-green to-futuri-cyan",
+    iconGradient: "from-emerald-400 to-cyan-400",
+    glowClass: "glow-green",
     icon: (
       <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
@@ -30,17 +30,17 @@ const products = [
     name: "Futuri Content",
     tagline: "Create Faster",
     description:
-      "AI-powered content creation that turns insights into publish-ready audio, video, and text. From trending topic to finished asset in minutes, not days.",
+      "AI-powered content engine that turns data-driven insights into publish-ready audio, video, and text. From trending topic to finished asset in minutes, not days.",
     features: [
       "AI audio & video generation",
-      "Automated content production",
-      "Multi-format publishing",
+      "Automated content pipeline",
       "Brand-safe AI voices & personas",
+      "Multi-platform distribution",
     ],
     href: "/products/futuri-content",
-    gradient: "from-futuri-violet to-pink-500",
-    iconGradient: "from-violet-400 to-pink-500",
-    glowClass: "glow-violet",
+    gradient: "from-futuri-red to-futuri-yellow",
+    iconGradient: "from-red-500 to-yellow-400",
+    glowClass: "glow-red",
     icon: (
       <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
@@ -51,16 +51,16 @@ const products = [
     name: "Futuri Sales",
     tagline: "Sell Smarter",
     description:
-      "Enterprise sales enablement that arms your team with AI-generated research, presentations, prospect intelligence, and spec creative — all in minutes.",
+      "Enterprise sales enablement powered by your data lakehouse. AI-generated research, presentations, prospect intelligence, and spec creative — all in minutes.",
     features: [
       "AI-powered prospect research",
-      "Instant presentation generation",
-      "Spec commercial creation",
-      "Revenue attribution & analytics",
+      "Instant presentation builder",
+      "Spec commercial generation",
+      "Revenue attribution analytics",
     ],
     href: "/products/futuri-sales",
-    gradient: "from-futuri-accent to-emerald-500",
-    iconGradient: "from-blue-400 to-emerald-500",
+    gradient: "from-futuri-blue to-futuri-violet",
+    iconGradient: "from-blue-400 to-violet-500",
     glowClass: "glow-blue",
     icon: (
       <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -70,11 +70,21 @@ const products = [
   },
 ];
 
+const dataJourneyStages = [
+  { label: "SOURCE", sub: "5 feeds", color: "bg-red-500" },
+  { label: "TRANSFORM", sub: "Normalize", color: "bg-orange-500" },
+  { label: "QUALITY", sub: "Validate", color: "bg-emerald-500" },
+  { label: "CDM", sub: "Unify", color: "bg-purple-500" },
+  { label: "ENRICH", sub: "Augment", color: "bg-blue-500" },
+  { label: "RESOLVE", sub: "Deduplicate", color: "bg-pink-500" },
+  { label: "GOLD", sub: "Enterprise", color: "bg-futuri-cyan" },
+];
+
 const stats = [
-  { value: "7,000+", label: "Enterprise clients" },
-  { value: "22", label: "Countries served" },
-  { value: "20+", label: "Patents held" },
-  { value: "1M+", label: "AI assets created" },
+  { value: "2.9M", label: "Records processed", color: "text-futuri-red" },
+  { value: "1.4M", label: "Golden records out", color: "text-futuri-green" },
+  { value: "96%", label: "Average quality", color: "text-futuri-cyan" },
+  { value: "27.6K", label: "AI tool invocations", color: "text-futuri-yellow" },
 ];
 
 const testimonials = [
@@ -86,36 +96,34 @@ const testimonials = [
   },
   {
     quote:
-      "The content intelligence platform predicted trending stories with 88% accuracy. Our newsroom has never been more efficient or more relevant.",
+      "The data platform predicted trending stories with 88% accuracy. Our newsroom has never been more efficient or more relevant.",
     author: "Digital Director",
     company: "National Broadcast Network",
   },
   {
     quote:
-      "I closed a $25,000 digital deal using a Futuri Sales intelligence report. The data-driven approach gives us instant credibility with prospects.",
+      "I closed a $25,000 digital deal using a Futuri intelligence report. The data-driven approach gives us instant credibility with prospects.",
     author: "Account Executive",
     company: "Regional Media Company",
   },
 ];
 
-const logos = [
-  "iHeartMedia", "Cumulus", "Beasley", "Townsquare", "Audacy",
-  "Salem", "Saga", "Midwest", "Zimmer", "Neuhoff",
-];
-
 export default function Home() {
   return (
     <div className="relative">
-      {/* Hero Section */}
+      {/* Hero Section — F1 inspired */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background effects */}
         <div className="absolute inset-0 mesh-gradient" />
-        <div className="absolute inset-0 grid-pattern" />
+        <div className="absolute inset-0 speed-lines" />
+
+        {/* Racing-inspired gradient streaks */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-futuri-red via-futuri-yellow to-futuri-green opacity-80" />
+        <div className="absolute top-20 right-0 w-96 h-px bg-gradient-to-l from-futuri-red/40 to-transparent" />
+        <div className="absolute top-32 right-0 w-64 h-px bg-gradient-to-l from-futuri-cyan/30 to-transparent" />
 
         {/* Animated orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-futuri-accent/10 rounded-full blur-[128px] animate-float" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-futuri-cyan/10 rounded-full blur-[128px] animate-float" style={{ animationDelay: "-3s" }} />
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-futuri-violet/10 rounded-full blur-[100px] animate-float" style={{ animationDelay: "-1.5s" }} />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-futuri-red/6 rounded-full blur-[150px] animate-float" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-futuri-cyan/6 rounded-full blur-[150px] animate-float" style={{ animationDelay: "-3s" }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32 pb-20 text-center">
           {/* Badge */}
@@ -123,9 +131,9 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs text-white/70 mb-8"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs text-white/70 mb-8 font-mono uppercase tracking-wider"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-futuri-green animate-pulse" />
             Trusted by 7,000+ brands across 22 countries
           </motion.div>
 
@@ -134,11 +142,11 @@ export default function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.95] mb-6"
+            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[0.9] mb-6"
           >
-            <span className="block text-white">The Enterprise</span>
-            <span className="block gradient-text">AI Platform</span>
-            <span className="block text-white">for Media</span>
+            <span className="block text-white">Your Data.</span>
+            <span className="block gradient-text">Race-Tuned.</span>
+            <span className="block text-white/90 text-4xl sm:text-5xl md:text-6xl lg:text-7xl mt-2">Enterprise-Grade.</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -146,10 +154,11 @@ export default function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
-            className="max-w-2xl mx-auto text-lg sm:text-xl text-white/50 leading-relaxed mb-10"
+            className="max-w-3xl mx-auto text-lg sm:text-xl text-white/40 leading-relaxed mb-10"
           >
-            Three integrated platforms that turn data into content, content into
-            revenue, and revenue into growth. Sell smarter. Create faster. Know more.
+            Everything Databricks makes you build, Futuri ships out of the box.
+            A purpose-built data lakehouse, content engine, and sales enablement
+            platform — all integrated for media companies.
           </motion.p>
 
           {/* CTAs */}
@@ -161,15 +170,15 @@ export default function Home() {
           >
             <Link
               href="/contact"
-              className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
+              className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-red to-red-600 text-white hover:shadow-xl hover:shadow-futuri-red/25 transition-all duration-300 hover:-translate-y-0.5"
             >
               Request a Demo
             </Link>
             <Link
-              href="#platform"
+              href="#data-journey"
               className="px-8 py-4 text-base font-semibold rounded-xl glass text-white/80 hover:text-white hover:bg-white/10 transition-all duration-300"
             >
-              Explore the Platform
+              See the Data Journey
             </Link>
           </motion.div>
 
@@ -184,47 +193,88 @@ export default function Home() {
               <motion.div
                 animate={{ y: [0, 12, 0] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-1.5 h-1.5 rounded-full bg-white/40 mt-2"
+                className="w-1.5 h-1.5 rounded-full bg-futuri-red/60 mt-2"
               />
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Problem / Opportunity Section */}
-      <section className="relative py-32 overflow-hidden">
+      {/* Data Journey — The Pit Lane Telemetry */}
+      <section id="data-journey" className="relative py-32 overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
-          <AnimatedSection className="text-center max-w-4xl mx-auto">
-            <p className="text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
-              The challenge
+          <AnimatedSection className="text-center mb-16">
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
+              The Data Journey
             </p>
-            <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6 text-white">
-              Content demand is up{" "}
-              <span className="gradient-text">5&times;</span>.
-              <br />
-              Media employment is down{" "}
-              <span className="gradient-text">26%</span>.
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-white">
+              From 5 raw sources to{" "}
+              <span className="gradient-text-data">enterprise gold</span>
             </h2>
-            <p className="text-xl text-white/50 leading-relaxed">
-              Your team is smaller. Your audience expects more. The gap between what you
-              need to produce and what you can produce grows every quarter. Futuri closes
-              that gap — same team, three times the output.
+            <p className="text-lg text-white/40 max-w-2xl mx-auto">
+              Like an F1 team&apos;s telemetry pipeline — every data point ingested,
+              validated, enriched, resolved, and promoted to race-ready intelligence.
             </p>
+          </AnimatedSection>
+
+          {/* Pipeline visualization */}
+          <AnimatedSection>
+            <div className="glass rounded-2xl p-6 md:p-10 overflow-x-auto">
+              {/* Top metrics */}
+              <div className="flex items-center justify-between mb-8 text-xs font-mono text-white/30 uppercase tracking-widest">
+                <span>2.9M records in</span>
+                <span className="hidden sm:block">51% compression</span>
+                <span>1.4M records out</span>
+              </div>
+
+              {/* Stage nodes */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-[640px]">
+                {dataJourneyStages.map((stage, i) => (
+                  <div key={stage.label} className="flex items-center flex-1">
+                    <div className="flex-1 text-center">
+                      <div className={`w-full h-12 md:h-14 ${stage.color} rounded-lg flex items-center justify-center mb-2 opacity-90`}>
+                        <span className="text-[10px] md:text-xs font-bold font-mono text-white tracking-wider">
+                          {stage.label}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-white/30 font-mono">{stage.sub}</span>
+                    </div>
+                    {i < dataJourneyStages.length - 1 && (
+                      <svg className="w-4 h-4 text-white/15 mx-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Data flow line */}
+              <div className="data-flow-line mt-6 rounded-full" />
+
+              {/* Source labels */}
+              <div className="flex flex-wrap gap-3 mt-6 justify-center">
+                {["Salesforce CRM", "Dun & Bradstreet", "LinkedIn", "Web Crawlers", "SEC Filings"].map((s) => (
+                  <span key={s} className="text-[10px] font-mono text-white/20 px-2 py-1 rounded border border-white/5">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
           </AnimatedSection>
         </div>
       </section>
 
-      {/* Stats Bar */}
+      {/* Stats — Pit Board */}
       <section className="relative py-16">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="glass rounded-2xl p-8 md:p-12">
+          <div className="glass rounded-2xl p-8 md:p-12 racing-stripe">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {stats.map((stat, i) => (
                 <AnimatedSection key={stat.label} delay={i * 0.1} className="text-center">
-                  <div className="text-3xl sm:text-4xl font-bold gradient-text mb-1">
+                  <div className={`text-3xl sm:text-4xl font-bold font-mono pit-board ${stat.color} mb-1`}>
                     {stat.value}
                   </div>
-                  <div className="text-sm text-white/40">{stat.label}</div>
+                  <div className="text-xs text-white/30 font-mono uppercase tracking-wider">{stat.label}</div>
                 </AnimatedSection>
               ))}
             </div>
@@ -232,19 +282,40 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Problem Statement */}
+      <section className="relative py-32 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <AnimatedSection className="text-center max-w-4xl mx-auto">
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
+              The challenge
+            </p>
+            <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6 text-white">
+              Most media companies run on
+              <br />
+              <span className="gradient-text">7-12 disconnected systems.</span>
+            </h2>
+            <p className="text-xl text-white/40 leading-relaxed">
+              No unified view of audiences. No unified view of advertisers. Data teams spend
+              70-80% of their time on integration and maintenance. Futuri gives you one
+              platform — the complete intelligence layer.
+            </p>
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* Platform Section */}
       <section id="platform" className="relative py-32">
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20">
-            <p className="text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
               The Platform
             </p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-white">
               Three products. One competitive advantage.
             </h2>
-            <p className="text-lg text-white/50 max-w-2xl mx-auto">
-              An integrated suite that connects audience intelligence, content creation,
-              and sales enablement into a single growth engine.
+            <p className="text-lg text-white/40 max-w-2xl mx-auto">
+              An integrated suite: data lakehouse, content engine, and sales enablement
+              — purpose-built for media companies.
             </p>
           </AnimatedSection>
 
@@ -252,35 +323,29 @@ export default function Home() {
             {products.map((product, i) => (
               <AnimatedSection key={product.name} delay={i * 0.15}>
                 <Link href={product.href} className="group block h-full">
-                  <div className={`relative h-full rounded-2xl glass p-8 hover:bg-white/[0.06] transition-all duration-500 ${product.glowClass} hover:shadow-none overflow-hidden`}>
-                    {/* Top accent line */}
-                    <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r ${product.gradient} opacity-50`} />
+                  <div className={`relative h-full rounded-2xl glass p-8 hover:bg-white/[0.04] transition-all duration-500 overflow-hidden`}>
+                    <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${product.gradient} opacity-60`} />
 
-                    {/* Icon */}
                     <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${product.iconGradient} flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform duration-300`}>
                       {product.icon}
                     </div>
 
-                    {/* Tag */}
-                    <span className={`inline-block text-xs font-semibold uppercase tracking-widest bg-gradient-to-r ${product.gradient} bg-clip-text text-transparent mb-3`}>
+                    <span className={`inline-block text-xs font-mono font-semibold uppercase tracking-[0.15em] bg-gradient-to-r ${product.gradient} bg-clip-text text-transparent mb-3`}>
                       {product.tagline}
                     </span>
 
-                    {/* Name */}
-                    <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-futuri-cyan transition-colors">
+                    <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-futuri-red transition-colors">
                       {product.name}
                     </h3>
 
-                    {/* Description */}
-                    <p className="text-white/50 leading-relaxed mb-6 text-sm">
+                    <p className="text-white/40 leading-relaxed mb-6 text-sm">
                       {product.description}
                     </p>
 
-                    {/* Features */}
                     <ul className="space-y-2.5 mb-8">
                       {product.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2.5 text-sm text-white/60">
-                          <svg className="w-4 h-4 text-futuri-cyan mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <li key={feature} className="flex items-start gap-2.5 text-sm text-white/50">
+                          <svg className="w-4 h-4 text-futuri-green mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                           </svg>
                           {feature}
@@ -288,8 +353,7 @@ export default function Home() {
                       ))}
                     </ul>
 
-                    {/* Link */}
-                    <div className="flex items-center gap-2 text-sm font-medium text-white/60 group-hover:text-futuri-cyan transition-colors">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/40 group-hover:text-futuri-red transition-colors">
                       Learn more
                       <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -303,58 +367,111 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works */}
+      {/* Competitive Comparison — like a pit board */}
+      <section className="relative py-32">
+        <div className="max-w-7xl mx-auto px-6">
+          <AnimatedSection className="text-center mb-16">
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
+              FDP vs The Field
+            </p>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-white">
+              What ships out of the box
+            </h2>
+          </AnimatedSection>
+
+          <AnimatedSection>
+            <div className="glass rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="text-left px-6 py-4 text-xs font-mono text-white/30 uppercase tracking-wider">Capability</th>
+                      <th className="text-center px-4 py-4 text-xs font-mono text-futuri-red uppercase tracking-wider">FDP</th>
+                      <th className="text-center px-4 py-4 text-xs font-mono text-white/30 uppercase tracking-wider">Databricks</th>
+                      <th className="text-center px-4 py-4 text-xs font-mono text-white/30 uppercase tracking-wider">Snowflake</th>
+                    </tr>
+                  </thead>
+                  <tbody className="font-mono">
+                    {[
+                      ["Visual Data Journey Pipeline", true, false, false],
+                      ["CRM Sync (Salesforce, HubSpot)", true, false, false],
+                      ["Entity Resolution & Matching", true, false, false],
+                      ["AI Agent Tools (MCP Registry)", true, false, false],
+                      ["Data Quality (Great Expectations)", true, "partial", "partial"],
+                      ["Data Product Marketplace", true, "partial", true],
+                      ["SQL Editor with AI Assist", true, true, true],
+                      ["Pipeline Orchestration", true, true, "partial"],
+                    ].map(([cap, fdp, db, sf], i) => (
+                      <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-3 text-white/60 text-xs">{cap as string}</td>
+                        <td className="text-center px-4 py-3">
+                          {fdp === true && <span className="text-futuri-green">&#10003;</span>}
+                          {fdp === "partial" && <span className="text-futuri-yellow">~</span>}
+                          {fdp === false && <span className="text-white/20">&#10005;</span>}
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          {db === true && <span className="text-white/40">&#10003;</span>}
+                          {db === "partial" && <span className="text-white/20">~</span>}
+                          {db === false && <span className="text-white/10">&#10005;</span>}
+                        </td>
+                        <td className="text-center px-4 py-3">
+                          {sf === true && <span className="text-white/40">&#10003;</span>}
+                          {sf === "partial" && <span className="text-white/20">~</span>}
+                          {sf === false && <span className="text-white/10">&#10005;</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      {/* How It Works — Flywheel */}
       <section className="relative py-32">
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-20">
-            <p className="text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
-              How it works
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
+              The Flywheel
             </p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-white">
               Data in. Revenue out.
             </h2>
-            <p className="text-lg text-white/50 max-w-2xl mx-auto">
-              Futuri&apos;s three platforms form a flywheel: data informs content,
-              content powers sales, and sales validates the data.
-            </p>
           </AnimatedSection>
 
-          <div className="relative">
-            {/* Connection line */}
-            <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-y-1/2" />
-
-            <div className="grid md:grid-cols-3 gap-8">
-              {[
-                {
-                  step: "01",
-                  title: "Detect & Predict",
-                  desc: "Futuri Data monitors 250,000+ sources in real time, scoring trends for momentum, audience fit, and peak timing. You see what matters before anyone else.",
-                  color: "text-futuri-cyan",
-                },
-                {
-                  step: "02",
-                  title: "Create & Publish",
-                  desc: "Futuri Content transforms those insights into broadcast-ready audio, video, articles, and social content — automatically branded, formatted, and localized.",
-                  color: "text-futuri-violet",
-                },
-                {
-                  step: "03",
-                  title: "Pitch & Close",
-                  desc: "Futuri Sales arms your reps with AI-generated prospect research, custom presentations, and spec commercials that close deals in a single meeting.",
-                  color: "text-futuri-accent",
-                },
-              ].map((item, i) => (
-                <AnimatedSection key={item.step} delay={i * 0.15}>
-                  <div className="relative text-center p-8">
-                    <div className={`text-6xl font-bold ${item.color} opacity-20 mb-4`}>
-                      {item.step}
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
-                    <p className="text-white/50 text-sm leading-relaxed">{item.desc}</p>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                step: "01",
+                title: "Ingest & Resolve",
+                desc: "Futuri Data pulls from CRMs, enrichment providers, web crawlers, and SEC filings. Entity resolution compresses 2.9M records into 1.4M golden records at 99% quality.",
+                color: "text-futuri-green",
+              },
+              {
+                step: "02",
+                title: "Create & Publish",
+                desc: "Futuri Content transforms data-driven insights into broadcast-ready audio, video, articles, and social content — automatically branded and localized.",
+                color: "text-futuri-red",
+              },
+              {
+                step: "03",
+                title: "Pitch & Close",
+                desc: "Futuri Sales arms your reps with AI-generated prospect intelligence, custom presentations, and spec commercials that close deals in a single meeting.",
+                color: "text-futuri-blue",
+              },
+            ].map((item, i) => (
+              <AnimatedSection key={item.step} delay={i * 0.15}>
+                <div className="relative text-center p-8 glass rounded-2xl">
+                  <div className={`text-5xl font-bold font-mono ${item.color} opacity-20 mb-4`}>
+                    {item.step}
                   </div>
-                </AnimatedSection>
-              ))}
-            </div>
+                  <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
+                  <p className="text-white/40 text-sm leading-relaxed">{item.desc}</p>
+                </div>
+              </AnimatedSection>
+            ))}
           </div>
         </div>
       </section>
@@ -363,8 +480,8 @@ export default function Home() {
       <section className="relative py-32">
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection className="text-center mb-16">
-            <p className="text-sm font-semibold text-futuri-cyan uppercase tracking-widest mb-4">
-              Trusted by leaders
+            <p className="text-xs font-mono font-semibold text-futuri-red uppercase tracking-[0.2em] mb-4">
+              From the Paddock
             </p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white">
               What our clients say
@@ -375,42 +492,21 @@ export default function Home() {
             {testimonials.map((t, i) => (
               <AnimatedSection key={i} delay={i * 0.1}>
                 <div className="glass rounded-2xl p-8 h-full flex flex-col">
-                  {/* Stars */}
                   <div className="flex gap-1 mb-4">
                     {[...Array(5)].map((_, j) => (
-                      <svg key={j} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <svg key={j} className="w-4 h-4 text-futuri-yellow" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     ))}
                   </div>
-                  <blockquote className="text-white/70 leading-relaxed text-sm flex-1 mb-6">
+                  <blockquote className="text-white/60 leading-relaxed text-sm flex-1 mb-6">
                     &ldquo;{t.quote}&rdquo;
                   </blockquote>
                   <div>
                     <div className="text-sm font-semibold text-white">{t.author}</div>
-                    <div className="text-xs text-white/40">{t.company}</div>
+                    <div className="text-xs text-white/30">{t.company}</div>
                   </div>
                 </div>
-              </AnimatedSection>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Logo Cloud */}
-      <section className="relative py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <AnimatedSection className="text-center mb-12">
-            <p className="text-sm text-white/40">
-              Powering the world&apos;s leading media companies
-            </p>
-          </AnimatedSection>
-          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
-            {logos.map((logo, i) => (
-              <AnimatedSection key={logo} delay={i * 0.05}>
-                <span className="text-lg font-bold text-white/15 hover:text-white/30 transition-colors tracking-wide">
-                  {logo}
-                </span>
               </AnimatedSection>
             ))}
           </div>
@@ -422,24 +518,24 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection>
             <div className="relative rounded-3xl overflow-hidden">
-              {/* Background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-futuri-accent/20 via-futuri-navy to-futuri-violet/20" />
-              <div className="absolute inset-0 grid-pattern opacity-50" />
+              <div className="absolute inset-0 bg-gradient-to-br from-futuri-red/15 via-futuri-black to-futuri-cyan/10" />
+              <div className="absolute inset-0 speed-lines opacity-50" />
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-futuri-red via-futuri-yellow to-futuri-green" />
 
               <div className="relative z-10 px-8 py-20 md:px-16 md:py-28 text-center">
                 <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white mb-6">
-                  Ready to transform your
+                  Stop building.
                   <br />
-                  <span className="gradient-text">media operation?</span>
+                  <span className="gradient-text">Start racing.</span>
                 </h2>
-                <p className="text-lg text-white/50 max-w-xl mx-auto mb-10">
-                  See how Futuri&apos;s integrated platform can help your team sell smarter,
-                  create faster, and know more — all from a single demo.
+                <p className="text-lg text-white/40 max-w-xl mx-auto mb-10">
+                  Databricks gives you a compute engine. Futuri gives you the complete
+                  intelligence layer — out of the box.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                   <Link
                     href="/contact"
-                    className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-futuri-cyan text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
+                    className="px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-red to-red-600 text-white hover:shadow-xl hover:shadow-futuri-red/25 transition-all duration-300 hover:-translate-y-0.5"
                   >
                     Request a Demo
                   </Link>

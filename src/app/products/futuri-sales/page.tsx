@@ -79,8 +79,9 @@ export default function FuturiSalesPage() {
     <div className="relative">
       {/* Hero */}
       <section className="relative pt-40 pb-24 overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-futuri-blue to-futuri-violet opacity-60" />
         <div className="absolute inset-0 mesh-gradient" />
-        <div className="absolute top-1/3 left-1/3 w-[600px] h-[600px] bg-futuri-accent/8 rounded-full blur-[150px]" />
+        <div className="absolute top-1/3 left-1/3 w-[600px] h-[600px] bg-futuri-blue/8 rounded-full blur-[150px]" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6">
           <motion.div
@@ -89,24 +90,24 @@ export default function FuturiSalesPage() {
             transition={{ duration: 0.7 }}
             className="max-w-3xl"
           >
-            <span className="inline-block text-sm font-semibold text-futuri-accent uppercase tracking-widest mb-4">
+            <span className="inline-block text-xs font-mono font-semibold text-futuri-blue uppercase tracking-[0.2em] font-mono mb-4">
               Futuri Sales
             </span>
             <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight leading-[0.95] mb-6 text-white">
               Close bigger deals
               <br />
-              <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+              <span className="gradient-text-sales">
                 in less time
               </span>
             </h1>
             <p className="text-xl text-white/50 leading-relaxed mb-8 max-w-2xl">
-              Enterprise sales enablement that gives every rep the research, creative,
-              and intelligence of an entire support team — powered by AI.
+              Powered by your data lakehouse. AI-generated research, presentations,
+              prospect intelligence, and spec creative — all surfaced from FDP golden records.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
                 href="/contact"
-                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-emerald-500 text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-blue to-futuri-violet text-white hover:shadow-xl hover:shadow-futuri-blue/25 transition-all duration-300 hover:-translate-y-0.5"
               >
                 Request a Demo
               </Link>
@@ -124,11 +125,11 @@ export default function FuturiSalesPage() {
       {/* Metrics */}
       <section className="relative py-16">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="glass rounded-2xl p-8 md:p-12">
+          <div className="glass racing-stripe rounded-2xl p-8 md:p-12">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {metrics.map((m, i) => (
                 <AnimatedSection key={m.label} delay={i * 0.1} className="text-center">
-                  <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-1">
+                  <div className="text-3xl sm:text-4xl font-bold gradient-text-sales mb-1">
                     {m.value}
                   </div>
                   <div className="text-sm text-white/40">{m.label}</div>
@@ -156,7 +157,7 @@ export default function FuturiSalesPage() {
             {features.map((f, i) => (
               <AnimatedSection key={f.title} delay={i * 0.1}>
                 <div className="glass rounded-2xl p-8 h-full hover:bg-white/[0.06] transition-all duration-300">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-emerald-500 flex items-center justify-center text-white mb-5">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-violet-500 flex items-center justify-center text-white mb-5">
                     {f.icon}
                   </div>
                   <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
@@ -230,7 +231,7 @@ export default function FuturiSalesPage() {
         <div className="max-w-7xl mx-auto px-6">
           <AnimatedSection>
             <div className="relative rounded-3xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-futuri-accent/20 via-futuri-navy to-emerald-500/20" />
+              <div className="absolute inset-0 bg-gradient-to-br from-futuri-blue/15 via-futuri-black to-futuri-violet/10" />
               <div className="relative z-10 px-8 py-20 md:px-16 md:py-24 text-center">
                 <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-4">
                   Give every rep a superpower.
@@ -240,7 +241,7 @@ export default function FuturiSalesPage() {
                 </p>
                 <Link
                   href="/contact"
-                  className="inline-flex px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-accent to-emerald-500 text-white hover:shadow-xl hover:shadow-futuri-accent/25 transition-all duration-300 hover:-translate-y-0.5"
+                  className="inline-flex px-8 py-4 text-base font-semibold rounded-xl bg-gradient-to-r from-futuri-blue to-futuri-violet text-white hover:shadow-xl hover:shadow-futuri-blue/25 transition-all duration-300 hover:-translate-y-0.5"
                 >
                   Schedule a Demo
                 </Link>
