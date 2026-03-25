@@ -92,8 +92,14 @@ export default function Navbar() {
             </AnimatePresence>
           </div>
 
+          <Link href="/industries" className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors">
+            Industries
+          </Link>
           <Link href="/about" className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors">
             About
+          </Link>
+          <Link href="/blog" className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors">
+            Blog
           </Link>
           <Link href="/contact" className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors">
             Contact
@@ -147,8 +153,14 @@ export default function Navbar() {
                 </Link>
               ))}
               <div className="border-t border-white/10 my-2" />
+              <Link href="/industries" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                Industries
+              </Link>
               <Link href="/about" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
                 About
+              </Link>
+              <Link href="/blog" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+                Blog
               </Link>
               <Link href="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
                 Contact

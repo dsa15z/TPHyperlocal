@@ -7,10 +7,18 @@ const platformLinks = [
   { name: "Futuri Sales", href: "/products/futuri-sales" },
 ];
 
+const industryLinks = [
+  { name: "Television", href: "/industries/television" },
+  { name: "Radio & Audio", href: "/industries/radio" },
+  { name: "Agencies", href: "/industries/agencies" },
+  { name: "Digital Publishers", href: "/industries/digital-publishers" },
+  { name: "Public Safety", href: "/industries/public-safety" },
+];
+
 const companyLinks = [
   { name: "About", href: "/about" },
-  { name: "Careers", href: "/about#careers" },
-  { name: "News & Insights", href: "/about#news" },
+  { name: "Blog", href: "/blog" },
+  { name: "Industries", href: "/industries" },
   { name: "Contact", href: "/contact" },
 ];
 
@@ -24,7 +32,7 @@ export default function Footer() {
   return (
     <footer className="relative border-t border-white/5">
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-10">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center mb-4">
@@ -54,6 +62,20 @@ export default function Footer() {
             <h4 className="text-sm font-semibold text-white/80 mb-4">Platform</h4>
             <ul className="space-y-2.5">
               {platformLinks.map((link) => (
+                <li key={link.name}>
+                  <Link href={link.href} className="text-sm text-white/40 hover:text-white/70 transition-colors">
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Industries */}
+          <div>
+            <h4 className="text-sm font-semibold text-white/80 mb-4">Industries</h4>
+            <ul className="space-y-2.5">
+              {industryLinks.map((link) => (
                 <li key={link.name}>
                   <Link href={link.href} className="text-sm text-white/40 hover:text-white/70 transition-colors">
                     {link.name}
