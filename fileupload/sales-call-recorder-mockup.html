@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=375, maximum-scale=1">
+<title>TopLine — Mobile Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #7D388E;
+    --primary-dark: #5E2A6B;
+    --primary-light: #F3EAF6;
+    --bg: #F7F8FA;
+    --surface: #FFFFFF;
+    --border: #E5E7EB;
+    --text: #1A1A2E;
+    --text-secondary: #6B7280;
+    --text-muted: #9CA3AF;
+    --danger: #EF4444;
+    --danger-light: #FEE2E2;
+    --info: #3B82F6;
+    --info-light: #EFF6FF;
+    --warning: #F59E0B;
+    --warning-light: #FEF3C7;
+    --purple: #8B5CF6;
+    --purple-light: #F3F0FF;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #E5E7EB;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 24px 0;
+  }
+
+  /* Phone frame */
+  .phone-frame {
+    width: 375px;
+    min-height: 812px;
+    background: var(--bg);
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.2);
+    position: relative;
+    border: 8px solid #1A1A2E;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px 8px;
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .status-bar .time { font-size: 15px; font-weight: 700; }
+  .status-icons { display: flex; gap: 4px; align-items: center; }
+  .status-icons svg { width: 16px; height: 16px; }
+
+  /* App header */
+  .app-header {
+    background: var(--surface);
+    padding: 0 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .header-top h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-top h1 .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .header-top h1 .logo svg { width: 26px; height: 26px; }
+  .topline-wordmark {
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+  .topline-wordmark .top { color: var(--primary); }
+  .topline-wordmark .line { color: var(--text); }
+  .header-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), #3F2860);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* Account pill */
+  .account-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+  }
+  .account-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    background: var(--purple-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .account-icon svg { width: 18px; height: 18px; color: var(--purple); }
+  .account-info { flex: 1; }
+  .account-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .account-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .account-pill .chevron { color: var(--text-muted); }
+
+  /* Scrollable content */
+  .content {
+    padding: 16px;
+    overflow-y: auto;
+    height: calc(812px - 200px - 80px);
+  }
+
+  /* ===== SCREEN 1: Call Recorder ===== */
+
+  /* Recording card */
+  .recording-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .recording-card .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 48px;
+    margin-bottom: 12px;
+  }
+  .waveform .bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--primary);
+    animation: wave 1.2s ease-in-out infinite;
+  }
+  .waveform .bar:nth-child(1)  { height: 12px; animation-delay: 0s; }
+  .waveform .bar:nth-child(2)  { height: 20px; animation-delay: 0.1s; }
+  .waveform .bar:nth-child(3)  { height: 32px; animation-delay: 0.15s; }
+  .waveform .bar:nth-child(4)  { height: 44px; animation-delay: 0.2s; }
+  .waveform .bar:nth-child(5)  { height: 28px; animation-delay: 0.25s; }
+  .waveform .bar:nth-child(6)  { height: 38px; animation-delay: 0.3s; }
+  .waveform .bar:nth-child(7)  { height: 18px; animation-delay: 0.35s; }
+  .waveform .bar:nth-child(8)  { height: 44px; animation-delay: 0.4s; }
+  .waveform .bar:nth-child(9)  { height: 30px; animation-delay: 0.45s; }
+  .waveform .bar:nth-child(10) { height: 22px; animation-delay: 0.5s; }
+  .waveform .bar:nth-child(11) { height: 36px; animation-delay: 0.55s; }
+  .waveform .bar:nth-child(12) { height: 14px; animation-delay: 0.6s; }
+  .waveform .bar:nth-child(13) { height: 26px; animation-delay: 0.65s; }
+  .waveform .bar:nth-child(14) { height: 40px; animation-delay: 0.7s; }
+  .waveform .bar:nth-child(15) { height: 16px; animation-delay: 0.75s; }
+  .waveform .bar:nth-child(16) { height: 34px; animation-delay: 0.8s; }
+  .waveform .bar:nth-child(17) { height: 24px; animation-delay: 0.85s; }
+  .waveform .bar:nth-child(18) { height: 42px; animation-delay: 0.9s; }
+  .waveform .bar:nth-child(19) { height: 20px; animation-delay: 0.95s; }
+  .waveform .bar:nth-child(20) { height: 10px; animation-delay: 1.0s; }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+
+  .timer {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+  }
+  .timer-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .recording-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+  }
+  .ctrl-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .ctrl-btn svg { width: 18px; height: 18px; color: var(--text-secondary); }
+  .record-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: var(--danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(239,68,68,0.35);
+    position: relative;
+  }
+  .record-btn::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(239,68,68,0.2);
+    animation: pulse-ring 2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.3); opacity: 0; }
+  }
+  .record-btn .stop-icon {
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 4px;
+  }
+
+  /* Live transcript */
+  .live-transcript {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-title .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+    animation: blink 1.5s infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-live {
+    background: var(--danger-light);
+    color: var(--danger);
+  }
+  .transcript-lines {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .transcript-lines .speaker {
+    font-weight: 600;
+    color: var(--text);
+  }
+  .transcript-lines .speaker.client { color: var(--info); }
+  .transcript-lines p { margin-bottom: 8px; }
+  .transcript-lines p:last-child { margin-bottom: 0; }
+
+  /* AI detection chips */
+  .ai-detections {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+  }
+  .detection-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .chip svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .chip-green { background: var(--primary-light); color: var(--primary-dark); }
+  .chip-magenta { background: #FDE8FC; color: #A10598; }
+  .chip-blue { background: var(--info-light); color: var(--info); }
+  .chip-amber { background: var(--warning-light); color: #b45309; }
+  .chip-purple { background: var(--purple-light); color: var(--purple); }
+
+  /* ===== SCREEN 2: Post-Call AI Summary (separate screen mockup below main) ===== */
+
+  .screen-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 32px 0 16px;
+    padding: 0 4px;
+  }
+  .screen-divider::before,
+  .screen-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .screen-divider span {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border-radius: var(--radius) var(--radius) 0 0;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    padding: 0 4px;
+  }
+  .tab {
+    padding: 12px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* CNA Summary card */
+  .summary-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .summary-card-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-card-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .summary-card-header h3 svg { width: 16px; height: 16px; }
+  .confidence-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 10px;
+  }
+  .conf-high { background: var(--primary-light); color: var(--primary-dark); }
+  .conf-med { background: var(--warning-light); color: #b45309; }
+
+  .field-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 16px;
+    border-bottom: 1px solid #F3F4F6;
+    gap: 8px;
+  }
+  .field-row:last-child { border-bottom: none; }
+  .field-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    width: 100px;
+    flex-shrink: 0;
+    padding-top: 2px;
+  }
+  .field-value {
+    font-size: 13px;
+    color: var(--text);
+    flex: 1;
+    line-height: 1.4;
+  }
+  .field-value.editable {
+    background: #F9FAFB;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 4px 8px;
+    cursor: text;
+  }
+  .field-source {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .field-source svg { width: 10px; height: 10px; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 1px 2px;
+  }
+  .tag-green { background: var(--primary-light); color: var(--primary-dark); }
+  .tag-magenta { background: #FDE8FC; color: #A10598; }
+  .tag-blue { background: var(--info-light); color: var(--info); }
+  .tag-purple { background: var(--purple-light); color: var(--purple); }
+
+  /* Action bar */
+  .action-bar {
+    display: flex;
+    gap: 8px;
+    padding: 16px 0;
+  }
+  .btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn svg { width: 16px; height: 16px; }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(125,56,142,0.3);
+  }
+  .btn-outline {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 24px;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .nav-item.active { color: var(--primary); font-weight: 600; }
+  .nav-item svg { width: 22px; height: 22px; }
+
+  /* Multi-screen container */
+  .screens {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    align-items: center;
+  }
+
+  /* Screen label */
+  .screen-label {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .screen-label h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 4px;
+  }
+  .screen-label p {
+    font-size: 12px;
+    color: #9CA3AF;
+  }
+
+  /* Fit for iHeart section */
+  .fit-section {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .fit-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fit-heart { color: var(--danger); }
+  .fit-header h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .fit-item {
+    padding: 10px 16px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    border-bottom: 1px solid #F3F4F6;
+    display: flex;
+    gap: 8px;
+  }
+  .fit-item:last-child { border-bottom: none; }
+  .fit-bullet {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #FC03CD;
+    flex-shrink: 0;
+    margin-top: 6px;
+  }
+
+  /* Activation sequence */
+  .activation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+  }
+  .activation-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .personalize {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .personalize-name {
+    font-weight: 600;
+    color: var(--text);
+    background: #F3F4F6;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .generate-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(125,56,142,0.3);
+  }
+  .generate-btn svg { width: 16px; height: 16px; }
+
+  /* Outreach cards */
+  .outreach-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .outreach-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .outreach-type {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .outreach-type svg { width: 14px; height: 14px; color: var(--text-secondary); }
+  .outreach-type span { font-size: 13px; font-weight: 600; color: var(--text); }
+  .outreach-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: #F3F4F6;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .outreach-preview {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+  .outreach-subject {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  /* Scroll hint */
+  .scroll-fade {
+    position: relative;
+  }
+  .scroll-fade::after {
+    content: '';
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(transparent, var(--bg));
+    pointer-events: none;
+  }
+
+  /* Screen 3 tweaks */
+  .content-full { height: calc(812px - 140px - 80px); }
+</style>
+</head>
+<body>
+
+<div class="screens">
+
+  <!-- ===== SCREEN 1: Active Call Recording ===== -->
+  <div>
+    <div class="screen-label">
+      <h2>Screen 1 — Active Call Recording</h2>
+      <p>TopLine — Real-time transcription with AI-detected CNA signals</p>
+    </div>
+    <div class="phone-frame scroll-fade">
+      <!-- Status bar -->
+      <div class="status-bar">
+        <span class="time">9:41</span>
+        <div class="status-icons">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div class="app-header">
+        <div class="header-top">
+          <h1>
+            <span class="logo">
+              <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100" height="100" rx="22" fill="#7D388E"/>
+                <path d="M25 35h50v8H55v32h-10V43H25V35z" fill="white"/>
+              </svg>
+            </span>
+            <span class="topline-wordmark"><span class="top">Top</span><span class="line">Line</span></span>
+          </h1>
+          <div class="header-avatar">MS</div>
+        </div>
+        <div class="account-pill">
+          <div class="account-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 13h4"/></svg>
+          </div>
+          <div class="account-info">
+            <div class="account-name">Kemper Financial</div>
+            <div class="account-meta">Mark Sullivan · VP Marketing, Personal Lines</div>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+
+      <!-- Scrollable content -->
+      <div class="content">
+        <!-- Recording card -->
+        <div class="recording-card">
+          <div class="label">Recording In Progress</div>
+          <div class="waveform">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div>
+          </div>
+          <div class="timer">14:32</div>
+          <div class="timer-sub">Transcribing with AI</div>
+          <div class="recording-controls">
+            <button class="ctrl-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+            </button>
+            <button class="record-btn">
+              <div class="stop-icon"></div>
+            </button>
+            <button class="ctrl-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 10H5M12 3v14M5 10l7 7 7-7"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Live transcript -->
+        <div class="live-transcript">
+          <div class="section-header">
+            <div class="section-title">
+              <span class="dot"></span>
+              Live Transcript
+            </div>
+            <span class="badge badge-live">Live</span>
+          </div>
+          <div class="transcript-lines">
+            <p><span class="speaker">Rep:</span> I'd love to learn more about how Kemper reaches customers for its personal lines today.</p>
+            <p><span class="speaker client">Mark:</span> We focus heavily on the non-standard auto segment — a lot of our customers are multicultural, first-time buyers. The biggest challenge is building trust with audiences who don't see themselves in typical insurance ads.</p>
+            <p><span class="speaker">Rep:</span> That's great context. What does your current media mix look like?</p>
+            <p><span class="speaker client">Mark:</span> Mostly digital — paid search, social, and some programmatic. We haven't really explored audio or radio sponsorships yet, but we know our audience listens a lot...</p>
+          </div>
+        </div>
+
+        <!-- AI Detections -->
+        <div class="ai-detections">
+          <div class="section-header">
+            <div class="section-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              AI-Detected Signals
+            </div>
+          </div>
+          <div class="detection-chips">
+            <span class="chip chip-green">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              Pain Point: Trust with Multicultural
+            </span>
+            <span class="chip chip-blue">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z"/></svg>
+              Non-Standard Auto Segment
+            </span>
+            <span class="chip chip-amber">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+              Gap: No Audio/Radio
+            </span>
+            <span class="chip chip-purple">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              Audience: Hispanic + First-Time Buyers
+            </span>
+            <span class="chip chip-green">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>
+              Trigger: Open Enrollment Season
+            </span>
+            <span class="chip chip-blue">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/></svg>
+              Content Asset: Customer Testimonials
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+          Home
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+          Record
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          CRM
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Insights
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== SCREEN 2: Post-Call CNA Summary ===== -->
+  <div>
+    <div class="screen-label">
+      <h2>Screen 2 — AI-Distilled CNA Summary</h2>
+      <p>TopLine — Auto-populated CRM fields from call, ready for rep review</p>
+    </div>
+    <div class="phone-frame scroll-fade">
+      <div class="status-bar">
+        <span class="time">9:56</span>
+        <div class="status-icons">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+        </div>
+      </div>
+
+      <div class="app-header">
+        <div class="header-top">
+          <h1>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+            <span class="topline-wordmark" style="font-size:16px"><span class="top">Top</span><span class="line">Line</span></span>
+          </h1>
+          <span class="badge" style="background:var(--primary-light);color:var(--primary-dark);">Saved</span>
+        </div>
+        <div class="account-pill">
+          <div class="account-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 13h4"/></svg>
+          </div>
+          <div class="account-info">
+            <div class="account-name">Kemper Financial</div>
+            <div class="account-meta">Call ended · 14m 32s · Mar 10, 2026</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tab active">CNA</div>
+        <div class="tab">Unique Fit</div>
+        <div class="tab">Channel Plan</div>
+        <div class="tab">Next Steps</div>
+        <div class="tab">Transcript</div>
+      </div>
+
+      <div class="content" style="height: calc(812px - 230px - 80px);">
+        <!-- Client Needs -->
+        <div class="summary-card">
+          <div class="summary-card-header">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              Client Needs
+            </h3>
+            <span class="confidence-pill conf-high">AI 94%</span>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Primary Goal</div>
+            <div class="field-value editable">
+              Grow personal lines policy volume in multicultural and first-time buyer segments across Midwest and Southeast
+              <div class="field-source">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                Detected at 3:42
+              </div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Pain Points</div>
+            <div class="field-value">
+              <span class="tag tag-blue">Low brand trust with target demo</span>
+              <span class="tag tag-blue">No audio/radio strategy</span>
+              <span class="tag tag-blue">Seasonal enrollment spikes</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Current Spend</div>
+            <div class="field-value editable">
+              Digital only — paid search, social media + programmatic display
+              <div class="field-source">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                Detected at 8:15
+              </div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Decision Maker</div>
+            <div class="field-value editable">
+              Mark Sullivan, VP Marketing — Personal Lines Division
+              <div class="field-source">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                Detected at 1:05
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audiences -->
+        <div class="summary-card">
+          <div class="summary-card-header">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+              Target Audiences
+            </h3>
+            <span class="confidence-pill conf-high">AI 91%</span>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Primary</div>
+            <div class="field-value">
+              <span class="tag tag-purple">Hispanic auto insurance shoppers</span>
+              <span class="tag tag-purple">First-time insurance buyers</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Secondary</div>
+            <div class="field-value">
+              <span class="tag tag-green">Young drivers (18–25)</span>
+              <span class="tag tag-green">Multi-policy households</span>
+              <span class="tag tag-green">Small business owners</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Events</div>
+            <div class="field-value editable">
+              Open enrollment campaigns, community events, local agent activations — need regional reach in Chicago, TX, FL
+              <div class="field-source">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                Detected at 6:20
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Opportunities -->
+        <div class="summary-card">
+          <div class="summary-card-header">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              Recommended Products
+            </h3>
+            <span class="confidence-pill conf-med">AI 78%</span>
+          </div>
+          <div class="field-row">
+            <div class="field-label">High Fit</div>
+            <div class="field-value">
+              <span class="tag tag-green">Spanish-Language Radio</span>
+              <span class="tag tag-green">Broadcast Radio (Regional)</span>
+              <span class="tag tag-green">Streaming Audio</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Medium Fit</div>
+            <div class="field-value">
+              <span class="tag tag-blue">iHeart Podcasting</span>
+              <span class="tag tag-blue">CTV/OTT</span>
+              <span class="tag tag-blue">Display Ads</span>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-label">Rationale</div>
+            <div class="field-value" style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+              Spanish-language radio reaches core multicultural audience with high trust and frequency. Regional broadcast drives brand awareness during enrollment spikes. Streaming audio targets younger first-time buyers with precise demo targeting.
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-bar">
+          <button class="btn btn-outline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+            Save to CRM
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+          Home
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+          Record
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          CRM
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Insights
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== SCREEN 3: Fit & Activation ===== -->
+  <div>
+    <div class="screen-label">
+      <h2>Screen 3 — Fit &amp; Activation Sequence</h2>
+      <p>TopLine — AI-generated account fit &amp; personalized outreach templates</p>
+    </div>
+    <div class="phone-frame scroll-fade">
+      <div class="status-bar">
+        <span class="time">9:58</span>
+        <div class="status-icons">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
+        </div>
+      </div>
+
+      <div class="app-header">
+        <div class="header-top">
+          <h1>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+            <span class="topline-wordmark" style="font-size:14px"><span class="top">Top</span><span class="line">Line</span></span>
+            <span style="font-weight:400; font-size:14px; color:var(--text-secondary)">/ Kemper</span>
+          </h1>
+          <div class="header-avatar">MS</div>
+        </div>
+        <!-- Tabs -->
+        <div class="tabs" style="margin: 0 -16px; padding: 0 16px;">
+          <div class="tab">Research</div>
+          <div class="tab">Contacts</div>
+          <div class="tab">CNA</div>
+          <div class="tab">Channel</div>
+          <div class="tab active">Assets</div>
+        </div>
+      </div>
+
+      <div class="content" style="height: calc(812px - 190px - 80px);">
+        <!-- Fit for iHeart -->
+        <div class="fit-section">
+          <div class="fit-header">
+            <svg class="fit-heart" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <h3>Why We Are a Unique Fit</h3>
+          </div>
+          <div class="fit-item">
+            <div class="fit-bullet"></div>
+            <div>Non-standard auto insurance leader with a core multicultural audience — Spanish-language Radio and Streaming Audio deliver high trust and repeat frequency with this demo.</div>
+          </div>
+          <div class="fit-item">
+            <div class="fit-bullet"></div>
+            <div>Heavy concentration in Chicago, Texas, and Florida markets makes Regional Broadcast Radio ideal for brand awareness during open enrollment spikes.</div>
+          </div>
+          <div class="fit-item">
+            <div class="fit-bullet"></div>
+            <div>First-time buyer audience skews younger (18–35), making Streaming Audio and Podcast sponsorships a strong digital-audio bridge from their current paid-search-only mix.</div>
+          </div>
+          <div class="fit-item">
+            <div class="fit-bullet"></div>
+            <div>Customer testimonials and real-life claims stories are ideal for iHeart Podcasting and CTV/OTT to build trust-based brand positioning at scale.</div>
+          </div>
+        </div>
+
+        <!-- Activation sequence -->
+        <div class="activation-header">
+          <h3>Activation Sequence</h3>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px;">
+          <div class="personalize">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Personalize for:
+            <span class="personalize-name">Mark Sullivan</span>
+          </div>
+        </div>
+        <button class="generate-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Generate All
+        </button>
+
+        <!-- Outreach card 1 -->
+        <div class="outreach-card">
+          <div class="outreach-card-header">
+            <div class="outreach-type">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+              <span>Cold Call</span>
+            </div>
+            <span class="outreach-badge">Call / VM</span>
+          </div>
+          <div class="outreach-preview">Hello Mark, this is [Your Name] with iHeartMedia. I was really impressed by Kemper's commitment to serving the non-standard auto market, especially your multicultural outreach...</div>
+        </div>
+
+        <!-- Outreach card 2 -->
+        <div class="outreach-card">
+          <div class="outreach-card-header">
+            <div class="outreach-type">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span>Seed Email — Short</span>
+            </div>
+            <span class="outreach-badge">Email</span>
+          </div>
+          <div class="outreach-subject">Subject: A thought for Mark at Kemper</div>
+          <div class="outreach-preview">Hi Mark, I was thinking about Kemper's position in the personal lines space, particularly how you're reaching first-time buyers in an increasingly competitive market...</div>
+        </div>
+
+        <!-- Outreach card 3 -->
+        <div class="outreach-card">
+          <div class="outreach-card-header">
+            <div class="outreach-type">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span>Seed Email — Personal</span>
+            </div>
+            <span class="outreach-badge">Email</span>
+          </div>
+          <div class="outreach-subject">Subject: Fwd: Quick thought for Kemper</div>
+          <div class="outreach-preview">Hey Mark, saw this and immediately thought of Kemper. Given your push into the multicultural auto segment across the Midwest and Southeast, I think there's a huge...</div>
+        </div>
+      </div>
+
+      <!-- Bottom nav -->
+      <div class="bottom-nav">
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+          Home
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+          Record
+        </div>
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          CRM
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Insights
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
