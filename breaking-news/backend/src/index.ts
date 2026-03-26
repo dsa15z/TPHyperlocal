@@ -1,0 +1,121 @@
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import dotenv from 'dotenv';
+
+import { storiesRoutes } from './routes/stories.js';
+import { searchRoutes } from './routes/search.js';
+import { feedsRoutes } from './routes/feeds.js';
+import { healthRoutes } from './routes/health.js';
+import { authMiddleware } from './middleware/auth.js';
+import { prisma } from './lib/prisma.js';
+
+dotenv.config();
+
+const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
+const HOST = process.env['HOST'] ?? '0.0.0.0';
+
+async function buildServer() {
+  const app = Fastify({
+    logger: {
+      transport:
+        process.env['NODE_ENV'] !== 'production'
+          ? { target: 'pino-pretty', options: { colorize: true } }
+          : undefined,
+    },
+    trustProxy: true,
+  });
+
+  // CORS
+  await app.register(cors, {
+    origin: process.env['CORS_ORIGIN']?.split(',') ?? ['*'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    credentials: true,
+  });
+
+  // Rate limiting
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return (
+        (request.headers['x-api-key'] as string) ??
+        request.ip
+      );
+    },
+  });
+
+  // Swagger documentation
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Breaking News Intelligence API',
+        description: 'API for the Breaking News Intelligence Platform',
+        version: '1.0.0',
+      },
+      servers: [
+        {
+          url: `http://localhost:${PORT}`,
+          description: 'Local development',
+        },
+      ],
+      components: {
+        securitySchemes: {
+          apiKey: {
+            type: 'apiKey',
+            name: 'x-api-key',
+            in: 'header',
+          },
+        },
+      },
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+      deepLinking: true,
+    },
+  });
+
+  // Auth middleware
+  app.addHook('onRequest', authMiddleware);
+
+  // Register routes
+  await app.register(healthRoutes, { prefix: '/api/v1' });
+  await app.register(storiesRoutes, { prefix: '/api/v1' });
+  await app.register(searchRoutes, { prefix: '/api/v1' });
+  await app.register(feedsRoutes, { prefix: '/api/v1' });
+
+  // Graceful shutdown
+  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    process.on(signal, async () => {
+      app.log.info(`Received ${signal}, shutting down gracefully...`);
+      await app.close();
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  }
+
+  return app;
+}
+
+async function main() {
+  const app = await buildServer();
+
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    app.log.info(`Server listening on ${HOST}:${PORT}`);
+    app.log.info(`Swagger docs available at http://${HOST}:${PORT}/docs`);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+
+main();

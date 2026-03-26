@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  FACEBOOK
+  TWITTER
+  RSS
+  NEWSAPI
+  MANUAL
+}
+
+enum SourceType {
+  NEWS_ORG
+  GOV_AGENCY
+  PUBLIC_PAGE
+  RSS_FEED
+  API_PROVIDER
+}
+
+enum StoryStatus {
+  EMERGING
+  BREAKING
+  TRENDING
+  ACTIVE
+  STALE
+  ARCHIVED
+}
+
+model Source {
+  id           String       @id @default(cuid())
+  platform     Platform
+  sourceType   SourceType
+  name         String
+  url          String?
+  platformId   String?
+  trustScore   Float        @default(0.5)
+  isActive     Boolean      @default(true)
+  metadata     Json?
+  lastPolledAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  posts SourcePost[]
+
+  @@index([platform, isActive])
+  @@index([sourceType])
+}
+
+model SourcePost {
+  id                 String   @id @default(cuid())
+  sourceId           String
+  source             Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  platformPostId     String   @unique
+  content            String   @db.Text
+  contentHash        String
+  title              String?
+  url                String?
+  authorName         String?
+  authorId           String?
+  engagementLikes    Int      @default(0)
+  engagementShares   Int      @default(0)
+  engagementComments Int      @default(0)
+  latitude           Float?
+  longitude          Float?
+  locationName       String?
+  category           String?
+  mediaUrls          Json?
+  rawData            Json?
+  publishedAt        DateTime
+  collectedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  storySources StorySource[]
+
+  @@index([platformPostId])
+  @@index([contentHash])
+  @@index([sourceId, publishedAt])
+  @@index([category])
+  @@index([publishedAt])
+}
+
+model Story {
+  id              String      @id @default(cuid())
+  title           String
+  summary         String?     @db.Text
+  category        String?
+  locationName    String?
+  latitude        Float?
+  longitude       Float?
+  neighborhood    String?
+  breakingScore   Float       @default(0)
+  trendingScore   Float       @default(0)
+  confidenceScore Float       @default(0)
+  localityScore   Float       @default(0)
+  compositeScore  Float       @default(0)
+  status          StoryStatus @default(EMERGING)
+  sourceCount     Int         @default(0)
+  firstSeenAt     DateTime    @default(now())
+  lastUpdatedAt   DateTime    @default(now())
+  mergedIntoId    String?
+  mergedInto      Story?      @relation("StoryMerges", fields: [mergedIntoId], references: [id])
+  mergedFrom      Story[]     @relation("StoryMerges")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  storySources   StorySource[]
+  scoreSnapshots ScoreSnapshot[]
+
+  @@index([compositeScore(sort: Desc)])
+  @@index([status])
+  @@index([firstSeenAt(sort: Desc)])
+  @@index([breakingScore(sort: Desc)])
+  @@index([trendingScore(sort: Desc)])
+  @@index([category])
+  @@index([status, compositeScore(sort: Desc)])
+}
+
+model StorySource {
+  id              String     @id @default(cuid())
+  storyId         String
+  story           Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourcePostId    String
+  sourcePost      SourcePost @relation(fields: [sourcePostId], references: [id], onDelete: Cascade)
+  similarityScore Float
+  isPrimary       Boolean    @default(false)
+  addedAt         DateTime   @default(now())
+
+  @@unique([storyId, sourcePostId])
+  @@index([storyId])
+  @@index([sourcePostId])
+}
+
+model ScoreSnapshot {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  breakingScore   Float
+  trendingScore   Float
+  confidenceScore Float
+  localityScore   Float
+  compositeScore  Float
+  snapshotAt      DateTime @default(now())
+
+  @@index([storyId, snapshotAt(sort: Desc)])
+}
+
+model RSSFeed {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  filters   Json
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model APIKey {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  name        String
+  ownerId     String
+  permissions Json?
+  rateLimit   Int       @default(100)
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([key])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String
+  details     Json?
+  performedBy String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@index([createdAt(sort: Desc)])
+}
