@@ -1,0 +1,147 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+export interface Story {
+  id: string;
+  title: string;
+  summary: string;
+  status: "BREAKING" | "TRENDING" | "ACTIVE" | "STALE";
+  category: string;
+  location: string;
+  breaking_score: number;
+  trending_score: number;
+  confidence_score: number;
+  locality_score: number;
+  composite_score: number;
+  source_count: number;
+  first_seen: string;
+  last_updated: string;
+  sources?: SourcePost[];
+}
+
+export interface SourcePost {
+  id: string;
+  platform: string;
+  author: string;
+  content: string;
+  url: string;
+  engagement: {
+    likes: number;
+    shares: number;
+    comments: number;
+  };
+  published_at: string;
+}
+
+export interface StoriesResponse {
+  stories: Story[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface StoryFilters {
+  q?: string;
+  category?: string;
+  status?: string;
+  time_range?: string;
+  min_score?: number;
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+}
+
+export interface Feed {
+  id: string;
+  name: string;
+  filters: {
+    category?: string;
+    status?: string;
+    min_score?: number;
+    keywords?: string;
+  };
+  rss_url: string;
+  created_at: string;
+}
+
+export interface CreateFeedPayload {
+  name: string;
+  filters: {
+    category?: string;
+    status?: string;
+    min_score?: number;
+    keywords?: string;
+  };
+}
+
+function buildQueryString(params: Record<string, unknown>): string {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  });
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : "";
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "Unknown error");
+    throw new Error(`API ${res.status}: ${errorBody}`);
+  }
+
+  return res.json();
+}
+
+export async function fetchStories(
+  filters: StoryFilters = {}
+): Promise<StoriesResponse> {
+  const qs = buildQueryString(filters);
+  return apiFetch<StoriesResponse>(`/api/v1/stories${qs}`);
+}
+
+export async function fetchStory(id: string): Promise<Story> {
+  return apiFetch<Story>(`/api/v1/stories/${id}`);
+}
+
+export async function fetchBreakingStories(): Promise<StoriesResponse> {
+  return apiFetch<StoriesResponse>("/api/v1/stories/breaking");
+}
+
+export async function fetchTrendingStories(): Promise<StoriesResponse> {
+  return apiFetch<StoriesResponse>("/api/v1/stories/trending");
+}
+
+export async function searchStories(
+  query: string,
+  filters: StoryFilters = {}
+): Promise<StoriesResponse> {
+  const qs = buildQueryString({ q: query, ...filters });
+  return apiFetch<StoriesResponse>(`/api/v1/search${qs}`);
+}
+
+export async function fetchFeeds(): Promise<Feed[]> {
+  return apiFetch<Feed[]>("/api/v1/feeds");
+}
+
+export async function createFeed(data: CreateFeedPayload): Promise<Feed> {
+  return apiFetch<Feed>("/api/v1/feeds", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFeed(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/feeds/${id}`, { method: "DELETE" });
+}

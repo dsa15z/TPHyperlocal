@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --surface: 11 14 20;
+    --surface-50: 15 19 25;
+    --surface-100: 20 24 32;
+    --surface-200: 26 31 43;
+    --surface-300: 35 41 54;
+  }
+
+  body {
+    @apply bg-surface text-gray-100;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-400 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  /* Glass morphism cards */
+  .glass-card {
+    @apply bg-surface-100/80 backdrop-blur-md border border-surface-300/50 rounded-xl;
+  }
+
+  .glass-card-strong {
+    @apply bg-surface-200/90 backdrop-blur-lg border border-surface-300/70 rounded-xl;
+  }
+
+  /* Score badge base */
+  .score-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums;
+  }
+
+  /* Score bar container */
+  .score-bar {
+    @apply h-2 rounded-full bg-surface-300 overflow-hidden;
+  }
+
+  .score-bar-fill {
+    @apply h-full rounded-full transition-all duration-500 ease-out;
+  }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider;
+  }
+
+  .status-breaking {
+    @apply bg-red-500/15 text-red-400 border border-red-500/30;
+  }
+
+  .status-trending {
+    @apply bg-orange-500/15 text-orange-400 border border-orange-500/30;
+  }
+
+  .status-active {
+    @apply bg-blue-500/15 text-blue-400 border border-blue-500/30;
+  }
+
+  .status-stale {
+    @apply bg-gray-500/15 text-gray-400 border border-gray-500/30;
+  }
+
+  /* Live indicator */
+  .live-indicator {
+    @apply inline-flex items-center gap-2 text-xs font-medium text-green-400;
+  }
+
+  .live-dot {
+    @apply w-2 h-2 rounded-full bg-green-400 animate-pulse-live;
+  }
+
+  /* Table styles */
+  .table-header {
+    @apply text-left text-xs font-semibold uppercase tracking-wider text-gray-400 px-4 py-3 cursor-pointer select-none hover:text-gray-200 transition-colors;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm;
+  }
+
+  .table-row {
+    @apply border-b border-surface-300/30 hover:bg-surface-200/50 transition-colors;
+  }
+
+  /* Filter inputs */
+  .filter-input {
+    @apply bg-surface-200 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all;
+  }
+
+  .filter-select {
+    @apply bg-surface-200 border border-surface-300 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all appearance-none cursor-pointer;
+  }
+
+  .filter-btn {
+    @apply px-3 py-2 text-sm font-medium rounded-lg border border-surface-300 text-gray-300 hover:text-white hover:bg-surface-300 transition-all;
+  }
+
+  .filter-btn-active {
+    @apply bg-accent/20 border-accent/50 text-accent;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: fade-in 0.3s ease-out;
+  }
+}
