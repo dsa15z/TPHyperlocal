@@ -9,7 +9,10 @@ import { storiesRoutes } from './routes/stories.js';
 import { searchRoutes } from './routes/search.js';
 import { feedsRoutes } from './routes/feeds.js';
 import { healthRoutes } from './routes/health.js';
+import { authRoutes } from './routes/auth.js';
+import { adminRoutes } from './routes/admin/index.js';
 import { authMiddleware } from './middleware/auth.js';
+import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
 
 dotenv.config();
@@ -82,14 +85,19 @@ async function buildServer() {
     },
   });
 
-  // Auth middleware
+  // Auth middleware — supports both API key (x-api-key) and JWT (Bearer token)
+  // API key auth for third-party API consumers
   app.addHook('onRequest', authMiddleware);
+  // JWT auth for frontend users
+  app.addHook('onRequest', jwtAuthMiddleware);
 
   // Register routes
   await app.register(healthRoutes, { prefix: '/api/v1' });
+  await app.register(authRoutes, { prefix: '/api/v1' });
   await app.register(storiesRoutes, { prefix: '/api/v1' });
   await app.register(searchRoutes, { prefix: '/api/v1' });
   await app.register(feedsRoutes, { prefix: '/api/v1' });
+  await app.register(adminRoutes, { prefix: '/api/v1' });
 
   // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
