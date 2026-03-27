@@ -61,10 +61,11 @@ export default function SourcesPage() {
   const [formMarketId, setFormMarketId] = useState("");
   const [formTrustScore, setFormTrustScore] = useState(50);
 
-  const { data: sources = [], isLoading } = useQuery({
+  const { data: sourcesData, isLoading } = useQuery({
     queryKey: ["admin-sources"],
     queryFn: fetchSources,
   });
+  const sources: Source[] = (sourcesData as any)?.data || sourcesData || [];
 
   const createMutation = useMutation({
     mutationFn: createSource,

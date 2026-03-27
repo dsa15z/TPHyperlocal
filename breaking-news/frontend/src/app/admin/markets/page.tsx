@@ -52,10 +52,11 @@ export default function MarketsPage() {
   const [formKeywords, setFormKeywords] = useState("");
   const [formNeighborhoods, setFormNeighborhoods] = useState("");
 
-  const { data: markets = [], isLoading } = useQuery({
+  const { data: marketsData, isLoading } = useQuery({
     queryKey: ["admin-markets"],
     queryFn: fetchMarkets,
   });
+  const markets: Market[] = (marketsData as any)?.data || marketsData || [];
 
   const createMutation = useMutation({
     mutationFn: createMarket,
