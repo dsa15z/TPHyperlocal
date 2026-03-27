@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pg_trgm]
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -14,6 +16,8 @@ enum Platform {
   TWITTER
   RSS
   NEWSAPI
+  NEWSCATCHER
+  PERIGON
   GDELT
   LLM_OPENAI
   LLM_CLAUDE
@@ -231,6 +235,18 @@ model SourcePost {
   // LLM-specific fields
   llmModel           String?  // "gpt-4o", "claude-sonnet-4-6", "grok-3", "gemini-2.0-flash"
   llmConfidence      Float?   // LLM's self-reported confidence 0-1
+  // Article extraction
+  fullArticleText    String?  @db.Text  // extracted full article from URL
+  fullArticleExtractedAt DateTime?
+  // Embeddings (pgvector)
+  embedding          Unsupported("vector(1536)")?  // OpenAI text-embedding-3-small
+  // NER entities (structured)
+  entities           Json?    // { people: [], organizations: [], locations: [], events: [] }
+  // Sentiment
+  sentimentScore     Float?   // -1.0 (negative) to 1.0 (positive)
+  sentimentLabel     String?  // POSITIVE, NEGATIVE, NEUTRAL
+  // MinHash signature for LSH dedup
+  minhashSignature   Json?    // array of hash values for LSH
   publishedAt        DateTime
   collectedAt        DateTime @default(now())
   createdAt          DateTime @default(now())
@@ -242,6 +258,7 @@ model SourcePost {
   @@index([sourceId, publishedAt])
   @@index([category])
   @@index([publishedAt])
+  @@index([sentimentLabel])
 }
 
 // ─── Stories ────────────────────────────────────────────────────────────────
@@ -253,16 +270,36 @@ model Story {
   title           String
   summary         String?     @db.Text
   aiSummary       String?     @db.Text // LLM-generated canonical summary
+  aiSummaryModel  String?     // which LLM generated the summary
+  aiSummaryAt     DateTime?   // when summary was generated
   category        String?
   locationName    String?
   latitude        Float?
   longitude       Float?
   neighborhood    String?
+  geocodedAt      DateTime?   // when geocoding was performed
   breakingScore   Float       @default(0)
   trendingScore   Float       @default(0)
   confidenceScore Float       @default(0)
   localityScore   Float       @default(0)
   compositeScore  Float       @default(0)
+  // Sentiment aggregate
+  sentimentScore  Float?      // avg sentiment across source posts
+  sentimentLabel  String?     // POSITIVE, NEGATIVE, NEUTRAL, MIXED
+  // Source credibility
+  credibilityScore Float?     // auto-calculated from corroboration history
+  // Editor review
+  editedTitle     String?     // editor-modified title (null = use AI/original)
+  editedSummary   String?     @db.Text // editor-modified summary
+  editedBy        String?     // userId of last editor
+  editedAt        DateTime?
+  editHistory     Json?       // array of { title, summary, editedBy, editedAt }
+  reviewStatus    String?     @default("UNREVIEWED") // UNREVIEWED, APPROVED, REJECTED, EDITED
+  // Topic cluster (BERTopic)
+  topicId         Int?        // BERTopic topic number
+  topicLabel      String?     // human-readable topic label
+  // Embedding for story-level similarity
+  embedding       Unsupported("vector(1536)")?
   status          StoryStatus @default(EMERGING)
   sourceCount     Int         @default(0)
   firstSeenAt     DateTime    @default(now())
@@ -275,6 +312,7 @@ model Story {
 
   storySources   StorySource[]
   scoreSnapshots ScoreSnapshot[]
+  notifications  Notification[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -373,4 +411,93 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt(sort: Desc)])
+}
+
+// ─── Notifications / Webhooks ───────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  type        String   // BREAKING_ALERT, TRENDING_ALERT, DIGEST
+  channel     String   // EMAIL, WEBHOOK, SLACK
+  recipient   String   // email address, webhook URL, or Slack channel
+  payload     Json?    // notification content
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([storyId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String
+  url         String   // webhook endpoint URL
+  secret      String?  // HMAC signing secret
+  events      Json     // ["BREAKING", "TRENDING", "NEW_STORY"]
+  filters     Json?    // { category: "CRIME", minScore: 0.7 }
+  isActive    Boolean  @default(true)
+  lastDeliveredAt DateTime?
+  failCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
+}
+
+// ─── Email Digest Subscriptions ─────────────────────────────────────────────
+
+model DigestSubscription {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String
+  email       String
+  frequency   String   // HOURLY, TWICE_DAILY, DAILY, WEEKLY
+  schedule    String?  // cron expression override
+  timezone    String   @default("America/Chicago")
+  filters     Json?    // { category: "CRIME", minScore: 0.5 }
+  isActive    Boolean  @default(true)
+  lastSentAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([userId])
+  @@index([frequency, isActive])
+}
+
+// ─── Source Credibility Tracking ────────────────────────────────────────────
+
+model SourceCredibilityLog {
+  id              String   @id @default(cuid())
+  sourceId        String
+  storyId         String
+  wasCorroborated Boolean  // did other sources confirm this story?
+  corroboratedBy  Int      @default(0) // how many other sources confirmed
+  timeToCorroboration Int? // minutes until first corroboration
+  createdAt       DateTime @default(now())
+
+  @@index([sourceId])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ─── Topic Clusters (BERTopic) ──────────────────────────────────────────────
+
+model TopicCluster {
+  id          Int      @id // BERTopic topic number
+  label       String   // auto-generated or admin-edited label
+  keywords    Json     // top keywords for this topic
+  storyCount  Int      @default(0)
+  isActive    Boolean  @default(true)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, storyCount(sort: Desc)])
 }
