@@ -4,6 +4,7 @@ import { marketRoutes } from './markets.js';
 import { sourceRoutes } from './sources.js';
 import { credentialRoutes } from './credentials.js';
 import { editorRoutes } from './editor.js';
+import { webhookRoutes } from './webhooks.js';
 
 /**
  * Admin route aggregator.
@@ -37,4 +38,7 @@ export async function adminRoutes(
 
   // Editor workflow (EDITOR+)
   app.register(editorRoutes);
+
+  // Webhooks & digests (ADMIN+)
+  app.register(webhookRoutes);
 }
