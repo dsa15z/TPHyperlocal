@@ -9,6 +9,7 @@ import clsx from "clsx";
 import { fetchStories, type StoryFilters } from "@/lib/api";
 import { StoryTable } from "@/components/StoryTable";
 import { FilterBar } from "@/components/FilterBar";
+import { NewsProgressPanel } from "@/components/NewsProgressPanel";
 
 function DashboardContent() {
   const [filters, setFilters] = useState<StoryFilters>({
@@ -77,6 +78,9 @@ function DashboardContent() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
+        {/* Pipeline progress */}
+        <NewsProgressPanel />
+
         {/* Filter bar */}
         <FilterBar onFiltersChange={handleFiltersChange} />
 

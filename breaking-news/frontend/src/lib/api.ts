@@ -148,6 +148,33 @@ export async function deleteFeed(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/feeds/${id}`, { method: "DELETE" });
 }
 
+// ─── Pipeline Status ────────────────────────────────────────────────────────
+
+export interface QueueStatus {
+  name: string;
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
+export interface PipelineStatus {
+  timestamp: string;
+  summary: {
+    active: number;
+    waiting: number;
+    completed: number;
+    failed: number;
+    is_processing: boolean;
+  };
+  queues: QueueStatus[];
+}
+
+export async function fetchPipelineStatus(): Promise<PipelineStatus> {
+  return apiFetch<PipelineStatus>("/api/v1/pipeline/status");
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
