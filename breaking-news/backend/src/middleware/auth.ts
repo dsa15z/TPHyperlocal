@@ -39,7 +39,6 @@ declare module 'fastify' {
 export async function authMiddleware(
   request: FastifyRequest,
   reply: FastifyReply,
-  done?: HookHandlerDoneFunction,
 ): Promise<void> {
   const url = request.url.split('?')[0] ?? '';
 
