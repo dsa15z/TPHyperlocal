@@ -1,12 +1,12 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [vector, pg_trgm]
+  // pgvector requires special PostgreSQL build — enable when available
+  // extensions = [vector, pg_trgm]
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
