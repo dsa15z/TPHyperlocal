@@ -239,7 +239,8 @@ model SourcePost {
   fullArticleText    String?  @db.Text  // extracted full article from URL
   fullArticleExtractedAt DateTime?
   // Embeddings (pgvector)
-  embedding          Unsupported("vector(1536)")?  // OpenAI text-embedding-3-small
+  // embedding stored as JSON until pgvector is available
+  embeddingJson      Json?    // array of 1536 floats (upgrade to pgvector later)
   // NER entities (structured)
   entities           Json?    // { people: [], organizations: [], locations: [], events: [] }
   // Sentiment
@@ -298,8 +299,8 @@ model Story {
   // Topic cluster (BERTopic)
   topicId         Int?        // BERTopic topic number
   topicLabel      String?     // human-readable topic label
-  // Embedding for story-level similarity
-  embedding       Unsupported("vector(1536)")?
+  // Embedding for story-level similarity (JSON until pgvector available)
+  embeddingJson   Json?
   status          StoryStatus @default(EMERGING)
   sourceCount     Int         @default(0)
   firstSeenAt     DateTime    @default(now())
