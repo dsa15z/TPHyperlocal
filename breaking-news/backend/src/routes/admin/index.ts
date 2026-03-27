@@ -3,6 +3,7 @@ import { accountRoutes } from './accounts.js';
 import { marketRoutes } from './markets.js';
 import { sourceRoutes } from './sources.js';
 import { credentialRoutes } from './credentials.js';
+import { editorRoutes } from './editor.js';
 
 /**
  * Admin route aggregator.
@@ -33,4 +34,7 @@ export async function adminRoutes(
 
   // Credential management (ADMIN+)
   app.register(credentialRoutes);
+
+  // Editor workflow (EDITOR+)
+  app.register(editorRoutes);
 }
