@@ -111,7 +111,7 @@ async function main() {
     },
     {
       platform: Platform.FACEBOOK,
-      sourceType: SourceType.PUBLIC_PAGE,
+      sourceType: SourceType.GOV_AGENCY,
       name: 'Houston Police Department',
       url: 'https://www.facebook.com/houstonpolice',
       platformId: 'houstonpolice',
@@ -121,7 +121,7 @@ async function main() {
     },
     {
       platform: Platform.FACEBOOK,
-      sourceType: SourceType.PUBLIC_PAGE,
+      sourceType: SourceType.GOV_AGENCY,
       name: 'Houston Fire Department',
       url: 'https://www.facebook.com/HoustonFireDept',
       platformId: 'HoustonFireDept',
