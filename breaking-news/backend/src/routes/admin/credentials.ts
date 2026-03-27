@@ -1,310 +1,387 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Validation schemas ───────────────────────────────────────────────────────
 
-function maskSecret(value: string | null): string | null {
-  if (!value) return null;
-  if (value.length <= 8) return '****';
-  return value.substring(0, 4) + '...' + value.substring(value.length - 4);
-}
+const platformEnum = z.enum([
+  'FACEBOOK', 'TWITTER', 'RSS', 'NEWSAPI', 'GDELT',
+  'LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI', 'MANUAL',
+]);
 
-function getAccountId(request: FastifyRequest): string {
-  const accountUser = (request as any).accountUser;
-  if (!accountUser?.accountId) {
-    throw new Error('No account context');
-  }
-  return accountUser.accountId;
-}
-
-function assertRole(request: FastifyRequest, roles: string[]): void {
-  const accountUser = (request as any).accountUser;
-  if (!accountUser || !roles.includes(accountUser.role)) {
-    throw { statusCode: 403, message: 'Insufficient permissions' };
-  }
-}
-
-// ─── Schemas ────────────────────────────────────────────────────────────────
-
-const CreateCredentialSchema = z.object({
-  platform: z.enum([
-    'FACEBOOK', 'TWITTER', 'NEWSAPI', 'GDELT',
-    'LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI',
-  ]),
+const createCredentialSchema = z.object({
+  platform: platformEnum,
   name: z.string().min(1).max(255),
-  apiKey: z.string().optional(),
-  apiSecret: z.string().optional(),
-  accessToken: z.string().optional(),
+  apiKey: z.string().max(2048).optional(),
+  apiSecret: z.string().max(2048).optional(),
+  accessToken: z.string().max(4096).optional(),
   extraConfig: z.record(z.unknown()).optional(),
 });
 
-const UpdateCredentialSchema = z.object({
+const updateCredentialSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  apiKey: z.string().optional(),
-  apiSecret: z.string().optional(),
-  accessToken: z.string().optional(),
-  extraConfig: z.record(z.unknown()).optional(),
+  apiKey: z.string().max(2048).optional().nullable(),
+  apiSecret: z.string().max(2048).optional().nullable(),
+  accessToken: z.string().max(4096).optional().nullable(),
+  extraConfig: z.record(z.unknown()).optional().nullable(),
   isActive: z.boolean().optional(),
 });
 
-// ─── Routes ─────────────────────────────────────────────────────────────────
+const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
-export async function credentialsRoutes(app: FastifyInstance) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  // List credentials (masked)
-  app.get('/admin/credentials', async (request: FastifyRequest, reply: FastifyReply) => {
-    assertRole(request, ['ADMIN', 'OWNER']);
-    const accountId = getAccountId(request);
+function requireAdmin(role: string) {
+  if (role !== 'ADMIN' && role !== 'OWNER') {
+    const err = new Error('Forbidden: ADMIN role or higher required');
+    (err as any).statusCode = 403;
+    throw err;
+  }
+}
 
-    const credentials = await prisma.accountCredential.findMany({
-      where: { accountId },
-      orderBy: { platform: 'asc' },
+/**
+ * Mask a sensitive string, showing only the first 3 and last 6 characters.
+ * Returns null if the input is null/undefined.
+ */
+function maskSecret(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.length <= 12) {
+    return value.slice(0, 3) + '...' + value.slice(-3);
+  }
+  return value.slice(0, 3) + '...' + value.slice(-6);
+}
+
+/**
+ * Sanitize a credential record for API responses.
+ * NEVER return raw apiKey, apiSecret, or accessToken values.
+ */
+function sanitizeCredential(cred: {
+  id: string;
+  accountId: string;
+  platform: string;
+  name: string;
+  apiKey: string | null;
+  apiSecret: string | null;
+  accessToken: string | null;
+  extraConfig: any;
+  isActive: boolean;
+  lastUsedAt: Date | null;
+  lastError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: cred.id,
+    accountId: cred.accountId,
+    platform: cred.platform,
+    name: cred.name,
+    apiKey: maskSecret(cred.apiKey),
+    apiSecret: maskSecret(cred.apiSecret),
+    accessToken: maskSecret(cred.accessToken),
+    extraConfig: cred.extraConfig,
+    isActive: cred.isActive,
+    lastUsedAt: cred.lastUsedAt,
+    lastError: cred.lastError,
+    createdAt: cred.createdAt,
+    updatedAt: cred.updatedAt,
+  };
+}
+
+// ─── Platform test helpers ───────────────────────────────────────────────────
+
+interface TestResult {
+  success: boolean;
+  message: string;
+  latencyMs?: number;
+}
+
+async function testNewsApi(apiKey: string): Promise<TestResult> {
+  const start = Date.now();
+  try {
+    const res = await fetch(
+      `https://newsapi.org/v2/top-headlines?country=us&pageSize=1`,
+      { headers: { 'X-Api-Key': apiKey }, signal: AbortSignal.timeout(10000) },
+    );
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { success: true, message: 'NewsAPI connection successful', latencyMs };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { success: false, message: (body as any).message ?? `HTTP ${res.status}`, latencyMs };
+  } catch (err: any) {
+    return { success: false, message: err.message ?? 'Connection failed', latencyMs: Date.now() - start };
+  }
+}
+
+async function testOpenAI(apiKey: string): Promise<TestResult> {
+  const start = Date.now();
+  try {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10000),
     });
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { success: true, message: 'OpenAI connection successful', latencyMs };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { success: false, message: (body as any).error?.message ?? `HTTP ${res.status}`, latencyMs };
+  } catch (err: any) {
+    return { success: false, message: err.message ?? 'Connection failed', latencyMs: Date.now() - start };
+  }
+}
 
-    const masked = credentials.map((c) => ({
-      id: c.id,
-      platform: c.platform,
-      name: c.name,
-      apiKey: maskSecret(c.apiKey),
-      apiSecret: maskSecret(c.apiSecret),
-      accessToken: maskSecret(c.accessToken),
-      extraConfig: c.extraConfig,
-      isActive: c.isActive,
-      lastUsedAt: c.lastUsedAt,
-      lastError: c.lastError,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-    }));
+async function testClaude(apiKey: string): Promise<TestResult> {
+  const start = Date.now();
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'ping' }],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { success: true, message: 'Claude connection successful', latencyMs };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { success: false, message: (body as any).error?.message ?? `HTTP ${res.status}`, latencyMs };
+  } catch (err: any) {
+    return { success: false, message: err.message ?? 'Connection failed', latencyMs: Date.now() - start };
+  }
+}
 
-    return { data: masked };
+async function testGrok(apiKey: string): Promise<TestResult> {
+  const start = Date.now();
+  try {
+    const res = await fetch('https://api.x.ai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { success: true, message: 'Grok connection successful', latencyMs };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { success: false, message: (body as any).error?.message ?? `HTTP ${res.status}`, latencyMs };
+  } catch (err: any) {
+    return { success: false, message: err.message ?? 'Connection failed', latencyMs: Date.now() - start };
+  }
+}
+
+async function testGemini(apiKey: string): Promise<TestResult> {
+  const start = Date.now();
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`,
+      { signal: AbortSignal.timeout(10000) },
+    );
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { success: true, message: 'Gemini connection successful', latencyMs };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { success: false, message: (body as any).error?.message ?? `HTTP ${res.status}`, latencyMs };
+  } catch (err: any) {
+    return { success: false, message: err.message ?? 'Connection failed', latencyMs: Date.now() - start };
+  }
+}
+
+async function testCredentialByPlatform(
+  platform: string,
+  credential: { apiKey: string | null; apiSecret: string | null; accessToken: string | null },
+): Promise<TestResult> {
+  switch (platform) {
+    case 'NEWSAPI': {
+      if (!credential.apiKey) return { success: false, message: 'No API key configured' };
+      return testNewsApi(credential.apiKey);
+    }
+    case 'LLM_OPENAI': {
+      const key = credential.apiKey ?? credential.accessToken;
+      if (!key) return { success: false, message: 'No API key or access token configured' };
+      return testOpenAI(key);
+    }
+    case 'LLM_CLAUDE': {
+      const key = credential.apiKey ?? credential.accessToken;
+      if (!key) return { success: false, message: 'No API key or access token configured' };
+      return testClaude(key);
+    }
+    case 'LLM_GROK': {
+      const key = credential.apiKey ?? credential.accessToken;
+      if (!key) return { success: false, message: 'No API key or access token configured' };
+      return testGrok(key);
+    }
+    case 'LLM_GEMINI': {
+      const key = credential.apiKey ?? credential.accessToken;
+      if (!key) return { success: false, message: 'No API key or access token configured' };
+      return testGemini(key);
+    }
+    default:
+      return { success: true, message: `No automated test available for platform ${platform}. Marked as untested.` };
+  }
+}
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+export async function credentialRoutes(
+  app: FastifyInstance,
+  _opts: FastifyPluginOptions,
+) {
+  // GET /admin/credentials — list credentials for account (masked)
+  app.get('/credentials', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const query = paginationSchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({ error: 'Validation error', details: query.error.flatten() });
+    }
+    const { limit, offset } = query.data;
+
+    const [credentials, total] = await Promise.all([
+      prisma.accountCredential.findMany({
+        where: { accountId: au.accountId },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.accountCredential.count({ where: { accountId: au.accountId } }),
+    ]);
+
+    return reply.status(200).send({
+      data: credentials.map(sanitizeCredential),
+      total,
+      limit,
+      offset,
+    });
   });
 
-  // Create credential
-  app.post('/admin/credentials', async (request: FastifyRequest, reply: FastifyReply) => {
-    assertRole(request, ['ADMIN', 'OWNER']);
-    const accountId = getAccountId(request);
+  // POST /admin/credentials — create credential
+  app.post('/credentials', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
 
-    const body = CreateCredentialSchema.parse(request.body);
-
-    // Check for duplicate platform+name
-    const existing = await prisma.accountCredential.findUnique({
-      where: {
-        accountId_platform_name: {
-          accountId,
-          platform: body.platform as any,
-          name: body.name,
-        },
-      },
-    });
-
-    if (existing) {
-      return reply.status(409).send({
-        error: 'Conflict',
-        message: `Credential "${body.name}" already exists for ${body.platform}`,
-      });
+    const parsed = createCredentialSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
     }
+
+    const data = parsed.data;
 
     const credential = await prisma.accountCredential.create({
       data: {
-        accountId,
-        platform: body.platform as any,
-        name: body.name,
-        apiKey: body.apiKey || null,
-        apiSecret: body.apiSecret || null,
-        accessToken: body.accessToken || null,
-        extraConfig: body.extraConfig || null,
+        accountId: au.accountId,
+        platform: data.platform as any,
+        name: data.name,
+        apiKey: data.apiKey ?? null,
+        apiSecret: data.apiSecret ?? null,
+        accessToken: data.accessToken ?? null,
+        extraConfig: data.extraConfig ?? undefined,
       },
     });
 
-    return reply.status(201).send({
-      data: {
-        id: credential.id,
-        platform: credential.platform,
-        name: credential.name,
-        apiKey: maskSecret(credential.apiKey),
-        apiSecret: maskSecret(credential.apiSecret),
-        accessToken: maskSecret(credential.accessToken),
-        isActive: credential.isActive,
-        createdAt: credential.createdAt,
-      },
-    });
+    return reply.status(201).send(sanitizeCredential(credential));
   });
 
-  // Update credential
-  app.patch('/admin/credentials/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    assertRole(request, ['ADMIN', 'OWNER']);
-    const accountId = getAccountId(request);
-    const { id } = request.params;
+  // PATCH /admin/credentials/:id — update credential
+  app.patch('/credentials/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
 
-    const body = UpdateCredentialSchema.parse(request.body);
+    const { id } = request.params as { id: string };
 
-    const existing = await prisma.accountCredential.findFirst({
-      where: { id, accountId },
-    });
-
-    if (!existing) {
-      return reply.status(404).send({ error: 'Not Found', message: 'Credential not found' });
+    const parsed = updateCredentialSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
     }
 
-    const updated = await prisma.accountCredential.update({
+    // Verify credential belongs to account
+    const existing = await prisma.accountCredential.findFirst({
+      where: { id, accountId: au.accountId },
+    });
+    if (!existing) {
+      return reply.status(404).send({ error: 'Credential not found' });
+    }
+
+    const credential = await prisma.accountCredential.update({
       where: { id },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.apiKey !== undefined && { apiKey: body.apiKey }),
-        ...(body.apiSecret !== undefined && { apiSecret: body.apiSecret }),
-        ...(body.accessToken !== undefined && { accessToken: body.accessToken }),
-        ...(body.extraConfig !== undefined && { extraConfig: body.extraConfig }),
-        ...(body.isActive !== undefined && { isActive: body.isActive }),
-        lastError: null, // Clear error on update
-      },
+      data: parsed.data,
     });
 
-    return {
-      data: {
-        id: updated.id,
-        platform: updated.platform,
-        name: updated.name,
-        apiKey: maskSecret(updated.apiKey),
-        apiSecret: maskSecret(updated.apiSecret),
-        accessToken: maskSecret(updated.accessToken),
-        isActive: updated.isActive,
-        updatedAt: updated.updatedAt,
-      },
-    };
+    return reply.status(200).send(sanitizeCredential(credential));
   });
 
-  // Delete credential
-  app.delete('/admin/credentials/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    assertRole(request, ['ADMIN', 'OWNER']);
-    const accountId = getAccountId(request);
-    const { id } = request.params;
+  // DELETE /admin/credentials/:id — delete credential
+  app.delete('/credentials/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
 
     const existing = await prisma.accountCredential.findFirst({
-      where: { id, accountId },
+      where: { id, accountId: au.accountId },
     });
-
     if (!existing) {
-      return reply.status(404).send({ error: 'Not Found', message: 'Credential not found' });
+      return reply.status(404).send({ error: 'Credential not found' });
     }
 
     await prisma.accountCredential.delete({ where: { id } });
-    return reply.status(204).send();
+
+    return reply.status(200).send({ message: 'Credential deleted' });
   });
 
-  // Test credential
-  app.post('/admin/credentials/:id/test', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    assertRole(request, ['ADMIN', 'OWNER']);
-    const accountId = getAccountId(request);
-    const { id } = request.params;
+  // POST /admin/credentials/:id/test — test if credential is valid
+  app.post('/credentials/:id/test', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
 
     const credential = await prisma.accountCredential.findFirst({
-      where: { id, accountId },
+      where: { id, accountId: au.accountId },
+    });
+    if (!credential) {
+      return reply.status(404).send({ error: 'Credential not found' });
+    }
+
+    const result = await testCredentialByPlatform(credential.platform, {
+      apiKey: credential.apiKey,
+      apiSecret: credential.apiSecret,
+      accessToken: credential.accessToken,
     });
 
-    if (!credential) {
-      return reply.status(404).send({ error: 'Not Found', message: 'Credential not found' });
-    }
-
-    let testResult: { success: boolean; message: string; latencyMs: number };
-    const start = Date.now();
-
-    try {
-      switch (credential.platform) {
-        case 'NEWSAPI': {
-          const resp = await fetch(
-            `https://newsapi.org/v2/top-headlines?country=us&pageSize=1&apiKey=${credential.apiKey}`,
-            { signal: AbortSignal.timeout(10000) }
-          );
-          testResult = {
-            success: resp.ok,
-            message: resp.ok ? 'NewsAPI connection successful' : `HTTP ${resp.status}`,
-            latencyMs: Date.now() - start,
-          };
-          break;
-        }
-        case 'LLM_OPENAI': {
-          const resp = await fetch('https://api.openai.com/v1/models', {
-            headers: { 'Authorization': `Bearer ${credential.apiKey}` },
-            signal: AbortSignal.timeout(10000),
-          });
-          testResult = {
-            success: resp.ok,
-            message: resp.ok ? 'OpenAI connection successful' : `HTTP ${resp.status}`,
-            latencyMs: Date.now() - start,
-          };
-          break;
-        }
-        case 'LLM_CLAUDE': {
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'x-api-key': credential.apiKey || '',
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 10,
-              messages: [{ role: 'user', content: 'ping' }],
-            }),
-            signal: AbortSignal.timeout(15000),
-          });
-          testResult = {
-            success: resp.ok,
-            message: resp.ok ? 'Claude connection successful' : `HTTP ${resp.status}`,
-            latencyMs: Date.now() - start,
-          };
-          break;
-        }
-        case 'LLM_GROK': {
-          const resp = await fetch('https://api.x.ai/v1/models', {
-            headers: { 'Authorization': `Bearer ${credential.apiKey}` },
-            signal: AbortSignal.timeout(10000),
-          });
-          testResult = {
-            success: resp.ok,
-            message: resp.ok ? 'Grok connection successful' : `HTTP ${resp.status}`,
-            latencyMs: Date.now() - start,
-          };
-          break;
-        }
-        case 'LLM_GEMINI': {
-          const resp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models?key=${credential.apiKey}`,
-            { signal: AbortSignal.timeout(10000) }
-          );
-          testResult = {
-            success: resp.ok,
-            message: resp.ok ? 'Gemini connection successful' : `HTTP ${resp.status}`,
-            latencyMs: Date.now() - start,
-          };
-          break;
-        }
-        default:
-          testResult = {
-            success: true,
-            message: `No test available for ${credential.platform}`,
-            latencyMs: 0,
-          };
-      }
-    } catch (err) {
-      testResult = {
-        success: false,
-        message: err instanceof Error ? err.message : 'Unknown error',
-        latencyMs: Date.now() - start,
-      };
-    }
-
-    // Update credential with test result
+    // Update last used and last error
     await prisma.accountCredential.update({
       where: { id },
       data: {
         lastUsedAt: new Date(),
-        lastError: testResult.success ? null : testResult.message,
+        lastError: result.success ? null : result.message,
       },
+    }).catch(() => {
+      // Swallow errors from background update
     });
 
-    return { data: testResult };
+    return reply.status(200).send({
+      credentialId: id,
+      platform: credential.platform,
+      name: credential.name,
+      ...result,
+    });
   });
 }
