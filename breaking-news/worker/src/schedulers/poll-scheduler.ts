@@ -7,6 +7,14 @@ const logger = createChildLogger('scheduler');
 
 let ingestionQueue: Queue;
 let scoringQueue: Queue;
+let llmIngestionQueue: Queue;
+let articleExtractionQueue: Queue;
+let geocodingQueue: Queue;
+let embeddingsQueue: Queue;
+let summarizationQueue: Queue;
+let sentimentQueue: Queue;
+let credibilityQueue: Queue;
+let digestQueue: Queue;
 
 /**
  * Initialize BullMQ queues used by the scheduler
@@ -20,8 +28,43 @@ function getQueues() {
   if (!scoringQueue) {
     scoringQueue = new Queue('scoring', { connection });
   }
+  if (!llmIngestionQueue) {
+    llmIngestionQueue = new Queue('llm-ingestion', { connection });
+  }
+  if (!articleExtractionQueue) {
+    articleExtractionQueue = new Queue('article-extraction', { connection });
+  }
+  if (!geocodingQueue) {
+    geocodingQueue = new Queue('geocoding', { connection });
+  }
+  if (!embeddingsQueue) {
+    embeddingsQueue = new Queue('embeddings', { connection });
+  }
+  if (!summarizationQueue) {
+    summarizationQueue = new Queue('summarization', { connection });
+  }
+  if (!sentimentQueue) {
+    sentimentQueue = new Queue('sentiment', { connection });
+  }
+  if (!credibilityQueue) {
+    credibilityQueue = new Queue('credibility', { connection });
+  }
+  if (!digestQueue) {
+    digestQueue = new Queue('digest', { connection });
+  }
 
-  return { ingestionQueue, scoringQueue };
+  return {
+    ingestionQueue,
+    scoringQueue,
+    llmIngestionQueue,
+    articleExtractionQueue,
+    geocodingQueue,
+    embeddingsQueue,
+    summarizationQueue,
+    sentimentQueue,
+    credibilityQueue,
+    digestQueue,
+  };
 }
 
 /**
@@ -160,6 +203,404 @@ async function scheduleFacebookPagePolls(): Promise<void> {
 }
 
 /**
+ * Schedule LLM polling jobs for all active LLM sources
+ */
+async function scheduleLLMPolls(): Promise<void> {
+  const { llmIngestionQueue } = getQueues();
+
+  try {
+    const llmSources = await prisma.source.findMany({
+      where: {
+        platform: { in: ['LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI'] },
+        isActive: true,
+      },
+      include: {
+        market: true,
+      },
+    });
+
+    logger.info({ count: llmSources.length }, 'Scheduling LLM poll jobs');
+
+    for (const source of llmSources) {
+      // Find the matching AccountCredential for this platform
+      const credential = await prisma.accountCredential.findFirst({
+        where: {
+          platform: source.platform,
+          isActive: true,
+        },
+      });
+
+      if (!credential?.apiKey) {
+        logger.warn({ sourceId: source.id, platform: source.platform }, 'No API key found for LLM source, skipping');
+        continue;
+      }
+
+      const marketKeywords = source.market?.keywords as string[] | null;
+
+      await llmIngestionQueue.add(
+        'llm_poll',
+        {
+          type: 'llm_poll',
+          sourceId: source.id,
+          platform: source.platform,
+          marketName: source.market?.name || null,
+          marketKeywords: marketKeywords || [],
+          apiKey: credential.apiKey,
+        },
+        {
+          jobId: `llm-poll-${source.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule LLM polls');
+  }
+}
+
+/**
+ * Schedule article extraction jobs for posts with URLs but no extracted text
+ */
+async function scheduleArticleExtractions(): Promise<void> {
+  const { articleExtractionQueue } = getQueues();
+
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const posts = await prisma.sourcePost.findMany({
+      where: {
+        url: { not: null },
+        fullArticleText: null,
+        createdAt: { gte: oneHourAgo },
+      },
+      select: { id: true, url: true },
+    });
+
+    logger.info({ count: posts.length }, 'Scheduling article extraction jobs');
+
+    for (const post of posts) {
+      await articleExtractionQueue.add(
+        'extract_article',
+        {
+          type: 'extract_article',
+          sourcePostId: post.id,
+          url: post.url,
+        },
+        {
+          jobId: `article-extract-${post.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule article extractions');
+  }
+}
+
+/**
+ * Schedule geocoding jobs for stories with location names but no coordinates
+ */
+async function scheduleGeocodingJobs(): Promise<void> {
+  const { geocodingQueue } = getQueues();
+
+  try {
+    const stories = await prisma.story.findMany({
+      where: {
+        OR: [
+          { locationName: { not: null } },
+          { neighborhood: { not: null } },
+        ],
+        latitude: null,
+        geocodedAt: null,
+      },
+      select: { id: true, locationName: true, neighborhood: true },
+    });
+
+    logger.info({ count: stories.length }, 'Scheduling geocoding jobs');
+
+    for (const story of stories) {
+      await geocodingQueue.add(
+        'geocode_story',
+        {
+          type: 'geocode_story',
+          storyId: story.id,
+          locationName: story.locationName,
+          neighborhood: story.neighborhood,
+        },
+        {
+          jobId: `geocode-${story.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule geocoding jobs');
+  }
+}
+
+/**
+ * Schedule embedding generation jobs for recent posts and stories
+ */
+async function scheduleEmbeddingJobs(): Promise<void> {
+  const { embeddingsQueue } = getQueues();
+
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    // Find source posts from the last hour with non-empty content
+    const posts = await prisma.sourcePost.findMany({
+      where: {
+        createdAt: { gte: oneHourAgo },
+        content: { not: '' },
+      },
+      select: { id: true },
+    });
+
+    logger.info({ count: posts.length }, 'Scheduling source post embedding jobs');
+
+    for (const post of posts) {
+      await embeddingsQueue.add(
+        'embed_post',
+        {
+          type: 'embed_post',
+          sourcePostId: post.id,
+        },
+        {
+          jobId: `embed-post-${post.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+
+    // Find stories updated in the last hour
+    const stories = await prisma.story.findMany({
+      where: {
+        updatedAt: { gte: oneHourAgo },
+      },
+      select: { id: true },
+    });
+
+    logger.info({ count: stories.length }, 'Scheduling story embedding jobs');
+
+    for (const story of stories) {
+      await embeddingsQueue.add(
+        'embed_story',
+        {
+          type: 'embed_story',
+          storyId: story.id,
+        },
+        {
+          jobId: `embed-story-${story.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule embedding jobs');
+  }
+}
+
+/**
+ * Schedule summarization jobs for stories with enough sources but no summary
+ */
+async function scheduleSummarizationJobs(): Promise<void> {
+  const { summarizationQueue } = getQueues();
+
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const stories = await prisma.story.findMany({
+      where: {
+        sourceCount: { gte: 3 },
+        OR: [
+          { aiSummary: null },
+          { aiSummaryAt: { lt: oneHourAgo } },
+        ],
+      },
+      select: { id: true, sourceCount: true },
+    });
+
+    logger.info({ count: stories.length }, 'Scheduling summarization jobs');
+
+    for (const story of stories) {
+      await summarizationQueue.add(
+        'summarize_story',
+        {
+          type: 'summarize_story',
+          storyId: story.id,
+        },
+        {
+          jobId: `summarize-${story.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule summarization jobs');
+  }
+}
+
+/**
+ * Schedule sentiment analysis jobs for recent posts without sentiment scores
+ */
+async function scheduleSentimentJobs(): Promise<void> {
+  const { sentimentQueue } = getQueues();
+
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const posts = await prisma.sourcePost.findMany({
+      where: {
+        createdAt: { gte: oneHourAgo },
+        sentimentScore: null,
+      },
+      select: { id: true },
+    });
+
+    logger.info({ count: posts.length }, 'Scheduling sentiment analysis jobs');
+
+    for (const post of posts) {
+      await sentimentQueue.add(
+        'analyze_sentiment',
+        {
+          type: 'analyze_sentiment',
+          sourcePostId: post.id,
+        },
+        {
+          jobId: `sentiment-${post.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule sentiment jobs');
+  }
+}
+
+/**
+ * Schedule credibility score updates for all active sources (daily)
+ */
+async function scheduleCredibilityUpdates(): Promise<void> {
+  const { credibilityQueue } = getQueues();
+
+  try {
+    const sources = await prisma.source.findMany({
+      where: {
+        isActive: true,
+      },
+      select: { id: true, name: true },
+    });
+
+    logger.info({ count: sources.length }, 'Scheduling credibility update jobs');
+
+    for (const source of sources) {
+      await credibilityQueue.add(
+        'update_credibility',
+        {
+          type: 'update_credibility',
+          sourceId: source.id,
+        },
+        {
+          jobId: `credibility-${source.id}-${Date.now()}`,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 86400 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule credibility updates');
+  }
+}
+
+/**
+ * Schedule digest email jobs for subscriptions that are due
+ */
+async function scheduleDigests(): Promise<void> {
+  const { digestQueue } = getQueues();
+
+  try {
+    const now = new Date();
+
+    const subscriptions = await prisma.digestSubscription.findMany({
+      where: {
+        isActive: true,
+      },
+    });
+
+    // Filter to only subscriptions that are due based on frequency and lastSentAt
+    const dueSubscriptions = subscriptions.filter((sub) => {
+      if (!sub.lastSentAt) return true; // Never sent, so it's due
+
+      const lastSent = sub.lastSentAt.getTime();
+      const elapsed = now.getTime() - lastSent;
+
+      switch (sub.frequency) {
+        case 'HOURLY':
+          return elapsed >= 60 * 60 * 1000; // 1 hour
+        case 'TWICE_DAILY':
+          return elapsed >= 12 * 60 * 60 * 1000; // 12 hours
+        case 'DAILY':
+          return elapsed >= 24 * 60 * 60 * 1000; // 24 hours
+        case 'WEEKLY':
+          return elapsed >= 7 * 24 * 60 * 60 * 1000; // 7 days
+        default:
+          return false;
+      }
+    });
+
+    logger.info({ count: dueSubscriptions.length, total: subscriptions.length }, 'Scheduling digest jobs');
+
+    for (const sub of dueSubscriptions) {
+      await digestQueue.add(
+        'send_digest',
+        {
+          type: 'send_digest',
+          subscriptionId: sub.id,
+          accountId: sub.accountId,
+          userId: sub.userId,
+          email: sub.email,
+          frequency: sub.frequency,
+          timezone: sub.timezone,
+          filters: sub.filters,
+        },
+        {
+          jobId: `digest-${sub.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule digests');
+  }
+}
+
+/**
  * Re-score all non-archived stories to apply score decay
  */
 async function runScoreDecay(): Promise<void> {
@@ -245,10 +686,45 @@ export function startSchedulers(): void {
   const cleanupInterval = setInterval(runCleanup, 60 * 60 * 1000);
   intervals.push(cleanupInterval);
 
+  // LLM polls: every 10 minutes
+  const llmInterval = setInterval(scheduleLLMPolls, 10 * 60 * 1000);
+  intervals.push(llmInterval);
+
+  // Article extraction: every 5 minutes
+  const articleExtractionInterval = setInterval(scheduleArticleExtractions, 5 * 60 * 1000);
+  intervals.push(articleExtractionInterval);
+
+  // Geocoding: every 15 minutes
+  const geocodingInterval = setInterval(scheduleGeocodingJobs, 15 * 60 * 1000);
+  intervals.push(geocodingInterval);
+
+  // Embeddings: every 10 minutes
+  const embeddingsInterval = setInterval(scheduleEmbeddingJobs, 10 * 60 * 1000);
+  intervals.push(embeddingsInterval);
+
+  // Summarization: every 15 minutes
+  const summarizationInterval = setInterval(scheduleSummarizationJobs, 15 * 60 * 1000);
+  intervals.push(summarizationInterval);
+
+  // Sentiment: every 5 minutes
+  const sentimentInterval = setInterval(scheduleSentimentJobs, 5 * 60 * 1000);
+  intervals.push(sentimentInterval);
+
+  // Credibility: every 24 hours
+  const credibilityInterval = setInterval(scheduleCredibilityUpdates, 24 * 60 * 60 * 1000);
+  intervals.push(credibilityInterval);
+
+  // Digests: every 5 minutes (checks if any are due)
+  const digestInterval = setInterval(scheduleDigests, 5 * 60 * 1000);
+  intervals.push(digestInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
   void scheduleFacebookPagePolls();
+  void scheduleLLMPolls();
+  void scheduleArticleExtractions();
+  void scheduleGeocodingJobs();
 
   logger.info('All schedulers started');
 }
@@ -266,6 +742,14 @@ export async function stopSchedulers(): Promise<void> {
 
   if (ingestionQueue) await ingestionQueue.close();
   if (scoringQueue) await scoringQueue.close();
+  if (llmIngestionQueue) await llmIngestionQueue.close();
+  if (articleExtractionQueue) await articleExtractionQueue.close();
+  if (geocodingQueue) await geocodingQueue.close();
+  if (embeddingsQueue) await embeddingsQueue.close();
+  if (summarizationQueue) await summarizationQueue.close();
+  if (sentimentQueue) await sentimentQueue.close();
+  if (credibilityQueue) await credibilityQueue.close();
+  if (digestQueue) await digestQueue.close();
 
   logger.info('Schedulers stopped');
 }

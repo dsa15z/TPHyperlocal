@@ -7,6 +7,16 @@ import { createIngestionWorker } from './workers/ingestion.worker.js';
 import { createEnrichmentWorker } from './workers/enrichment.worker.js';
 import { createClusteringWorker } from './workers/clustering.worker.js';
 import { createScoringWorker } from './workers/scoring.worker.js';
+import { createLLMIngestionWorker } from './workers/llm-ingestion.worker.js';
+import { createArticleExtractionWorker } from './workers/article-extraction.worker.js';
+import { createGeocodingWorker } from './workers/geocoding.worker.js';
+import { createEmbeddingsWorker } from './workers/embeddings.worker.js';
+import { createNotificationWorker } from './workers/notification.worker.js';
+import { createSummarizationWorker } from './workers/summarization.worker.js';
+import { createSentimentWorker } from './workers/sentiment.worker.js';
+import { createCredibilityWorker } from './workers/credibility.worker.js';
+import { createRSSDiscoveryWorker } from './workers/rss-discovery.worker.js';
+import { createDigestWorker } from './workers/digest.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -51,6 +61,46 @@ async function main(): Promise<void> {
   const scoringWorker = createScoringWorker();
   workers.push(scoringWorker);
   logger.info('Scoring worker started');
+
+  const llmIngestionWorker = createLLMIngestionWorker();
+  workers.push(llmIngestionWorker);
+  logger.info('LLM ingestion worker started');
+
+  const articleExtractionWorker = createArticleExtractionWorker();
+  workers.push(articleExtractionWorker);
+  logger.info('Article extraction worker started');
+
+  const geocodingWorker = createGeocodingWorker();
+  workers.push(geocodingWorker);
+  logger.info('Geocoding worker started');
+
+  const embeddingsWorker = createEmbeddingsWorker();
+  workers.push(embeddingsWorker);
+  logger.info('Embeddings worker started');
+
+  const notificationWorker = createNotificationWorker();
+  workers.push(notificationWorker);
+  logger.info('Notification worker started');
+
+  const summarizationWorker = createSummarizationWorker();
+  workers.push(summarizationWorker);
+  logger.info('Summarization worker started');
+
+  const sentimentWorker = createSentimentWorker();
+  workers.push(sentimentWorker);
+  logger.info('Sentiment worker started');
+
+  const credibilityWorker = createCredibilityWorker();
+  workers.push(credibilityWorker);
+  logger.info('Credibility worker started');
+
+  const rssDiscoveryWorker = createRSSDiscoveryWorker();
+  workers.push(rssDiscoveryWorker);
+  logger.info('RSS discovery worker started');
+
+  const digestWorker = createDigestWorker();
+  workers.push(digestWorker);
+  logger.info('Digest worker started');
 
   // Start poll schedulers
   startSchedulers();
