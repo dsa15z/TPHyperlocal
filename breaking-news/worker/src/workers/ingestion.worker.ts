@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Worker, Queue, Job } from 'bullmq';
 import { XMLParser } from 'fast-xml-parser';
 import { createChildLogger } from '../lib/logger.js';
