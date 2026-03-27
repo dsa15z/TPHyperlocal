@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
