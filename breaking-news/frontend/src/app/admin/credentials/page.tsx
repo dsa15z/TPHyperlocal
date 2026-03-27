@@ -59,10 +59,11 @@ export default function CredentialsPage() {
   const [formApiSecret, setFormApiSecret] = useState("");
   const [formAccessToken, setFormAccessToken] = useState("");
 
-  const { data: credentials = [], isLoading } = useQuery<Credential[]>({
+  const { data: credentialsData, isLoading } = useQuery({
     queryKey: ["admin-credentials"],
     queryFn: fetchCredentials,
   });
+  const credentials: Credential[] = (credentialsData as any)?.data || credentialsData || [];
 
   const createMutation = useMutation({
     mutationFn: createCredential,
