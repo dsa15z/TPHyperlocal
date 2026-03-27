@@ -59,7 +59,7 @@ export default function CredentialsPage() {
   const [formApiSecret, setFormApiSecret] = useState("");
   const [formAccessToken, setFormAccessToken] = useState("");
 
-  const { data: credentials = [], isLoading } = useQuery({
+  const { data: credentials = [], isLoading } = useQuery<Credential[]>({
     queryKey: ["admin-credentials"],
     queryFn: fetchCredentials,
   });
