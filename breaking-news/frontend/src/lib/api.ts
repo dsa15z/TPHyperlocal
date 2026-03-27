@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "./auth";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 export interface Story {
@@ -144,4 +146,144 @@ export async function createFeed(data: CreateFeedPayload): Promise<Feed> {
 
 export async function deleteFeed(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/feeds/${id}`, { method: "DELETE" });
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export interface AuthResponse {
+  token: string;
+  user: { id: string; email: string; displayName: string };
+}
+
+export async function login(
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function register(
+  email: string,
+  password: string,
+  displayName: string,
+  accountName: string
+): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>("/api/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password, displayName, accountName }),
+  });
+}
+
+// ─── Admin: Sources ──────────────────────────────────────────────────────────
+
+export async function fetchSources(): Promise<unknown[]> {
+  return apiFetch<unknown[]>("/api/v1/admin/sources", {
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function createSource(data: {
+  name: string;
+  platform: string;
+  sourceType: string;
+  url: string;
+  marketId?: string;
+  trustScore: number;
+}): Promise<unknown> {
+  return apiFetch<unknown>("/api/v1/admin/sources", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function toggleSource(
+  id: string,
+  enabled: boolean
+): Promise<unknown> {
+  return apiFetch<unknown>(`/api/v1/admin/sources/${id}`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ isActive: enabled }),
+  });
+}
+
+// ─── Admin: Credentials ─────────────────────────────────────────────────────
+
+export async function fetchCredentials(): Promise<unknown[]> {
+  return apiFetch<unknown[]>("/api/v1/admin/credentials", {
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function createCredential(data: {
+  platform: string;
+  name: string;
+  apiKey: string;
+  apiSecret?: string;
+  accessToken?: string;
+}): Promise<unknown> {
+  return apiFetch<unknown>("/api/v1/admin/credentials", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function testCredential(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  return apiFetch<{ success: boolean; message: string }>(
+    `/api/v1/admin/credentials/${id}/test`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+    }
+  );
+}
+
+export async function deleteCredential(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/admin/credentials/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+// ─── Admin: Markets ─────────────────────────────────────────────────────────
+
+export async function fetchMarkets(): Promise<unknown[]> {
+  return apiFetch<unknown[]>("/api/v1/admin/markets", {
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function createMarket(
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return apiFetch<unknown>("/api/v1/admin/markets", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateMarket(
+  id: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return apiFetch<unknown>(`/api/v1/admin/markets/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteMarket(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/admin/markets/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
 }
