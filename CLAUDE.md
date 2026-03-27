@@ -7,6 +7,8 @@
 3. **Simple first, smart later** — Jaccard similarity before embeddings. Keyword extraction before NER models. Heuristic scoring before ML. Ship v1, then upgrade.
 4. **Data pipeline integrity** — Ingestion → Enrichment → Clustering → Scoring is a strict pipeline. Each stage must be idempotent and independently retryable.
 5. **Composability** — Every component (API, MCP, RSS, workers) must function independently. Failure in one must not cascade.
+6. **Documentation as code** — Always maintain architecture docs in `breaking-news/docs/`. When you change a system, update the relevant doc section. Stale docs are worse than no docs.
+7. **API-first, always** — Every capability must be exposed as both an internal service API (for inter-service calls) and an external RESTful API (for third parties). No feature exists only in the UI. If it's in the frontend, it must have an API endpoint backing it.
 
 ## Architecture Rules
 
@@ -19,6 +21,25 @@ breaking-news/
 ├── mcp-server/  → MCP tools for AI assistants, deployed to Railway
 └── shared/      → Types, constants, DTOs (consumed by all)
 ```
+
+### Architectural Model
+This system follows a **layered service architecture**:
+1. **Data Layer** — PostgreSQL (Prisma ORM) + Redis (cache/queues). Single source of truth.
+2. **Service Layer** — Internal business logic (scoring, clustering, enrichment). Accessed via BullMQ jobs and direct function calls.
+3. **Internal API Layer** — Fastify routes used by the frontend and workers. Handles auth, validation, pagination.
+4. **External API Layer** — RESTful `/api/v1/*` endpoints for third parties. Versioned, rate-limited, documented via OpenAPI/Swagger.
+5. **Integration Layer** — MCP server (AI assistants), RSS feeds (newsroom tools), webhooks (future).
+6. **Presentation Layer** — Next.js frontend. Consumes only the API layer — never accesses DB directly.
+
+**Rule**: Every new feature must define its API contract (endpoint, request/response schema, auth) before implementation. Schema-first, not code-first.
+
+### Documentation Requirements
+- Architecture docs live in `breaking-news/docs/` (sections 01-16)
+- When adding a new API endpoint, update `docs/08-api-design.md`
+- When adding a new MCP tool, update `docs/09-mcp-server.md`
+- When changing the data model, update `docs/07-data-model.md`
+- When modifying scoring logic, update `docs/06-scoring-ranking.md`
+- Run `breaking-news/docs/README.md` as the index linking all sections
 
 ### Source of Truth
 - **PostgreSQL** is the single source of truth for all story, source, and score data
