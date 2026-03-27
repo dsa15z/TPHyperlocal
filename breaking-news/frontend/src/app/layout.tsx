@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Houston Breaking News Intelligence",
+  title: "Breaking News Intelligence",
   description:
-    "Real-time breaking news monitoring and intelligence dashboard for the Houston metro area.",
+    "Real-time breaking news monitoring and intelligence dashboard for your local markets.",
 };
 
 export default function RootLayout({

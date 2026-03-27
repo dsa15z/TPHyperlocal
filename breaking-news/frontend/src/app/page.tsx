@@ -10,8 +10,11 @@ import { fetchStories, type StoryFilters } from "@/lib/api";
 import { StoryTable } from "@/components/StoryTable";
 import { FilterBar } from "@/components/FilterBar";
 import { NewsProgressPanel } from "@/components/NewsProgressPanel";
+import { useUser } from "@/components/UserProvider";
 
 function DashboardContent() {
+  const { dashboardTitle, isLoggedIn } = useUser();
+
   const [filters, setFilters] = useState<StoryFilters>({
     time_range: "24h",
     page: 1,
@@ -53,7 +56,7 @@ function DashboardContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-bold text-white tracking-tight">
-                Houston Breaking News Intelligence
+                {dashboardTitle}
               </h1>
               <div className="live-indicator">
                 <span className="live-dot" />
@@ -61,6 +64,14 @@ function DashboardContent() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {isLoggedIn && (
+                <Link
+                  href="/settings"
+                  className="text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  News Profile
+                </Link>
+              )}
               <Link
                 href="/feeds"
                 className="text-sm text-gray-400 hover:text-white transition-colors"

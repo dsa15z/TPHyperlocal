@@ -91,8 +91,9 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  AccountUser[]
-  auditLogs AuditLog[]
+  accounts    AccountUser[]
+  preferences UserPreference[]
+  auditLogs   AuditLog[]
 
   @@index([email])
 }
@@ -111,6 +112,25 @@ model AccountUser {
   @@unique([accountId, userId])
   @@index([accountId])
   @@index([userId])
+}
+
+// ─── User Preferences (News Profile) ───────────────────────────────────────
+
+model UserPreference {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String
+  // News profile settings
+  defaultMarketId String?  // preferred market to view on dashboard
+  categories      Json?    // ["CRIME", "POLITICS", "WEATHER"] - preferred categories
+  minScore        Float    @default(0) // minimum composite score filter
+  keywords        Json?    // ["flooding", "energy"] - custom keywords of interest
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, accountId])
+  @@index([accountId])
 }
 
 // ─── Multi-Tenant: Markets ──────────────────────────────────────────────────

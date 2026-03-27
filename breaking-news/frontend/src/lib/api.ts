@@ -148,6 +148,63 @@ export async function deleteFeed(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/feeds/${id}`, { method: "DELETE" });
 }
 
+// ─── User Profile & Preferences ─────────────────────────────────────────────
+
+export interface MarketInfo {
+  id: string;
+  name: string;
+  slug: string;
+  state: string | null;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  keywords: string[] | null;
+  isActive: boolean;
+}
+
+export interface UserPreferences {
+  defaultMarketId: string | null;
+  categories: string[] | null;
+  minScore: number;
+  keywords: string[] | null;
+}
+
+export interface UserProfile {
+  user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  account: {
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+  } | null;
+  markets: MarketInfo[];
+  preferences: UserPreferences | null;
+}
+
+export async function fetchUserProfile(): Promise<UserProfile> {
+  return apiFetch<UserProfile>("/api/v1/user/profile", {
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function updateUserPreferences(
+  data: Partial<UserPreferences>
+): Promise<{ preferences: UserPreferences }> {
+  return apiFetch<{ preferences: UserPreferences }>(
+    "/api/v1/user/preferences",
+    {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    }
+  );
+}
+
 // ─── Pipeline Status ────────────────────────────────────────────────────────
 
 export interface QueueStatus {
