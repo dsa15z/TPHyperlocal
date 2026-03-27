@@ -7,11 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
 enum Platform {
   FACEBOOK
   TWITTER
   RSS
   NEWSAPI
+  GDELT
+  LLM_OPENAI
+  LLM_CLAUDE
+  LLM_GROK
+  LLM_GEMINI
   MANUAL
 }
 
@@ -21,6 +28,7 @@ enum SourceType {
   PUBLIC_PAGE
   RSS_FEED
   API_PROVIDER
+  LLM_PROVIDER
 }
 
 enum StoryStatus {
@@ -32,6 +40,146 @@ enum StoryStatus {
   ARCHIVED
 }
 
+enum UserRole {
+  VIEWER
+  EDITOR
+  ADMIN
+  OWNER
+}
+
+// ─── Multi-Tenant: Account ─────────────────────────────────────────────────
+
+model Account {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  plan        String   @default("free") // free, pro, enterprise
+  maxMarkets  Int      @default(1)
+  maxSources  Int      @default(20)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users          AccountUser[]
+  markets        Market[]
+  accountSources AccountSource[]
+  credentials    AccountCredential[]
+  apiKeys        APIKey[]
+  feeds          RSSFeed[]
+  auditLogs      AuditLog[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ─── Multi-Tenant: Users & Auth ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  displayName   String?
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  AccountUser[]
+  auditLogs AuditLog[]
+
+  @@index([email])
+}
+
+model AccountUser {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      UserRole @default(VIEWER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, userId])
+  @@index([accountId])
+  @@index([userId])
+}
+
+// ─── Multi-Tenant: Markets ──────────────────────────────────────────────────
+
+model Market {
+  id          String  @id @default(cuid())
+  accountId   String
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String  // "Houston", "Dallas", "Austin"
+  slug        String  // "houston", "dallas", "austin"
+  state       String? // "TX"
+  latitude    Float
+  longitude   Float
+  radiusKm    Float   @default(80)
+  timezone    String  @default("America/Chicago")
+  isActive    Boolean @default(true)
+  // Market-specific keyword sets for filtering
+  keywords    Json?   // ["houston", "harris county", "galveston"]
+  neighborhoods Json? // ["Galleria", "Montrose", "Heights", ...]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources Source[]
+  stories Story[]
+
+  @@unique([accountId, slug])
+  @@index([accountId, isActive])
+}
+
+// ─── Multi-Tenant: Per-Account Credentials ──────────────────────────────────
+// Each account stores their own API keys for external services
+
+model AccountCredential {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  platform    Platform
+  name        String   // "NewsAPI Key", "OpenAI API Key", etc.
+  // Encrypted credential fields
+  apiKey      String?  @db.Text // encrypted at rest
+  apiSecret   String?  @db.Text // encrypted at rest
+  accessToken String?  @db.Text // encrypted at rest
+  extraConfig Json?    // additional platform-specific config
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([accountId, platform, name])
+  @@index([accountId, platform])
+}
+
+// ─── Multi-Tenant: Account-Source Configuration ─────────────────────────────
+// Controls which sources are enabled for each account
+
+model AccountSource {
+  id             String   @id @default(cuid())
+  accountId      String
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceId       String
+  source         Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  isEnabled      Boolean  @default(true)
+  pollIntervalMs Int?     // override default poll interval
+  metadata       Json?    // account-specific source config
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([accountId, sourceId])
+  @@index([accountId, isEnabled])
+}
+
+// ─── Sources ────────────────────────────────────────────────────────────────
+
 model Source {
   id           String       @id @default(cuid())
   platform     Platform
@@ -41,16 +189,24 @@ model Source {
   platformId   String?
   trustScore   Float        @default(0.5)
   isActive     Boolean      @default(true)
+  isGlobal     Boolean      @default(false) // available to all accounts
+  marketId     String?
+  market       Market?      @relation(fields: [marketId], references: [id], onDelete: SetNull)
   metadata     Json?
   lastPolledAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  posts SourcePost[]
+  posts          SourcePost[]
+  accountSources AccountSource[]
 
   @@index([platform, isActive])
   @@index([sourceType])
+  @@index([marketId])
+  @@index([isGlobal])
 }
+
+// ─── Source Posts ────────────────────────────────────────────────────────────
 
 model SourcePost {
   id                 String   @id @default(cuid())
@@ -72,6 +228,9 @@ model SourcePost {
   category           String?
   mediaUrls          Json?
   rawData            Json?
+  // LLM-specific fields
+  llmModel           String?  // "gpt-4o", "claude-sonnet-4-6", "grok-3", "gemini-2.0-flash"
+  llmConfidence      Float?   // LLM's self-reported confidence 0-1
   publishedAt        DateTime
   collectedAt        DateTime @default(now())
   createdAt          DateTime @default(now())
@@ -85,10 +244,15 @@ model SourcePost {
   @@index([publishedAt])
 }
 
+// ─── Stories ────────────────────────────────────────────────────────────────
+
 model Story {
   id              String      @id @default(cuid())
+  marketId        String?
+  market          Market?     @relation(fields: [marketId], references: [id], onDelete: SetNull)
   title           String
   summary         String?     @db.Text
+  aiSummary       String?     @db.Text // LLM-generated canonical summary
   category        String?
   locationName    String?
   latitude        Float?
@@ -112,6 +276,7 @@ model Story {
   storySources   StorySource[]
   scoreSnapshots ScoreSnapshot[]
 
+  @@index([marketId])
   @@index([compositeScore(sort: Desc)])
   @@index([status])
   @@index([firstSeenAt(sort: Desc)])
@@ -119,7 +284,10 @@ model Story {
   @@index([trendingScore(sort: Desc)])
   @@index([category])
   @@index([status, compositeScore(sort: Desc)])
+  @@index([marketId, status, compositeScore(sort: Desc)])
 }
+
+// ─── Story-Source Links ─────────────────────────────────────────────────────
 
 model StorySource {
   id              String     @id @default(cuid())
@@ -136,6 +304,8 @@ model StorySource {
   @@index([sourcePostId])
 }
 
+// ─── Score History ──────────────────────────────────────────────────────────
+
 model ScoreSnapshot {
   id              String   @id @default(cuid())
   storyId         String
@@ -150,18 +320,28 @@ model ScoreSnapshot {
   @@index([storyId, snapshotAt(sort: Desc)])
 }
 
+// ─── RSS Feed Definitions ───────────────────────────────────────────────────
+
 model RSSFeed {
   id        String   @id @default(cuid())
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
   name      String
   slug      String   @unique
   filters   Json
   isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([accountId])
 }
+
+// ─── API Keys (for third-party consumers of OUR API) ────────────────────────
 
 model APIKey {
   id          String    @id @default(cuid())
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   key         String    @unique
   name        String
   ownerId     String
@@ -172,18 +352,25 @@ model APIKey {
   createdAt   DateTime  @default(now())
 
   @@index([key])
+  @@index([accountId])
 }
+
+// ─── Audit Log ──────────────────────────────────────────────────────────────
 
 model AuditLog {
   id          String   @id @default(cuid())
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   action      String
   entityType  String
   entityId    String
   details     Json?
-  performedBy String?
   createdAt   DateTime @default(now())
 
+  @@index([accountId])
   @@index([entityType, entityId])
-  @@index([performedBy])
+  @@index([userId])
   @@index([createdAt(sort: Desc)])
 }

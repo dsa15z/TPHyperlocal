@@ -5,6 +5,11 @@ export enum Platform {
   TWITTER = "TWITTER",
   RSS = "RSS",
   NEWSAPI = "NEWSAPI",
+  GDELT = "GDELT",
+  LLM_OPENAI = "LLM_OPENAI",
+  LLM_CLAUDE = "LLM_CLAUDE",
+  LLM_GROK = "LLM_GROK",
+  LLM_GEMINI = "LLM_GEMINI",
   MANUAL = "MANUAL",
 }
 
@@ -14,6 +19,14 @@ export enum SourceType {
   PUBLIC_PAGE = "PUBLIC_PAGE",
   RSS_FEED = "RSS_FEED",
   API_PROVIDER = "API_PROVIDER",
+  LLM_PROVIDER = "LLM_PROVIDER",
+}
+
+export enum UserRole {
+  VIEWER = "VIEWER",
+  EDITOR = "EDITOR",
+  ADMIN = "ADMIN",
+  OWNER = "OWNER",
 }
 
 export enum StoryStatus {
@@ -107,6 +120,61 @@ export interface ScoreBreakdown {
   confidenceScore: number;
   localityScore: number;
   compositeScore: number;
+}
+
+// ── Multi-Tenant DTOs ────────────────────────────────────────────────────────
+
+export interface AccountDTO {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  plan: string;
+  maxMarkets: number;
+  maxSources: number;
+  createdAt: string;
+}
+
+export interface MarketDTO {
+  id: string;
+  accountId: string;
+  name: string;
+  slug: string;
+  state: string | null;
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  timezone: string;
+  isActive: boolean;
+  keywords: string[] | null;
+  neighborhoods: string[] | null;
+}
+
+export interface AccountCredentialDTO {
+  id: string;
+  accountId: string;
+  platform: Platform;
+  name: string;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  lastError: string | null;
+  // NOTE: apiKey/apiSecret/accessToken are NEVER returned in DTOs
+}
+
+export interface UserDTO {
+  id: string;
+  email: string;
+  displayName: string | null;
+  isActive: boolean;
+  lastLoginAt: string | null;
+}
+
+export interface AccountUserDTO {
+  id: string;
+  userId: string;
+  user: UserDTO;
+  role: UserRole;
+  isActive: boolean;
 }
 
 // ── Pagination & Filters ─────────────────────────────────────────────────────
