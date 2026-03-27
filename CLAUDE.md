@@ -132,7 +132,9 @@ cd backend && npx prisma migrate dev --name <name>  # New migration
 
 ### Railway API
 - **Project ID**: `d361f9bc-3960-42f0-8936-981891df4193`
-- Railway token: pending (provide via `RAILWAY_TOKEN` env var)
+- **Token**: Set via `RAILWAY_TOKEN` env var (never commit the token)
+- **API Base**: `https://backboard.railway.com/graphql/v2` (GraphQL)
+- Use `curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -X POST` for Railway API calls
 
 ## Environment Variables
 
