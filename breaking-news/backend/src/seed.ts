@@ -1,124 +1,157 @@
-import { PrismaClient } from '@prisma/client';
-import crypto from 'crypto';
+import { PrismaClient, Platform, SourceType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database...');
 
-  // --- RSS Sources ---
+  // --- Clean existing sources to avoid duplicates (url is not unique) ---
+  await prisma.source.deleteMany({});
+  console.log('Cleared existing sources');
+
+  // --- RSS Sources (News Organizations) ---
   const rssSources = [
     {
+      platform: Platform.RSS,
+      sourceType: SourceType.NEWS_ORG,
       name: 'Houston Chronicle',
-      type: 'rss' as const,
       url: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php',
-      active: true,
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { feedUrl: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php' },
     },
     {
+      platform: Platform.RSS,
+      sourceType: SourceType.NEWS_ORG,
       name: 'KHOU 11',
-      type: 'rss' as const,
       url: 'https://www.khou.com/feeds/syndication/rss/news',
-      active: true,
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { feedUrl: 'https://www.khou.com/feeds/syndication/rss/news' },
     },
     {
+      platform: Platform.RSS,
+      sourceType: SourceType.NEWS_ORG,
       name: 'KPRC / Click2Houston',
-      type: 'rss' as const,
       url: 'https://www.click2houston.com/arcio/rss/category/news/',
-      active: true,
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { feedUrl: 'https://www.click2houston.com/arcio/rss/category/news/' },
     },
     {
+      platform: Platform.RSS,
+      sourceType: SourceType.NEWS_ORG,
       name: 'ABC13 Houston',
-      type: 'rss' as const,
       url: 'https://abc13.com/feed/',
-      active: true,
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { feedUrl: 'https://abc13.com/feed/' },
     },
     {
+      platform: Platform.RSS,
+      sourceType: SourceType.NEWS_ORG,
       name: 'Houston Public Media',
-      type: 'rss' as const,
       url: 'https://www.houstonpublicmedia.org/feed/',
-      active: true,
-    },
-    {
-      name: 'Harris County',
-      type: 'rss' as const,
-      url: 'https://www.harriscountytx.gov/rss',
-      active: true,
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { feedUrl: 'https://www.houstonpublicmedia.org/feed/' },
     },
   ];
 
-  for (const source of rssSources) {
-    await prisma.source.upsert({
-      where: { url: source.url },
-      update: {},
-      create: source,
-    });
-  }
-  console.log(`Seeded ${rssSources.length} RSS sources`);
+  // --- RSS Source (Government Agency) ---
+  const govSources = [
+    {
+      platform: Platform.RSS,
+      sourceType: SourceType.GOV_AGENCY,
+      name: 'Harris County',
+      url: 'https://www.harriscountytx.gov/rss',
+      trustScore: 0.9,
+      isActive: true,
+      metadata: { feedUrl: 'https://www.harriscountytx.gov/rss' },
+    },
+  ];
 
   // --- NewsAPI Source ---
-  const newsApiSource = {
-    name: 'NewsAPI - Houston',
-    type: 'newsapi' as const,
-    url: 'https://newsapi.org/v2/everything?q=Houston+Texas&sortBy=publishedAt',
-    active: true,
-  };
+  const newsApiSources = [
+    {
+      platform: Platform.NEWSAPI,
+      sourceType: SourceType.API_PROVIDER,
+      name: 'NewsAPI - Houston',
+      url: 'https://newsapi.org/v2/everything?q=Houston+Texas&sortBy=publishedAt',
+      trustScore: 0.8,
+      isActive: true,
+      metadata: { query: 'Houston Texas', sortBy: 'publishedAt' },
+    },
+  ];
 
-  await prisma.source.upsert({
-    where: { url: newsApiSource.url },
-    update: {},
-    create: newsApiSource,
-  });
-  console.log('Seeded NewsAPI source');
+  // --- GDELT Source ---
+  const gdeltSources = [
+    {
+      platform: Platform.NEWSAPI,
+      sourceType: SourceType.API_PROVIDER,
+      name: 'GDELT - Houston',
+      url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&format=json',
+      trustScore: 0.7,
+      isActive: true,
+      metadata: { query: 'Houston Texas', mode: 'artlist', format: 'json' },
+    },
+  ];
 
   // --- Facebook Page Sources ---
   const facebookSources = [
     {
+      platform: Platform.FACEBOOK,
+      sourceType: SourceType.GOV_AGENCY,
       name: 'City of Houston',
-      type: 'facebook' as const,
       url: 'https://www.facebook.com/cityofhouston',
-      config: { pageId: 'cityofhouston' },
-      active: true,
+      platformId: 'cityofhouston',
+      trustScore: 0.6,
+      isActive: true,
+      metadata: { pageId: 'cityofhouston' },
     },
     {
+      platform: Platform.FACEBOOK,
+      sourceType: SourceType.PUBLIC_PAGE,
       name: 'Houston Police Department',
-      type: 'facebook' as const,
       url: 'https://www.facebook.com/houstonpolice',
-      config: { pageId: 'houstonpolice' },
-      active: true,
+      platformId: 'houstonpolice',
+      trustScore: 0.6,
+      isActive: true,
+      metadata: { pageId: 'houstonpolice' },
     },
     {
+      platform: Platform.FACEBOOK,
+      sourceType: SourceType.PUBLIC_PAGE,
       name: 'Houston Fire Department',
-      type: 'facebook' as const,
       url: 'https://www.facebook.com/HoustonFireDept',
-      config: { pageId: 'HoustonFireDept' },
-      active: true,
+      platformId: 'HoustonFireDept',
+      trustScore: 0.6,
+      isActive: true,
+      metadata: { pageId: 'HoustonFireDept' },
     },
   ];
 
-  for (const source of facebookSources) {
-    await prisma.source.upsert({
-      where: { url: source.url },
-      update: {},
-      create: {
-        name: source.name,
-        type: source.type,
-        url: source.url,
-        active: source.active,
-        config: source.config,
-      },
-    });
+  const allSources = [
+    ...rssSources,
+    ...govSources,
+    ...newsApiSources,
+    ...gdeltSources,
+    ...facebookSources,
+  ];
+
+  for (const source of allSources) {
+    await prisma.source.create({ data: source });
   }
-  console.log(`Seeded ${facebookSources.length} Facebook sources`);
+  console.log(`Seeded ${allSources.length} sources`);
 
   // --- Default Public RSS Feed ---
-  await prisma.feed.upsert({
+  await prisma.rSSFeed.upsert({
     where: { slug: 'houston-breaking' },
     update: {},
     create: {
-      title: 'Houston Breaking News',
+      name: 'Houston Breaking News',
       slug: 'houston-breaking',
-      description: 'Real-time breaking news from the Houston metro area',
-      public: true,
+      isPublic: true,
       filters: {
         minSeverity: 3,
         region: 'houston-metro',
@@ -128,14 +161,15 @@ async function main() {
   console.log('Seeded default RSS feed definition');
 
   // --- Default Development API Key ---
-  const devKey = crypto.randomBytes(32).toString('hex');
-  await prisma.apiKey.upsert({
+  await prisma.aPIKey.upsert({
     where: { key: 'dev-key-do-not-use-in-production' },
     update: {},
     create: {
       key: 'dev-key-do-not-use-in-production',
       name: 'Development Key',
-      active: true,
+      ownerId: 'system',
+      isActive: true,
+      rateLimit: 1000,
     },
   });
   console.log('Seeded development API key: dev-key-do-not-use-in-production');
