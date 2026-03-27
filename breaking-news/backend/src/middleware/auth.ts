@@ -21,6 +21,11 @@ function isPublicPath(url: string): boolean {
   // RSS feed endpoints are public
   if (url.match(/^\/api\/v1\/feeds\/[^/]+\/rss/)) return true;
 
+  // Stories and search are public (read-only)
+  if (url.startsWith('/api/v1/stories')) return true;
+  if (url.startsWith('/api/v1/search')) return true;
+  if (url.startsWith('/api/v1/feeds')) return true;
+
   return false;
 }
 
