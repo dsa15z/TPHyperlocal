@@ -289,14 +289,47 @@ export async function searchStories(
 }
 
 export async function fetchFeeds(): Promise<Feed[]> {
-  return apiFetch<Feed[]>("/api/v1/feeds");
+  const raw = await apiFetch<any>("/api/v1/feeds");
+  const feeds = raw.data || raw || [];
+  return (Array.isArray(feeds) ? feeds : []).map((f: any) => ({
+    id: f.id,
+    name: f.name,
+    filters: f.filters || {},
+    rss_url: f.rssUrl || `/api/v1/feeds/${f.slug}/rss`,
+    created_at: f.createdAt,
+  }));
 }
 
 export async function createFeed(data: CreateFeedPayload): Promise<Feed> {
-  return apiFetch<Feed>("/api/v1/feeds", {
+  // Backend expects slug; generate from name
+  const slug = data.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const raw = await apiFetch<any>("/api/v1/feeds", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      name: data.name,
+      slug,
+      filters: {
+        categories: data.filters.category ? [data.filters.category] : undefined,
+        statuses: data.filters.status ? [data.filters.status] : undefined,
+        minScore:
+          data.filters.min_score && data.filters.min_score > 0
+            ? data.filters.min_score / 100
+            : undefined,
+      },
+      isPublic: true,
+    }),
   });
+  const f = raw.data || raw;
+  return {
+    id: f.id,
+    name: f.name,
+    filters: f.filters || {},
+    rss_url: f.rssUrl || `/api/v1/feeds/${f.slug}/rss`,
+    created_at: f.createdAt,
+  };
 }
 
 export async function deleteFeed(id: string): Promise<void> {
