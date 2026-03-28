@@ -99,7 +99,7 @@ async function buildServer() {
   await app.register(storiesRoutes, { prefix: '/api/v1' });
   await app.register(searchRoutes, { prefix: '/api/v1' });
   await app.register(feedsRoutes, { prefix: '/api/v1' });
-  await app.register(adminRoutes, { prefix: '/api/v1' });
+  await app.register(adminRoutes, { prefix: '/api/v1/admin' });
   await app.register(pipelineRoutes, { prefix: '/api/v1' });
   await app.register(userRoutes, { prefix: '/api/v1' });
 
