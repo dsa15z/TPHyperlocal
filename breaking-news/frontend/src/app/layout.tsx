@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SiteNav } from "@/components/SiteNav";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,7 +25,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans bg-surface text-gray-100 antialiased min-h-screen`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <SiteNav />
+          {children}
+        </Providers>
       </body>
     </html>
   );

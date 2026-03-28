@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ExternalLink,
   MessageCircle,
   Heart,
@@ -83,19 +82,6 @@ export default function StoryDetailPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-surface-300/50 bg-surface-50/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </Link>
-        </div>
-      </header>
-
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* Story header */}
         <div className="space-y-4">
