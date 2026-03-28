@@ -106,31 +106,186 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// ─── Transformers (backend camelCase → frontend snake_case) ─────────────────
+
+function timeRangeToMaxAge(timeRange?: string): number | undefined {
+  if (!timeRange) return undefined;
+  const map: Record<string, number> = {
+    "1h": 1,
+    "6h": 6,
+    "24h": 24,
+    "7d": 168,
+  };
+  return map[timeRange];
+}
+
+const SORT_FIELD_MAP: Record<string, string> = {
+  breaking_score: "breakingScore",
+  trending_score: "trendingScore",
+  confidence_score: "confidenceScore",
+  composite_score: "compositeScore",
+  first_seen: "firstSeenAt",
+  last_updated: "lastUpdatedAt",
+  source_count: "sourceCount",
+};
+
+function transformStory(raw: any): Story {
+  return {
+    id: raw.id,
+    title: raw.editedTitle || raw.title,
+    summary: raw.editedSummary || raw.aiSummary || raw.summary || "",
+    status: raw.status,
+    category: raw.category || "Unknown",
+    location: raw.locationName || raw.neighborhood || "",
+    breaking_score: raw.breakingScore ?? 0,
+    trending_score: raw.trendingScore ?? 0,
+    confidence_score: raw.confidenceScore ?? 0,
+    locality_score: raw.localityScore ?? 0,
+    composite_score: raw.compositeScore ?? 0,
+    source_count: raw._count?.storySources ?? raw.sourceCount ?? 0,
+    first_seen: raw.firstSeenAt,
+    last_updated: raw.lastUpdatedAt,
+    sources: raw.storySources?.map(transformStorySource),
+  };
+}
+
+function transformStorySource(raw: any): SourcePost {
+  const post = raw.sourcePost || raw;
+  return {
+    id: post.id,
+    platform: post.source?.platform || post.platform || "Unknown",
+    author: post.authorName || post.source?.name || "Unknown",
+    content: post.content || "",
+    url: post.url || "",
+    engagement: {
+      likes: post.engagementLikes ?? 0,
+      shares: post.engagementShares ?? 0,
+      comments: post.engagementComments ?? 0,
+    },
+    published_at: post.publishedAt,
+  };
+}
+
+// ─── Stories ────────────────────────────────────────────────────────────────
+
 export async function fetchStories(
   filters: StoryFilters = {}
 ): Promise<StoriesResponse> {
-  const qs = buildQueryString(filters);
-  return apiFetch<StoriesResponse>(`/api/v1/stories${qs}`);
+  const page = filters.page || 1;
+  const pageSize = filters.page_size || 25;
+
+  const backendParams: Record<string, any> = {
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    sort: SORT_FIELD_MAP[filters.sort_by || ""] || "compositeScore",
+    order: filters.sort_order || "desc",
+  };
+
+  if (filters.status) backendParams.status = filters.status;
+  if (filters.category) backendParams.category = filters.category;
+  if (filters.time_range) {
+    const maxAge = timeRangeToMaxAge(filters.time_range);
+    if (maxAge) backendParams.maxAge = maxAge;
+  }
+  if (filters.min_score && filters.min_score > 0) {
+    backendParams.minScore = filters.min_score / 100;
+  }
+
+  // If there's a search query, use the search endpoint instead
+  if (filters.q) {
+    return fetchStoriesViaSearch(filters.q, backendParams, page, pageSize);
+  }
+
+  const qs = buildQueryString(backendParams);
+  const raw = await apiFetch<any>(`/api/v1/stories${qs}`);
+
+  const stories = (raw.data || []).map(transformStory);
+  const total = raw.pagination?.total ?? stories.length;
+
+  return {
+    stories,
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+async function fetchStoriesViaSearch(
+  query: string,
+  params: Record<string, any>,
+  page: number,
+  pageSize: number
+): Promise<StoriesResponse> {
+  const qs = buildQueryString({ q: query, ...params });
+  const raw = await apiFetch<any>(`/api/v1/search${qs}`);
+
+  const stories = (raw.data?.stories || []).map(transformStory);
+  const total = raw.pagination?.total ?? stories.length;
+
+  return {
+    stories,
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 
 export async function fetchStory(id: string): Promise<Story> {
-  return apiFetch<Story>(`/api/v1/stories/${id}`);
+  const raw = await apiFetch<any>(`/api/v1/stories/${id}`);
+  return transformStory(raw.data || raw);
 }
 
 export async function fetchBreakingStories(): Promise<StoriesResponse> {
-  return apiFetch<StoriesResponse>("/api/v1/stories/breaking");
+  const raw = await apiFetch<any>("/api/v1/stories/breaking");
+  const stories = (raw.data || []).map(transformStory);
+  return {
+    stories,
+    total: stories.length,
+    page: 1,
+    page_size: stories.length,
+    total_pages: 1,
+  };
 }
 
 export async function fetchTrendingStories(): Promise<StoriesResponse> {
-  return apiFetch<StoriesResponse>("/api/v1/stories/trending");
+  const raw = await apiFetch<any>("/api/v1/stories/trending");
+  const stories = (raw.data || []).map(transformStory);
+  return {
+    stories,
+    total: stories.length,
+    page: 1,
+    page_size: stories.length,
+    total_pages: 1,
+  };
 }
 
 export async function searchStories(
   query: string,
   filters: StoryFilters = {}
 ): Promise<StoriesResponse> {
-  const qs = buildQueryString({ q: query, ...filters });
-  return apiFetch<StoriesResponse>(`/api/v1/search${qs}`);
+  const page = filters.page || 1;
+  const pageSize = filters.page_size || 25;
+  const params: Record<string, any> = {
+    q: query,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  };
+  if (filters.category) params.category = filters.category;
+
+  const qs = buildQueryString(params);
+  const raw = await apiFetch<any>(`/api/v1/search${qs}`);
+  const stories = (raw.data?.stories || []).map(transformStory);
+  const total = raw.pagination?.total ?? stories.length;
+
+  return {
+    stories,
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }
 
 export async function fetchFeeds(): Promise<Feed[]> {
