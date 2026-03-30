@@ -10,14 +10,18 @@ import {
   AlertCircle,
   X,
   Check,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
+  apiFetch,
   fetchMarkets,
   createMarket,
   updateMarket,
   deleteMarket,
 } from "@/lib/api";
+import { getAuthHeaders } from "@/lib/auth";
 
 interface Market {
   id: string;
@@ -82,6 +86,30 @@ export default function MarketsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
     },
   });
+
+  const autofillMutation = useMutation({
+    mutationFn: (params: { name: string; state: string }) =>
+      apiFetch<any>("/api/v1/admin/markets/autofill", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(params),
+      }),
+    onSuccess: (data: any) => {
+      if (data.latitude) setFormLat(String(data.latitude));
+      if (data.longitude) setFormLon(String(data.longitude));
+      if (data.timezone) setFormTimezone(data.timezone);
+      if (data.radiusKm) setFormRadius(String(data.radiusKm));
+      if (data.keywords?.length) setFormKeywords(data.keywords.join(", "));
+      if (data.neighborhoods?.length) setFormNeighborhoods(data.neighborhoods.join(", "));
+      if (data.slug && !formSlug) setFormSlug(data.slug);
+    },
+  });
+
+  const handleAutofill = () => {
+    if (formName.trim() && formState.trim()) {
+      autofillMutation.mutate({ name: formName.trim(), state: formState.trim() });
+    }
+  };
 
   const resetForm = () => {
     setFormName("");
@@ -190,7 +218,13 @@ export default function MarketsPage() {
                 <input
                   type="text"
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => {
+                    setFormName(e.target.value);
+                    // Auto-generate slug from name
+                    if (!editingId) {
+                      setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+                    }
+                  }}
                   placeholder="e.g., Houston"
                   className="filter-input w-full"
                 />
@@ -213,13 +247,41 @@ export default function MarketsPage() {
                 <label className="block text-sm text-gray-400 mb-1">
                   State *
                 </label>
-                <input
-                  type="text"
-                  value={formState}
-                  onChange={(e) => setFormState(e.target.value)}
-                  placeholder="e.g., TX"
-                  className="filter-input w-full"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={formState}
+                    onChange={(e) => setFormState(e.target.value)}
+                    onBlur={() => {
+                      // Auto-fill when both name and state are set
+                      if (formName.trim() && formState.trim() && !formLat && !editingId) {
+                        handleAutofill();
+                      }
+                    }}
+                    placeholder="e.g., TX"
+                    className="filter-input flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutofill}
+                    disabled={!formName.trim() || !formState.trim() || autofillMutation.isPending}
+                    className={clsx(
+                      "filter-btn flex items-center gap-1 text-xs whitespace-nowrap",
+                      autofillMutation.isPending
+                        ? "text-purple-400 border-purple-500/30"
+                        : "text-purple-400 border-purple-500/30 hover:bg-purple-500/10",
+                      (!formName.trim() || !formState.trim()) && "opacity-40 cursor-not-allowed"
+                    )}
+                    title="Auto-fill lat/long, keywords, neighborhoods using AI"
+                  >
+                    {autofillMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    Auto-fill
+                  </button>
+                </div>
               </div>
 
               <div>
