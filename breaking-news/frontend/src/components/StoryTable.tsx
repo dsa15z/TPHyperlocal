@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   useReactTable,
@@ -82,6 +82,8 @@ interface StoryTableProps {
   onSortingChange: (sorting: SortingState) => void;
   /** Optional column configuration from the view system */
   columnConfig?: ColumnConfig[];
+  /** Called when a column is resized directly in the grid header */
+  onColumnResize?: (columnId: string, newWidth: number) => void;
 }
 
 const columnHelper = createColumnHelper<Story>();
@@ -265,6 +267,7 @@ export function StoryTable({
   sorting,
   onSortingChange,
   columnConfig,
+  onColumnResize,
 }: StoryTableProps) {
   const columns = useMemo(() => {
     const allDefs = buildColumnDefs();
@@ -300,7 +303,29 @@ export function StoryTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableSortingRemoval: true,
+    enableColumnResizing: true,
+    columnResizeMode: "onChange",
   });
+
+  // Track whether any column is currently being resized
+  const wasResizing = useRef(false);
+
+  // When resizing ends, propagate all column widths to the view system
+  const isAnyResizing = table.getState().columnSizingInfo.isResizingColumn;
+  useEffect(() => {
+    if (isAnyResizing) {
+      wasResizing.current = true;
+    } else if (wasResizing.current) {
+      // Resizing just ended — push all current widths to the view config
+      wasResizing.current = false;
+      if (onColumnResize) {
+        const sizing = table.getState().columnSizing;
+        for (const [colId, width] of Object.entries(sizing)) {
+          onColumnResize(colId, width);
+        }
+      }
+    }
+  }, [isAnyResizing, onColumnResize, table]);
 
   return (
     <div className="overflow-x-auto">
@@ -311,11 +336,12 @@ export function StoryTable({
               {headerGroup.headers.map((header) => {
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
+                const isResizing = header.column.getIsResizing();
 
                 return (
                   <th
                     key={header.id}
-                    className={clsx("table-header", canSort && "cursor-pointer")}
+                    className={clsx("table-header relative group/th", canSort && "cursor-pointer")}
                     style={{ width: header.getSize() }}
                     onClick={header.column.getToggleSortingHandler()}
                   >
@@ -336,6 +362,25 @@ export function StoryTable({
                         </span>
                       )}
                     </div>
+                    {/* Column resize handle — drag to resize, double-click to reset */}
+                    <div
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      onDoubleClick={() => header.column.resetSize()}
+                      className={clsx(
+                        "absolute top-0 right-0 w-1 h-full cursor-col-resize select-none touch-none",
+                        "opacity-0 group-hover/th:opacity-100 transition-opacity",
+                        isResizing
+                          ? "bg-accent opacity-100 w-0.5"
+                          : "hover:bg-accent/60"
+                      )}
+                    />
                   </th>
                 );
               })}

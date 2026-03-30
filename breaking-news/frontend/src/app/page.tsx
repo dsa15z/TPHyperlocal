@@ -120,6 +120,18 @@ function DashboardContent() {
     setHasViewChanges(true);
   }, []);
 
+  /** Called when a column is resized directly in the table grid header */
+  const handleColumnResize = useCallback((columnId: string, newWidth: number) => {
+    setColumnConfig((prev) =>
+      prev.map((c) =>
+        c.id === columnId
+          ? { ...c, width: Math.max(c.minWidth, Math.round(newWidth)) }
+          : c
+      )
+    );
+    setHasViewChanges(true);
+  }, []);
+
   // ── View CRUD ───────────────────────────────────────────────────────────
   const persistViews = useCallback(
     (updated: DashboardView[]) => {
@@ -282,6 +294,7 @@ function DashboardContent() {
               sorting={sorting}
               onSortingChange={setSorting}
               columnConfig={columnConfig}
+              onColumnResize={handleColumnResize}
             />
           </div>
         )}
