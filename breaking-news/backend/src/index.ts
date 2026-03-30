@@ -21,6 +21,7 @@ import { annotationRoutes } from './routes/annotations.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { registerSSERoutes } from './lib/sse.js';
+import { predictionRoutes } from './routes/predictions.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -117,6 +118,7 @@ async function buildServer() {
   await app.register(annotationRoutes, { prefix: '/api/v1' });
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
+  await app.register(predictionRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

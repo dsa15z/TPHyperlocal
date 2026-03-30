@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { AnnotationPanel } from "@/components/AnnotationPanel";
+import { StoryTimeline } from "@/components/StoryTimeline";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -216,6 +217,9 @@ export default function StoryDetailPage() {
             />
           </div>
         </div>
+
+        {/* Story development timeline */}
+        <StoryTimeline storyId={id} />
 
         {/* Editorial annotations */}
         <AnnotationPanel storyId={id} />

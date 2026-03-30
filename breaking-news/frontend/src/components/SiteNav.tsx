@@ -19,6 +19,8 @@ import {
   MessageSquare,
   BarChart3,
   FileText,
+  TrendingUp,
+  Mic,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -37,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/bookmarks", label: "Bookmarks", icon: <Bookmark className="w-4 h-4" />, section: "main" },
   { href: "/pulses", label: "Pulses", icon: <Zap className="w-4 h-4" />, section: "main" },
   { href: "/show-prep", label: "Show Prep", icon: <Mic2 className="w-4 h-4" />, section: "main" },
+  { href: "/rising", label: "Rising", icon: <TrendingUp className="w-4 h-4" />, section: "main" },
   { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" />, section: "main" },
   { href: "/feeds", label: "RSS Feeds", icon: <Rss className="w-4 h-4" />, section: "main" },
   { href: "/settings", label: "Profile", icon: <Settings className="w-4 h-4" />, section: "main" },
@@ -48,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/community-radar", label: "Social", icon: <Radio className="w-4 h-4" />, section: "admin" },
   { href: "/admin/widgets", label: "Widgets", icon: <Code className="w-4 h-4" />, section: "admin" },
   { href: "/admin/feature-flags", label: "Flags", icon: <Flag className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/audio-sources", label: "Audio", icon: <Mic className="w-4 h-4" />, section: "admin" },
   { href: "/admin/prompts", label: "Prompts", icon: <FileText className="w-4 h-4" />, section: "admin" },
   { href: "/admin/credentials", label: "Keys", icon: <KeyRound className="w-4 h-4" />, section: "admin" },
 ];

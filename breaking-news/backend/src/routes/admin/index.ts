@@ -11,6 +11,7 @@ import { featureFlagRoutes } from './feature-flags.js';
 import { widgetRoutes } from './widgets.js';
 import { promptRoutes } from './prompts.js';
 import { dashboardLayoutRoutes } from './dashboards.js';
+import { audioSourceRoutes } from './audio-sources.js';
 
 /**
  * Admin route aggregator.
@@ -65,4 +66,7 @@ export async function adminRoutes(
 
   // Dashboard layouts (ADMIN+)
   app.register(dashboardLayoutRoutes);
+
+  // Audio sources (ADMIN+)
+  app.register(audioSourceRoutes);
 }
