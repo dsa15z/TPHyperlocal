@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Plus,
   MapPin,
   Pencil,
@@ -145,21 +143,12 @@ export default function MarketsPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-surface-300/50 bg-surface-50/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-emerald-400" />
-              Markets
-            </h1>
-          </div>
+      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            <MapPin className="w-6 h-6 text-emerald-400" />
+            Markets
+          </h1>
           <button
             onClick={() => {
               if (editingId) {
@@ -174,9 +163,6 @@ export default function MarketsPage() {
             Add Market
           </button>
         </div>
-      </header>
-
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
         {/* Form */}
         {showForm && (
           <div className="glass-card-strong p-6 space-y-4 animate-in">

@@ -18,6 +18,8 @@ async function main() {
       url: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php' },
     },
     {
@@ -27,6 +29,7 @@ async function main() {
       url: 'https://www.khou.com/feeds/syndication/rss/news',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://www.khou.com/feeds/syndication/rss/news' },
     },
     {
@@ -36,6 +39,7 @@ async function main() {
       url: 'https://www.click2houston.com/arcio/rss/category/news/',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://www.click2houston.com/arcio/rss/category/news/' },
     },
     {
@@ -45,6 +49,7 @@ async function main() {
       url: 'https://abc13.com/feed/',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://abc13.com/feed/' },
     },
     {
@@ -54,6 +59,7 @@ async function main() {
       url: 'https://www.houstonpublicmedia.org/feed/',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://www.houstonpublicmedia.org/feed/' },
     },
   ];
@@ -67,6 +73,7 @@ async function main() {
       url: 'https://www.harriscountytx.gov/rss',
       trustScore: 0.9,
       isActive: true,
+      isGlobal: true,
       metadata: { feedUrl: 'https://www.harriscountytx.gov/rss' },
     },
   ];
@@ -80,6 +87,7 @@ async function main() {
       url: 'https://newsapi.org/v2/everything?q=Houston+Texas&sortBy=publishedAt',
       trustScore: 0.8,
       isActive: true,
+      isGlobal: true,
       metadata: { query: 'Houston Texas', sortBy: 'publishedAt' },
     },
   ];
@@ -93,6 +101,7 @@ async function main() {
       url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&format=json',
       trustScore: 0.7,
       isActive: true,
+      isGlobal: true,
       metadata: { query: 'Houston Texas', mode: 'artlist', format: 'json' },
     },
   ];
@@ -107,6 +116,7 @@ async function main() {
       platformId: 'cityofhouston',
       trustScore: 0.6,
       isActive: true,
+      isGlobal: true,
       metadata: { pageId: 'cityofhouston' },
     },
     {
@@ -117,6 +127,7 @@ async function main() {
       platformId: 'houstonpolice',
       trustScore: 0.6,
       isActive: true,
+      isGlobal: true,
       metadata: { pageId: 'houstonpolice' },
     },
     {
@@ -127,6 +138,7 @@ async function main() {
       platformId: 'HoustonFireDept',
       trustScore: 0.6,
       isActive: true,
+      isGlobal: true,
       metadata: { pageId: 'HoustonFireDept' },
     },
   ];
@@ -169,6 +181,7 @@ async function main() {
       name: 'Development Key',
       ownerId: 'system',
       isActive: true,
+      isGlobal: true,
       rateLimit: 1000,
     },
   });

@@ -18,7 +18,7 @@ function isPublicPath(url: string): boolean {
   // Swagger docs
   if (url.startsWith('/docs')) return true;
 
-  // Auth endpoints are public (register, login, etc.)
+  // Auth endpoints are public
   if (url.startsWith('/api/v1/auth')) return true;
 
   // RSS feed endpoints are public
@@ -28,7 +28,7 @@ function isPublicPath(url: string): boolean {
   if (url.startsWith('/api/v1/stories')) return true;
   if (url.startsWith('/api/v1/search')) return true;
   if (url.startsWith('/api/v1/feeds')) return true;
-  if (url.startsWith('/api/v1/pipeline')) return true;
+  if (url.startsWith('/api/v1/pipeline/status')) return true;
 
   return false;
 }
@@ -58,10 +58,12 @@ export async function authMiddleware(
 
   const apiKeyHeader = request.headers['x-api-key'];
 
+  // If no API key but a Bearer token is present, skip this middleware
+  // and let the JWT middleware handle authentication instead
   if (!apiKeyHeader || typeof apiKeyHeader !== 'string') {
     const authHeader = request.headers['authorization'];
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      return;
+      return; // Let JWT middleware handle it
     }
     reply.status(401).send({
       error: 'Unauthorized',

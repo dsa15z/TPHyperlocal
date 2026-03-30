@@ -4,11 +4,11 @@ import { useState, useCallback, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
 import { Radio, ChevronLeft, ChevronRight } from "lucide-react";
-import Link from "next/link";
 import clsx from "clsx";
 import { fetchStories, type StoryFilters } from "@/lib/api";
 import { StoryTable } from "@/components/StoryTable";
 import { FilterBar } from "@/components/FilterBar";
+import { NewsProgressPanel } from "@/components/NewsProgressPanel";
 
 function DashboardContent() {
   const [filters, setFilters] = useState<StoryFilters>({
@@ -20,7 +20,7 @@ function DashboardContent() {
     { id: "breaking_score", desc: true },
   ]);
 
-  const { data, isLoading, isError, error, dataUpdatedAt } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["stories", filters],
     queryFn: () =>
       fetchStories({
@@ -46,37 +46,10 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-surface-300/50 bg-surface-50/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                Houston Breaking News Intelligence
-              </h1>
-              <div className="live-indicator">
-                <span className="live-dot" />
-                LIVE
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/feeds"
-                className="text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                RSS Feeds
-              </Link>
-              {dataUpdatedAt > 0 && (
-                <span className="text-xs text-gray-600">
-                  Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
+        {/* Pipeline progress */}
+        <NewsProgressPanel />
+
         {/* Filter bar */}
         <FilterBar onFiltersChange={handleFiltersChange} />
 
