@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '@prisma/client';
+import { semanticSearch, findSimilarStories } from '../lib/vector-search.js';
 
 // ─── In-memory trending search tracker ──────────────────────────────────────
 
@@ -51,6 +52,7 @@ const SearchQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  semantic: z.enum(['true', 'false']).optional(), // enable vector similarity search
 });
 
 const SuggestSchema = z.object({
@@ -130,7 +132,8 @@ export async function searchRoutes(
       });
     }
 
-    const { q, category, status, fields, from, to, minScore, maxScore, sort, order, limit, offset } = parseResult.data;
+    const { q, category, status, fields, from, to, minScore, maxScore, sort, order, limit, offset, semantic } = parseResult.data;
+    const useSemanticSearch = semantic === 'true';
 
     // Track this search for trending
     trackSearch(q);

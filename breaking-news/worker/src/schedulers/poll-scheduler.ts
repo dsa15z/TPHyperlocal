@@ -16,6 +16,7 @@ let summarizationQueue: Queue;
 let sentimentQueue: Queue;
 let credibilityQueue: Queue;
 let digestQueue: Queue;
+let newscatcherQueue: Queue;
 
 /**
  * Initialize BullMQ queues used by the scheduler
@@ -53,6 +54,9 @@ function getQueues() {
   if (!digestQueue) {
     digestQueue = new Queue('digest', { connection });
   }
+  if (!newscatcherQueue) {
+    newscatcherQueue = new Queue('newscatcher', { connection });
+  }
 
   return {
     ingestionQueue,
@@ -65,6 +69,7 @@ function getQueues() {
     sentimentQueue,
     credibilityQueue,
     digestQueue,
+    newscatcherQueue,
   };
 }
 
@@ -235,6 +240,76 @@ async function scheduleTwitterPolls(): Promise<void> {
     }
   } catch (err) {
     logger.error({ err }, 'Failed to schedule Twitter polls');
+  }
+}
+
+/**
+ * Schedule Newscatcher API polling jobs for all active Newscatcher sources.
+ * If no NEWSCATCHER sources exist but the API key is set, looks for sources
+ * with platform='API' whose URL contains 'newscatcher'.
+ * Runs every 10 minutes.
+ */
+async function scheduleNewscatcherPolls(): Promise<void> {
+  const { newscatcherQueue } = getQueues();
+
+  const apiKey = process.env['NEWSCATCHER_API_KEY'];
+  if (!apiKey) {
+    return; // No API key, skip silently
+  }
+
+  try {
+    // First try platform = 'NEWSCATCHER'
+    let sources = await prisma.source.findMany({
+      where: {
+        platform: 'NEWSCATCHER',
+        isActive: true,
+      },
+      include: { market: true },
+    });
+
+    // Fallback: look for API sources with 'newscatcher' in the URL
+    if (sources.length === 0) {
+      sources = await prisma.source.findMany({
+        where: {
+          platform: 'API',
+          isActive: true,
+          url: { contains: 'newscatcher' },
+        },
+        include: { market: true },
+      });
+    }
+
+    if (sources.length === 0) {
+      logger.debug('No Newscatcher sources found, skipping poll');
+      return;
+    }
+
+    logger.info({ count: sources.length }, 'Scheduling Newscatcher poll jobs');
+
+    for (const source of sources) {
+      const metadata = source.metadata as Record<string, unknown> | null;
+      const marketKeywords = source.market?.keywords as string[] | null;
+      const query = (metadata?.['query'] as string) || (marketKeywords ? marketKeywords.slice(0, 5).join(' ') : 'Houston Texas');
+      const market = source.market?.name || (metadata?.['market'] as string) || undefined;
+
+      await newscatcherQueue.add(
+        'newscatcher_poll',
+        {
+          sourceId: source.id,
+          query,
+          market,
+        },
+        {
+          jobId: `newscatcher-poll-${source.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule Newscatcher polls');
   }
 }
 
@@ -848,6 +923,10 @@ export function startSchedulers(): void {
   const digestInterval = setInterval(scheduleDigests, 5 * 60 * 1000);
   intervals.push(digestInterval);
 
+  // Newscatcher: every 10 minutes
+  const newscatcherInterval = setInterval(scheduleNewscatcherPolls, 10 * 60 * 1000);
+  intervals.push(newscatcherInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -857,6 +936,7 @@ export function startSchedulers(): void {
   void scheduleStockMonitor();
   void scheduleArticleExtractions();
   void scheduleGeocodingJobs();
+  void scheduleNewscatcherPolls();
 
   logger.info('All schedulers started');
 }
