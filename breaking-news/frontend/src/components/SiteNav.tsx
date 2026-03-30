@@ -25,6 +25,11 @@ import {
   ChevronRight,
   Menu,
   X,
+  Webhook,
+  Users,
+  ClipboardCheck,
+  LayoutGrid,
+  Bell,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -47,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" />, section: "main" },
   { href: "/feeds", label: "RSS Feeds", icon: <Rss className="w-4 h-4" />, section: "main" },
   { href: "/settings", label: "News Profile", icon: <Settings className="w-4 h-4" />, section: "main" },
+  { href: "/settings/notifications", label: "Alert Settings", icon: <Bell className="w-4 h-4" />, section: "main" },
   // Admin
   { href: "/admin/sources", label: "Data Feeds", icon: <Database className="w-4 h-4" />, section: "admin" },
   { href: "/admin/markets", label: "Markets", icon: <MapPin className="w-4 h-4" />, section: "admin" },
@@ -57,6 +63,10 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/community-radar", label: "Social Monitor", icon: <Radio className="w-4 h-4" />, section: "admin" },
   { href: "/admin/widgets", label: "Widgets", icon: <Code className="w-4 h-4" />, section: "admin" },
   { href: "/admin/feature-flags", label: "Feature Flags", icon: <Flag className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/editor", label: "Review Queue", icon: <ClipboardCheck className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/webhooks", label: "Webhooks", icon: <Webhook className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/accounts", label: "Team", icon: <Users className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/dashboards", label: "Layouts", icon: <LayoutGrid className="w-4 h-4" />, section: "admin" },
   { href: "/admin/credentials", label: "API Keys", icon: <KeyRound className="w-4 h-4" />, section: "admin" },
 ];
 
