@@ -215,7 +215,7 @@ function transformStory(raw: any): Story {
     confidence_score: raw.confidenceScore ?? 0,
     locality_score: raw.localityScore ?? 0,
     composite_score: raw.compositeScore ?? 0,
-    source_count: uniqueStorySources.length || raw._count?.storySources ?? raw.sourceCount ?? 0,
+    source_count: uniqueStorySources.length || (raw._count?.storySources ?? raw.sourceCount ?? 0),
     first_seen: raw.firstSeenAt,
     last_updated: raw.lastUpdatedAt,
     sources: uniqueStorySources.map(transformStorySource),
