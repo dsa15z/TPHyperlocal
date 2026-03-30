@@ -216,6 +216,12 @@ export async function pipelineRoutes(
 
       // === SPANISH LANGUAGE ===
       { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'La Voz de Houston', url: 'https://lavoztx.com/feed/', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://lavoztx.com/feed/', language: 'es' } },
+
+      // === LLM SOURCES (AI-powered news scanning) ===
+      { platform: 'LLM_OPENAI' as const, sourceType: 'LLM_PROVIDER' as const, name: 'OpenAI - Houston Breaking News', url: 'https://api.openai.com', trustScore: 0.65, isGlobal: true, metadata: { marketName: 'Houston, Texas', marketKeywords: ['Houston', 'Harris County', 'breaking news', 'crime', 'weather', 'traffic', 'politics', 'business'], model: 'gpt-4o-mini' } },
+      { platform: 'LLM_GROK' as const, sourceType: 'LLM_PROVIDER' as const, name: 'Grok - Houston Real-Time', url: 'https://api.x.ai', trustScore: 0.70, isGlobal: true, metadata: { marketName: 'Houston, Texas', marketKeywords: ['Houston', 'Harris County', 'breaking', 'shooting', 'fire', 'flood', 'accident', 'storm'], model: 'grok-3-mini' } },
+      { platform: 'LLM_CLAUDE' as const, sourceType: 'LLM_PROVIDER' as const, name: 'Claude - Houston News Analysis', url: 'https://api.anthropic.com', trustScore: 0.65, isGlobal: true, metadata: { marketName: 'Houston, Texas', marketKeywords: ['Houston', 'Harris County', 'Texas', 'breaking news', 'developing story', 'investigation'], model: 'claude-sonnet-4-6-20250514' } },
+      { platform: 'LLM_GEMINI' as const, sourceType: 'LLM_PROVIDER' as const, name: 'Gemini - Houston News', url: 'https://generativelanguage.googleapis.com', trustScore: 0.60, isGlobal: true, metadata: { marketName: 'Houston, Texas', marketKeywords: ['Houston', 'Harris County', 'breaking news', 'trending', 'community'], model: 'gemini-2.0-flash' } },
     ];
 
     let added = 0;

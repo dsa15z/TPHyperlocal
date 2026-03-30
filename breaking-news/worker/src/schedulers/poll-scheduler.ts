@@ -285,7 +285,16 @@ async function scheduleLLMPolls(): Promise<void> {
         },
       });
 
-      if (!credential?.apiKey) {
+      // Fall back to env vars if no credential found
+      const envKeyMap: Record<string, string> = {
+        'LLM_OPENAI': 'OPENAI_API_KEY',
+        'LLM_CLAUDE': 'ANTHROPIC_API_KEY',
+        'LLM_GROK': 'XAI_API_KEY',
+        'LLM_GEMINI': 'GOOGLE_AI_KEY',
+      };
+      const apiKey = credential?.apiKey || process.env[envKeyMap[source.platform] || ''];
+
+      if (!apiKey) {
         logger.warn({ sourceId: source.id, platform: source.platform }, 'No API key found for LLM source, skipping');
         continue;
       }
@@ -300,7 +309,7 @@ async function scheduleLLMPolls(): Promise<void> {
           platform: source.platform,
           marketName: source.market?.name || null,
           marketKeywords: marketKeywords || [],
-          apiKey: credential.apiKey,
+          apiKey,
         },
         {
           jobId: `llm-poll-${source.id}-${Date.now()}`,
