@@ -34,6 +34,7 @@ import {
   ScrollText,
   MessageSquareMore,
   Network,
+  DollarSign,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -55,6 +56,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/show-prep", label: "Show Prep", icon: <Mic2 className="w-4 h-4" />, section: "main" },
   { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" />, section: "main" },
   { href: "/feeds", label: "RSS Feeds", icon: <Rss className="w-4 h-4" />, section: "main" },
+  { href: "/radio", label: "RadioGPT", icon: <Radio className="w-4 h-4" />, section: "main" },
+  { href: "/stocks", label: "Market Movers", icon: <DollarSign className="w-4 h-4" />, section: "main" },
   { href: "/topics", label: "Topic Clusters", icon: <Network className="w-4 h-4" />, section: "main" },
   { href: "/settings", label: "News Profile", icon: <Settings className="w-4 h-4" />, section: "main" },
   { href: "/settings/notifications", label: "Alert Settings", icon: <Bell className="w-4 h-4" />, section: "main" },

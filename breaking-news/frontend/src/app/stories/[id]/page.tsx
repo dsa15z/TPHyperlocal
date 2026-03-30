@@ -20,6 +20,9 @@ import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { AnnotationPanel } from "@/components/AnnotationPanel";
 import { StoryTimeline } from "@/components/StoryTimeline";
 import { PredictionBadge } from "@/components/PredictionBadge";
+import { FactCheckPanel } from "@/components/FactCheckPanel";
+import { CollaborativeEditor } from "@/components/CollaborativeEditor";
+import { TranslationPanel } from "@/components/TranslationPanel";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -221,6 +224,19 @@ export default function StoryDetailPage() {
             />
           </div>
         </div>
+
+        {/* Collaborative editor */}
+        <CollaborativeEditor
+          storyId={id}
+          initialTitle={story.title}
+          initialSummary={story.summary}
+        />
+
+        {/* Fact checking */}
+        <FactCheckPanel storyId={id} />
+
+        {/* Translations */}
+        <TranslationPanel storyId={id} />
 
         {/* Story development timeline */}
         <StoryTimeline storyId={id} />

@@ -356,6 +356,9 @@ model Story {
   bookmarks          Bookmark[]
   annotations        StoryAnnotation[]
   predictions        StoryPrediction[]
+  editSessions       StoryEditSession[]
+  factChecks         FactCheck[]
+  translations       TranslatedContent[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -871,6 +874,115 @@ model DashboardLayout {
   updatedAt   DateTime @updatedAt
 
   @@index([accountId])
+}
+
+// ─── RadioGPT ──────────────────────────────────────────────────────────────
+
+model RadioScript {
+  id          String   @id @default(cuid())
+  accountId   String
+  voiceId     String?
+  showName    String   // "Morning Drive", "Afternoon News"
+  format      String   @default("NEWS") // NEWS, TALK, SPORTS, WEATHER
+  storyIds    Json     // array of story IDs used to generate
+  script      String   @db.Text // full generated radio script
+  duration    Int?     // estimated seconds
+  model       String   // which LLM generated it
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, createdAt(sort: Desc)])
+}
+
+// ─── History of the Day ────────────────────────────────────────────────────
+
+model HistoryEvent {
+  id          String   @id @default(cuid())
+  month       Int      // 1-12
+  day         Int      // 1-31
+  year        Int?     // null = recurring
+  title       String
+  description String   @db.Text
+  category    String?  // POLITICS, SCIENCE, CULTURE, SPORTS, LOCAL
+  significance Int     @default(5) // 1-10 importance
+  source      String?  // where this fact came from
+  isLocal     Boolean  @default(false) // local to market
+  createdAt   DateTime @default(now())
+
+  @@index([month, day])
+  @@index([category])
+}
+
+// ─── Stock Price Monitoring ────────────────────────────────────────────────
+
+model StockAlert {
+  id          String   @id @default(cuid())
+  ticker      String   // AAPL, TSLA, etc.
+  companyName String
+  changePercent Float  // e.g. -5.2 or +8.1
+  price       Float
+  previousClose Float
+  direction   String   // UP or DOWN
+  magnitude   String   // MAJOR (>5%), SIGNIFICANT (>3%), NOTABLE (>2%)
+  headline    String?  // auto-generated headline
+  storyId     String?  // linked to auto-created story
+  detectedAt  DateTime @default(now())
+
+  @@index([detectedAt(sort: Desc)])
+  @@index([ticker])
+}
+
+// ─── Collaborative Editing ─────────────────────────────────────────────────
+
+model StoryEditSession {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId      String
+  isActive    Boolean  @default(true)
+  lastHeartbeat DateTime @default(now())
+  cursor      Json?    // { field, position } for showing cursor position
+  createdAt   DateTime @default(now())
+
+  @@index([storyId, isActive])
+  @@index([userId])
+}
+
+// ─── Fact Checking ─────────────────────────────────────────────────────────
+
+model FactCheck {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  claim       String   @db.Text // the claim being checked
+  verdict     String   // VERIFIED, UNVERIFIED, FALSE, MISLEADING, NEEDS_CONTEXT
+  confidence  Float    // 0-1 AI confidence in verdict
+  evidence    String?  @db.Text // supporting evidence
+  sources     Json?    // URLs/references used
+  model       String   @default("heuristic") // which checker produced this
+  checkedBy   String?  // userId if manually verified
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storyId])
+  @@index([verdict])
+}
+
+// ─── Multi-Language Support ────────────────────────────────────────────────
+
+model TranslatedContent {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceLanguage  String   @default("en")
+  targetLanguage  String   // es, fr, zh, etc.
+  translatedTitle String
+  translatedSummary String? @db.Text
+  model           String   // which translation service
+  confidence      Float?
+  createdAt       DateTime @default(now())
+
+  @@unique([storyId, targetLanguage])
+  @@index([targetLanguage])
 }
 
 // ─── Coverage Gap Detection ────────────────────────────────────────────────
