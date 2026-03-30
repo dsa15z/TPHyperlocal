@@ -168,6 +168,74 @@ export async function pipelineRoutes(
     return reply.send({ message: `Seeded ${seeded} sources`, seeded });
   });
 
+  // POST /api/v1/pipeline/add-sources - add additional sources (even if some exist)
+  app.post('/pipeline/add-sources', async (_request, reply) => {
+    const allSources = [
+      // === HOUSTON LOCAL NEWS (TV/Radio) ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Chronicle', url: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'KHOU 11 News', url: 'https://www.khou.com/feeds/syndication/rss/news', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://www.khou.com/feeds/syndication/rss/news' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'KPRC / Click2Houston', url: 'https://www.click2houston.com/arcio/rss/category/news/', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://www.click2houston.com/arcio/rss/category/news/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'ABC13 Houston (KTRK)', url: 'https://abc13.com/feed/', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://abc13.com/feed/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'FOX 26 Houston (KRIV)', url: 'https://www.fox26houston.com/rss', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://www.fox26houston.com/rss' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Public Media (KUHF)', url: 'https://www.houstonpublicmedia.org/feed/', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://www.houstonpublicmedia.org/feed/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Landing', url: 'https://houstonlanding.org/feed/', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://houstonlanding.org/feed/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Press', url: 'https://www.houstonpress.com/houston/Rss.xml', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://www.houstonpress.com/houston/Rss.xml' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Community Impact - Houston', url: 'https://communityimpact.com/feed/?market=houston', trustScore: 0.75, isGlobal: true, metadata: { feedUrl: 'https://communityimpact.com/feed/?market=houston' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Business Journal', url: 'https://www.bizjournals.com/houston/news/rss', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://www.bizjournals.com/houston/news/rss' } },
+
+      // === TEXAS STATE NEWS ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Texas Tribune', url: 'https://www.texastribune.org/feeds/latest/', trustScore: 0.90, isGlobal: true, metadata: { feedUrl: 'https://www.texastribune.org/feeds/latest/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Dallas Morning News', url: 'https://www.dallasnews.com/arc/outboundfeeds/rss/?outputType=xml', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://www.dallasnews.com/arc/outboundfeeds/rss/?outputType=xml' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'San Antonio Express-News', url: 'https://www.expressnews.com/rss/feed/San-Antonio-breaking-news-702.php', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://www.expressnews.com/rss/feed/San-Antonio-breaking-news-702.php' } },
+
+      // === NATIONAL NEWS AGGREGATORS (matching TopicPulse) ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Google News - Houston', url: 'https://news.google.com/rss/search?q=Houston+Texas&hl=en-US&gl=US&ceid=US:en', trustScore: 0.75, isGlobal: true, metadata: { feedUrl: 'https://news.google.com/rss/search?q=Houston+Texas&hl=en-US&gl=US&ceid=US:en' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Google News - Breaking', url: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Bing News - Houston', url: 'https://www.bing.com/news/search?q=Houston+Texas&format=rss&mkt=en-US', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://www.bing.com/news/search?q=Houston+Texas&format=rss&mkt=en-US' } },
+
+      // === NATIONAL WIRE SERVICES ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'AP News - Top Headlines', url: 'https://rsshub.app/apnews/topics/apf-topnews', trustScore: 0.95, isGlobal: true, metadata: { feedUrl: 'https://rsshub.app/apnews/topics/apf-topnews' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Reuters - Top News', url: 'https://www.reutersagency.com/feed/', trustScore: 0.95, isGlobal: true, metadata: { feedUrl: 'https://www.reutersagency.com/feed/' } },
+
+      // === GOVERNMENT SOURCES ===
+      { platform: 'RSS' as const, sourceType: 'GOV_AGENCY' as const, name: 'Harris County', url: 'https://www.harriscountytx.gov/rss', trustScore: 0.90, isGlobal: true, metadata: { feedUrl: 'https://www.harriscountytx.gov/rss' } },
+      { platform: 'RSS' as const, sourceType: 'GOV_AGENCY' as const, name: 'City of Houston', url: 'https://www.houstontx.gov/rss.html', trustScore: 0.90, isGlobal: true, metadata: { feedUrl: 'https://www.houstontx.gov/rss.html' } },
+      { platform: 'RSS' as const, sourceType: 'GOV_AGENCY' as const, name: 'NWS Houston', url: 'https://alerts.weather.gov/cap/tx.php?x=0', trustScore: 0.95, isGlobal: true, metadata: { feedUrl: 'https://alerts.weather.gov/cap/tx.php?x=0' } },
+      { platform: 'RSS' as const, sourceType: 'GOV_AGENCY' as const, name: 'TxDOT Houston', url: 'https://www.txdot.gov/inside-txdot/media-center/feeds.xml', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://www.txdot.gov/inside-txdot/media-center/feeds.xml' } },
+
+      // === SPECIALTY BEATS ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Space City Weather', url: 'https://spacecityweather.com/feed/', trustScore: 0.85, isGlobal: true, metadata: { feedUrl: 'https://spacecityweather.com/feed/' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Sports - ESPN', url: 'https://www.espn.com/espn/rss/news', trustScore: 0.75, isGlobal: true, metadata: { feedUrl: 'https://www.espn.com/espn/rss/news' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Chron - Sports', url: 'https://www.houstonchronicle.com/rss/feed/Houston-Texans-702.php', trustScore: 0.80, isGlobal: true, metadata: { feedUrl: 'https://www.houstonchronicle.com/rss/feed/Houston-Texans-702.php' } },
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'Houston Real Estate', url: 'https://www.har.com/blog/feed/', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://www.har.com/blog/feed/' } },
+
+      // === API SOURCES ===
+      { platform: 'NEWSAPI' as const, sourceType: 'API_PROVIDER' as const, name: 'NewsAPI - Houston', url: 'https://newsapi.org/v2/everything?q=Houston+Texas&sortBy=publishedAt', trustScore: 0.80, isGlobal: true, metadata: { query: 'Houston Texas', sortBy: 'publishedAt' } },
+      { platform: 'NEWSAPI' as const, sourceType: 'API_PROVIDER' as const, name: 'NewsAPI - Harris County', url: 'https://newsapi.org/v2/everything?q=Harris+County+Texas&sortBy=publishedAt', trustScore: 0.75, isGlobal: true, metadata: { query: 'Harris County Texas', sortBy: 'publishedAt' } },
+      { platform: 'GDELT' as const, sourceType: 'API_PROVIDER' as const, name: 'GDELT - Houston', url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=Houston+Texas&mode=artlist&format=json&maxrecords=50', trustScore: 0.70, isGlobal: true, metadata: { query: 'Houston Texas', mode: 'artlist' } },
+
+      // === SPANISH LANGUAGE ===
+      { platform: 'RSS' as const, sourceType: 'NEWS_ORG' as const, name: 'La Voz de Houston', url: 'https://lavoztx.com/feed/', trustScore: 0.70, isGlobal: true, metadata: { feedUrl: 'https://lavoztx.com/feed/', language: 'es' } },
+    ];
+
+    let added = 0;
+    let skipped = 0;
+    for (const src of allSources) {
+      // Check if source with this URL already exists
+      const existing = await prisma.source.findFirst({ where: { url: src.url } });
+      if (existing) { skipped++; continue; }
+      await prisma.source.create({ data: { ...src, isActive: true } });
+      added++;
+    }
+
+    return reply.send({
+      message: `Added ${added} new sources (${skipped} already existed)`,
+      added,
+      skipped,
+      total: allSources.length,
+    });
+  });
+
   // POST /api/v1/pipeline/trigger - trigger ingestion for all active sources
   app.post('/pipeline/trigger', async (request, reply) => {
     const parseResult = TriggerSchema.safeParse(request.body || {});
