@@ -30,6 +30,10 @@ import {
   ClipboardCheck,
   LayoutGrid,
   Bell,
+  Mail,
+  ScrollText,
+  MessageSquareMore,
+  Network,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -51,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/show-prep", label: "Show Prep", icon: <Mic2 className="w-4 h-4" />, section: "main" },
   { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" />, section: "main" },
   { href: "/feeds", label: "RSS Feeds", icon: <Rss className="w-4 h-4" />, section: "main" },
+  { href: "/topics", label: "Topic Clusters", icon: <Network className="w-4 h-4" />, section: "main" },
   { href: "/settings", label: "News Profile", icon: <Settings className="w-4 h-4" />, section: "main" },
   { href: "/settings/notifications", label: "Alert Settings", icon: <Bell className="w-4 h-4" />, section: "main" },
   // Admin
@@ -67,6 +72,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/webhooks", label: "Webhooks", icon: <Webhook className="w-4 h-4" />, section: "admin" },
   { href: "/admin/accounts", label: "Team", icon: <Users className="w-4 h-4" />, section: "admin" },
   { href: "/admin/dashboards", label: "Layouts", icon: <LayoutGrid className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/slack", label: "Slack", icon: <MessageSquareMore className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/digests", label: "Email Digests", icon: <Mail className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: <ScrollText className="w-4 h-4" />, section: "admin" },
   { href: "/admin/credentials", label: "API Keys", icon: <KeyRound className="w-4 h-4" />, section: "admin" },
 ];
 

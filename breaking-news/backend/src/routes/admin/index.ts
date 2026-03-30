@@ -12,6 +12,9 @@ import { widgetRoutes } from './widgets.js';
 import { promptRoutes } from './prompts.js';
 import { dashboardLayoutRoutes } from './dashboards.js';
 import { audioSourceRoutes } from './audio-sources.js';
+import { digestSubscriptionRoutes } from './digest-subscriptions.js';
+import { auditLogRoutes } from './audit-logs.js';
+import { slackIntegrationRoutes } from './slack-integrations.js';
 
 /**
  * Admin route aggregator.
@@ -69,4 +72,13 @@ export async function adminRoutes(
 
   // Audio sources (ADMIN+)
   app.register(audioSourceRoutes);
+
+  // Digest subscriptions (ADMIN+)
+  app.register(digestSubscriptionRoutes);
+
+  // Audit logs (ADMIN+)
+  app.register(auditLogRoutes);
+
+  // Slack integrations (ADMIN+)
+  app.register(slackIntegrationRoutes);
 }

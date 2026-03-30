@@ -19,6 +19,7 @@ import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { AnnotationPanel } from "@/components/AnnotationPanel";
 import { StoryTimeline } from "@/components/StoryTimeline";
+import { PredictionBadge } from "@/components/PredictionBadge";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -159,6 +160,9 @@ export default function StoryDetailPage() {
           {/* Bookmark button */}
           {isAuthenticated() && <BookmarkButton storyId={id} />}
         </div>
+
+        {/* Viral prediction */}
+        <PredictionBadge storyId={id} />
 
         {/* AI First Drafts */}
         <FirstDraftPanel storyId={id} />

@@ -22,6 +22,8 @@ import { analyticsRoutes } from './routes/analytics.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { registerSSERoutes } from './lib/sse.js';
 import { predictionRoutes } from './routes/predictions.js';
+import { topicClusterRoutes } from './routes/topic-clusters.js';
+import { stateTransitionRoutes } from './routes/state-transitions.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -119,6 +121,8 @@ async function buildServer() {
   await app.register(analyticsRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(predictionRoutes, { prefix: '/api/v1' });
+  await app.register(topicClusterRoutes, { prefix: '/api/v1' });
+  await app.register(stateTransitionRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown
