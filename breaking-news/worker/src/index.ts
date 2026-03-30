@@ -33,6 +33,7 @@ import { createCourtRecordWorker } from './workers/court-record.worker.js';
 import { createCommunityRadarWorker } from './workers/community-radar.worker.js';
 import { createVideoGenerationWorker } from './workers/video-generation.worker.js';
 import { createEngagementTrackingWorker } from './workers/engagement-tracking.worker.js';
+import { createSocialMonitorWorker } from './workers/social-monitor.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -181,6 +182,10 @@ async function main(): Promise<void> {
   const engagementTrackingWorker = createEngagementTrackingWorker();
   workers.push(engagementTrackingWorker);
   logger.info('Engagement tracking worker started');
+
+  const socialMonitorWorker = createSocialMonitorWorker();
+  workers.push(socialMonitorWorker);
+  logger.info('Social monitor worker started');
 
   // Start poll schedulers
   startSchedulers();
