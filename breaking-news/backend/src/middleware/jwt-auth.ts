@@ -44,7 +44,7 @@ function isPublicPath(url: string): boolean {
   if (url.startsWith('/api/v1/stories')) return true;
   if (url.startsWith('/api/v1/search')) return true;
   if (url.startsWith('/api/v1/feeds')) return true;
-  if (url.startsWith('/api/v1/pipeline/status')) return true;
+  if (url.startsWith('/api/v1/pipeline')) return true;
 
   return false;
 }
