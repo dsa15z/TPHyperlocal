@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,8 +11,12 @@ import {
   Clock,
   MapPin,
   Tag,
+  Bookmark,
 } from "lucide-react";
 import clsx from "clsx";
+import { apiFetch } from "@/lib/api";
+import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
+import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -31,6 +35,41 @@ const PLATFORM_ICONS: Record<string, string> = {
   news: "N",
   rss: "RSS",
 };
+
+function BookmarkButton({ storyId }: { storyId: string }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["bookmarks"],
+    queryFn: () => apiFetch<any>("/api/v1/bookmarks", { headers: getAuthHeaders() }),
+  });
+
+  const isBookmarked = (data?.data || []).some((b: any) => b.storyId === storyId);
+
+  const addMutation = useMutation({
+    mutationFn: () => apiFetch<any>("/api/v1/bookmarks", { method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ storyId }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bookmarks"] }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => apiFetch<void>(`/api/v1/bookmarks/${storyId}`, { method: "DELETE", headers: getAuthHeaders() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bookmarks"] }),
+  });
+
+  return (
+    <button
+      onClick={() => isBookmarked ? removeMutation.mutate() : addMutation.mutate()}
+      className={clsx(
+        "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+        isBookmarked
+          ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30"
+          : "bg-surface-200 text-gray-400 border border-surface-300 hover:text-white"
+      )}
+    >
+      <Bookmark className={clsx("w-4 h-4", isBookmarked && "fill-yellow-400")} />
+      {isBookmarked ? "Bookmarked" : "Bookmark"}
+    </button>
+  );
+}
 
 export default function StoryDetailPage() {
   const params = useParams();
@@ -114,7 +153,13 @@ export default function StoryDetailPage() {
             </span>
             <span>{story.source_count} sources</span>
           </div>
+
+          {/* Bookmark button */}
+          {isAuthenticated() && <BookmarkButton storyId={id} />}
         </div>
+
+        {/* AI First Drafts */}
+        <FirstDraftPanel storyId={id} />
 
         {/* Score cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

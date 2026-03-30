@@ -135,7 +135,7 @@ function buildQueryString(params: Record<string, any>): string {
   return qs ? `?${qs}` : "";
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...init,
