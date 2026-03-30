@@ -25,8 +25,8 @@ FROM node:20-slim AS production
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma (required on slim images)
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma + PostgreSQL client for migrations
+RUN apt-get update -y && apt-get install -y openssl postgresql-client && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package.json package-lock.json* ./
@@ -41,6 +41,9 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
+
+# Copy migration scripts
+COPY scripts ./scripts
 
 # Set environment
 ENV NODE_ENV=production
