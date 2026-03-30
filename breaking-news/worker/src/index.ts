@@ -19,6 +19,8 @@ import { createRSSDiscoveryWorker } from './workers/rss-discovery.worker.js';
 import { createDigestWorker } from './workers/digest.worker.js';
 import { createCoverageWorker } from './workers/coverage.worker.js';
 import { createFirstDraftWorker } from './workers/first-draft.worker.js';
+import { createPushNotificationWorker } from './workers/push-notification.worker.js';
+import { createDomainScoringWorker } from './workers/domain-scoring.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -111,6 +113,14 @@ async function main(): Promise<void> {
   const firstDraftWorker = createFirstDraftWorker();
   workers.push(firstDraftWorker);
   logger.info('First draft worker started');
+
+  const pushNotificationWorker = createPushNotificationWorker();
+  workers.push(pushNotificationWorker);
+  logger.info('Push notification worker started');
+
+  const domainScoringWorker = createDomainScoringWorker();
+  workers.push(domainScoringWorker);
+  logger.info('Domain scoring worker started');
 
   // Start poll schedulers
   startSchedulers();

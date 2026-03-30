@@ -17,6 +17,10 @@ import { firstDraftRoutes } from './routes/first-draft.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
 import { showPrepRoutes } from './routes/show-prep.js';
 import { pulseRoutes } from './routes/pulses.js';
+import { annotationRoutes } from './routes/annotations.js';
+import { analyticsRoutes } from './routes/analytics.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { registerSSERoutes } from './lib/sse.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -110,6 +114,10 @@ async function buildServer() {
   await app.register(bookmarkRoutes, { prefix: '/api/v1' });
   await app.register(showPrepRoutes, { prefix: '/api/v1' });
   await app.register(pulseRoutes, { prefix: '/api/v1' });
+  await app.register(annotationRoutes, { prefix: '/api/v1' });
+  await app.register(analyticsRoutes, { prefix: '/api/v1' });
+  await app.register(notificationRoutes, { prefix: '/api/v1' });
+  registerSSERoutes(app);
 
   // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

@@ -17,6 +17,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
+import { AnnotationPanel } from "@/components/AnnotationPanel";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -215,6 +216,9 @@ export default function StoryDetailPage() {
             />
           </div>
         </div>
+
+        {/* Editorial annotations */}
+        <AnnotationPanel storyId={id} />
 
         {/* Source posts */}
         {story.sources && story.sources.length > 0 && (

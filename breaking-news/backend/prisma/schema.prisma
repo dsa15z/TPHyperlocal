@@ -354,6 +354,8 @@ model Story {
   stateTransitions   StoryStateTransition[]
   firstDrafts        FirstDraft[]
   bookmarks          Bookmark[]
+  annotations        StoryAnnotation[]
+  predictions        StoryPrediction[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -788,6 +790,87 @@ model DomainScore {
   score       Float    @default(0)
   appearances Int      @default(0)
   lastUpdated DateTime @default(now())
+}
+
+// ─── Collaborative Annotations ─────────────────────────────────────────────
+
+model StoryAnnotation {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String   @default("NOTE") // NOTE, TAG, FLAG, ASSIGNMENT
+  content   String   @db.Text
+  tags      Json?    // e.g. ["urgent", "needs-followup"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storyId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+// ─── Story Prediction Scoring ──────────────────────────────────────────────
+
+model StoryPrediction {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viralProbability Float   // 0-1 probability of going viral
+  peakScorePrediction Float? // predicted peak composite score
+  predictedStatus String?  // predicted final status
+  factors         Json?    // { velocityTrend, sourceDiversity, engagement, ... }
+  model           String   @default("heuristic_v1")
+  createdAt       DateTime @default(now())
+
+  @@index([storyId, createdAt(sort: Desc)])
+}
+
+// ─── Audio Transcription ───────────────────────────────────────────────────
+
+model AudioSource {
+  id            String   @id @default(cuid())
+  accountId     String
+  name          String   // "Police Scanner Feed", "Press Conference"
+  type          String   // STREAM, FILE, URL
+  url           String?
+  isActive      Boolean  @default(true)
+  lastProcessedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transcripts AudioTranscript[]
+
+  @@index([accountId, isActive])
+}
+
+model AudioTranscript {
+  id            String       @id @default(cuid())
+  audioSourceId String
+  audioSource   AudioSource  @relation(fields: [audioSourceId], references: [id], onDelete: Cascade)
+  content       String       @db.Text
+  duration      Int?         // seconds
+  language      String       @default("en")
+  confidence    Float?       // transcription confidence 0-1
+  storyId       String?      // linked story if matched
+  processedAt   DateTime     @default(now())
+
+  @@index([audioSourceId, processedAt(sort: Desc)])
+  @@index([storyId])
+}
+
+// ─── Dashboard Layouts per Role ────────────────────────────────────────────
+
+model DashboardLayout {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String   // "Anchor View", "Assignment Editor", "Producer"
+  role        String?  // optional: lock to a specific UserRole
+  layout      Json     // { panels: [{ type, position, size, config }] }
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
 }
 
 // ─── Coverage Gap Detection ────────────────────────────────────────────────

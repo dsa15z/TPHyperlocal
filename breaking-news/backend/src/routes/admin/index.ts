@@ -9,6 +9,8 @@ import { coverageRoutes } from './coverage.js';
 import { voiceRoutes } from './voices.js';
 import { featureFlagRoutes } from './feature-flags.js';
 import { widgetRoutes } from './widgets.js';
+import { promptRoutes } from './prompts.js';
+import { dashboardLayoutRoutes } from './dashboards.js';
 
 /**
  * Admin route aggregator.
@@ -57,4 +59,10 @@ export async function adminRoutes(
 
   // Embeddable widgets (ADMIN+)
   app.register(widgetRoutes);
+
+  // Prompt management (ADMIN+)
+  app.register(promptRoutes);
+
+  // Dashboard layouts (ADMIN+)
+  app.register(dashboardLayoutRoutes);
 }

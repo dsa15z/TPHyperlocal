@@ -17,9 +17,12 @@ import {
   Flag,
   Code,
   MessageSquare,
+  BarChart3,
+  FileText,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
+import { NotificationBell } from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -34,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/bookmarks", label: "Bookmarks", icon: <Bookmark className="w-4 h-4" />, section: "main" },
   { href: "/pulses", label: "Pulses", icon: <Zap className="w-4 h-4" />, section: "main" },
   { href: "/show-prep", label: "Show Prep", icon: <Mic2 className="w-4 h-4" />, section: "main" },
+  { href: "/analytics", label: "Analytics", icon: <BarChart3 className="w-4 h-4" />, section: "main" },
   { href: "/feeds", label: "RSS Feeds", icon: <Rss className="w-4 h-4" />, section: "main" },
   { href: "/settings", label: "Profile", icon: <Settings className="w-4 h-4" />, section: "main" },
   // Admin nav
@@ -44,6 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/community-radar", label: "Social", icon: <Radio className="w-4 h-4" />, section: "admin" },
   { href: "/admin/widgets", label: "Widgets", icon: <Code className="w-4 h-4" />, section: "admin" },
   { href: "/admin/feature-flags", label: "Flags", icon: <Flag className="w-4 h-4" />, section: "admin" },
+  { href: "/admin/prompts", label: "Prompts", icon: <FileText className="w-4 h-4" />, section: "admin" },
   { href: "/admin/credentials", label: "Keys", icon: <KeyRound className="w-4 h-4" />, section: "admin" },
 ];
 
@@ -118,6 +123,8 @@ export function SiteNav() {
                 })}
               </>
             )}
+
+            {isLoggedIn && <NotificationBell />}
 
             <div className="ml-2 live-indicator flex-shrink-0">
               <span className="live-dot" />
