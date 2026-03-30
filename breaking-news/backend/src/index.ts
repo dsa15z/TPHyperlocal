@@ -29,6 +29,8 @@ import { stockRoutes } from './routes/stocks.js';
 import { collaborativeRoutes } from './routes/collaborative.js';
 import { factCheckRoutes } from './routes/fact-check.js';
 import { translationRoutes } from './routes/translations.js';
+import { assignmentDeskRoutes } from './routes/assignment-desk.js';
+import { breakingPackageRoutes } from './routes/breaking-package.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -133,6 +135,8 @@ async function buildServer() {
   await app.register(collaborativeRoutes, { prefix: '/api/v1' });
   await app.register(factCheckRoutes, { prefix: '/api/v1' });
   await app.register(translationRoutes, { prefix: '/api/v1' });
+  await app.register(assignmentDeskRoutes, { prefix: '/api/v1' });
+  await app.register(breakingPackageRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

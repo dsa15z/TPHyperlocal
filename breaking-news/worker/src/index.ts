@@ -24,6 +24,9 @@ import { createDomainScoringWorker } from './workers/domain-scoring.worker.js';
 import { createAudioTranscriptionWorker } from './workers/audio-transcription.worker.js';
 import { createPredictionWorker } from './workers/prediction.worker.js';
 import { createStockMonitorWorker } from './workers/stock-monitor.worker.js';
+import { createPublicDataWorker } from './workers/public-data.worker.js';
+import { createShiftBriefingWorker } from './workers/shift-briefing.worker.js';
+import { createBreakingPackageWorker } from './workers/breaking-package.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -136,6 +139,18 @@ async function main(): Promise<void> {
   const stockMonitorWorker = createStockMonitorWorker();
   workers.push(stockMonitorWorker);
   logger.info('Stock monitor worker started');
+
+  const publicDataWorker = createPublicDataWorker();
+  workers.push(publicDataWorker);
+  logger.info('Public data worker started');
+
+  const shiftBriefingWorker = createShiftBriefingWorker();
+  workers.push(shiftBriefingWorker);
+  logger.info('Shift briefing worker started');
+
+  const breakingPackageWorker = createBreakingPackageWorker();
+  workers.push(breakingPackageWorker);
+  logger.info('Breaking package worker started');
 
   // Start poll schedulers
   startSchedulers();

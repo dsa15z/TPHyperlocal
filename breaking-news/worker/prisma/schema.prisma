@@ -359,6 +359,8 @@ model Story {
   editSessions       StoryEditSession[]
   factChecks         FactCheck[]
   translations       TranslatedContent[]
+  assignments        Assignment[]
+  breakingPackages   BreakingPackage[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -874,6 +876,148 @@ model DashboardLayout {
   updatedAt   DateTime @updatedAt
 
   @@index([accountId])
+}
+
+// ─── Assignment Desk ───────────────────────────────────────────────────────
+
+model Reporter {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String?  // linked to User if they have an account
+  name        String
+  email       String?
+  phone       String?
+  beats       Json?    // ["crime", "politics", "education"]
+  status      String   @default("AVAILABLE") // AVAILABLE, ON_ASSIGNMENT, OFF_DUTY, ON_BREAK
+  currentLat  Float?   // current location for proximity matching
+  currentLon  Float?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments Assignment[]
+
+  @@index([accountId, status])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  accountId   String
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  reporterId  String
+  reporter    Reporter @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  status      String   @default("ASSIGNED") // ASSIGNED, EN_ROUTE, ON_SCENE, FILED, AIRED, CANCELLED
+  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW
+  notes       String?  @db.Text
+  deadline    DateTime?
+  filedAt     DateTime?
+  airedAt     DateTime?
+  assignedBy  String?  // userId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@index([reporterId, status])
+  @@index([storyId])
+}
+
+// ─── Shift Handoff ─────────────────────────────────────────────────────────
+
+model ShiftBriefing {
+  id          String   @id @default(cuid())
+  accountId   String
+  shiftName   String   // "Morning", "Afternoon", "Evening", "Overnight"
+  content     String   @db.Text // AI-generated markdown briefing
+  storyCount  Int      @default(0)
+  gapCount    Int      @default(0)
+  model       String   // which LLM generated
+  generatedAt DateTime @default(now())
+
+  @@index([accountId, generatedAt(sort: Desc)])
+}
+
+// ─── One-Click Breaking Package ────────────────────────────────────────────
+
+model BreakingPackage {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  accountId   String
+  broadcastScript String?  @db.Text
+  socialPost      String?  @db.Text
+  pushTitle       String?
+  pushBody        String?
+  webSummary      String?  @db.Text
+  bulletPoints    String?  @db.Text
+  graphicPrompt   String?  // prompt for image generation
+  status          String   @default("GENERATED") // GENERATED, REVIEWED, PUBLISHED
+  publishedTo     Json?    // ["broadcast", "social", "push", "web"]
+  generatedBy     String?
+  createdAt       DateTime @default(now())
+
+  @@index([storyId])
+  @@index([accountId, createdAt(sort: Desc)])
+}
+
+// ─── Public Data Sources ───────────────────────────────────────────────────
+
+model PublicDataFeed {
+  id          String   @id @default(cuid())
+  accountId   String?
+  name        String
+  type        String   // NWS_WEATHER, UTILITY_OUTAGE, COURT_FILING, GOV_AGENDA, TRAFFIC_INCIDENT, POLICE_DISPATCH
+  url         String
+  apiConfig   Json?    // API keys, params, zones
+  isActive    Boolean  @default(true)
+  pollIntervalMin Int  @default(15)
+  lastPolledAt DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  alerts PublicDataAlert[]
+
+  @@index([type, isActive])
+}
+
+model PublicDataAlert {
+  id          String        @id @default(cuid())
+  feedId      String
+  feed        PublicDataFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  externalId  String        @unique // dedup key
+  type        String        // SEVERE_WEATHER, POWER_OUTAGE, TRAFFIC_CLOSURE, COURT_FILING, GOV_AGENDA_ITEM
+  severity    String        @default("INFO") // CRITICAL, WARNING, WATCH, INFO
+  title       String
+  description String?       @db.Text
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  rawData     Json?
+  storyId     String?       // linked to auto-created story
+  detectedAt  DateTime      @default(now())
+  expiresAt   DateTime?
+
+  @@index([type, detectedAt(sort: Desc)])
+  @@index([severity])
+  @@index([feedId])
+}
+
+// ─── Show Deadlines ────────────────────────────────────────────────────────
+
+model ShowDeadline {
+  id          String   @id @default(cuid())
+  accountId   String
+  showName    String   // "5pm News", "6am Morning"
+  airTime     String   // "17:00" (24h format)
+  timezone    String   @default("America/Chicago")
+  daysOfWeek  Json     // [1,2,3,4,5] = Mon-Fri
+  scriptDeadlineMin Int @default(30) // scripts due 30 min before air
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
 }
 
 // ─── RadioGPT ──────────────────────────────────────────────────────────────

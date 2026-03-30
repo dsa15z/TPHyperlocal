@@ -23,6 +23,7 @@ import { PredictionBadge } from "@/components/PredictionBadge";
 import { FactCheckPanel } from "@/components/FactCheckPanel";
 import { CollaborativeEditor } from "@/components/CollaborativeEditor";
 import { TranslationPanel } from "@/components/TranslationPanel";
+import { BreakingPackagePanel } from "@/components/BreakingPackagePanel";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -163,6 +164,9 @@ export default function StoryDetailPage() {
           {/* Bookmark button */}
           {isAuthenticated() && <BookmarkButton storyId={id} />}
         </div>
+
+        {/* One-click breaking package */}
+        <BreakingPackagePanel storyId={id} />
 
         {/* Viral prediction */}
         <PredictionBadge storyId={id} />
