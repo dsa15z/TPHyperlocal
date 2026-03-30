@@ -59,10 +59,20 @@ export async function storiesRoutes(
 
     if (category) {
       const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
-      if (categories.length === 1) {
-        where.category = categories[0];
-      } else if (categories.length > 1) {
-        where.category = { in: categories };
+      const hasUnknown = categories.includes('Unknown');
+      const named = categories.filter((c) => c !== 'Unknown');
+
+      if (hasUnknown && named.length > 0) {
+        where.OR = [
+          { category: { in: named } },
+          { category: null },
+        ];
+      } else if (hasUnknown) {
+        where.category = null;
+      } else if (named.length === 1) {
+        where.category = named[0];
+      } else if (named.length > 1) {
+        where.category = { in: named };
       }
     }
 
@@ -113,14 +123,26 @@ export async function storiesRoutes(
         : { in: statuses as StoryStatus[] };
     }
 
+    // Helper: apply category filter to a where clause (handles Unknown → null)
+    function applyCategoryFilter(w: Prisma.StoryWhereInput) {
+      if (!category) return;
+      const cats = category.split(',').map((s) => s.trim()).filter(Boolean);
+      const hasUnknown = cats.includes('Unknown');
+      const named = cats.filter((c) => c !== 'Unknown');
+      if (hasUnknown && named.length > 0) {
+        w.OR = [...(w.OR || []), { category: { in: named } }, { category: null }];
+      } else if (hasUnknown) {
+        w.category = null;
+      } else if (named.length === 1) {
+        w.category = named[0];
+      } else if (named.length > 1) {
+        w.category = { in: named };
+      }
+    }
+
     // Status facet where: includes category + source filters, excludes status
     const statusFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
-    if (category) {
-      const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
-      statusFacetWhere.category = categories.length === 1
-        ? categories[0]
-        : { in: categories };
-    }
+    applyCategoryFilter(statusFacetWhere);
 
     // Source facet where: includes status + category filters, excludes source
     const sourceFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
@@ -130,12 +152,7 @@ export async function storiesRoutes(
         ? (statuses[0] as StoryStatus)
         : { in: statuses as StoryStatus[] };
     }
-    if (category) {
-      const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
-      sourceFacetWhere.category = categories.length === 1
-        ? categories[0]
-        : { in: categories };
-    }
+    applyCategoryFilter(sourceFacetWhere);
 
     const [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
       prisma.story.findMany({
@@ -191,7 +208,18 @@ export async function storiesRoutes(
           ${maxAge !== undefined ? Prisma.sql`AND st."firstSeenAt" >= ${new Date(Date.now() - maxAge * 60 * 60 * 1000)}` : Prisma.empty}
           ${minScore !== undefined ? Prisma.sql`AND st."compositeScore" >= ${minScore}` : Prisma.empty}
           ${status ? Prisma.sql`AND st.status IN (${Prisma.join(status.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
-          ${category ? Prisma.sql`AND st.category IN (${Prisma.join(category.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
+          ${category ? (() => {
+            const cats = category.split(',').map(s => s.trim()).filter(Boolean);
+            const hasUnknown = cats.includes('Unknown');
+            const named = cats.filter(c => c !== 'Unknown');
+            if (hasUnknown && named.length > 0) {
+              return Prisma.sql`AND (st.category IN (${Prisma.join(named)}) OR st.category IS NULL)`;
+            } else if (hasUnknown) {
+              return Prisma.sql`AND st.category IS NULL`;
+            } else {
+              return Prisma.sql`AND st.category IN (${Prisma.join(named)})`;
+            }
+          })() : Prisma.empty}
         GROUP BY s.id, s.name, s.platform
         ORDER BY count DESC
       `,
