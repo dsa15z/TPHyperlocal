@@ -73,6 +73,23 @@ export async function storiesRoutes(
         take: limit,
         skip: offset,
         include: {
+          storySources: {
+            include: {
+              sourcePost: {
+                select: {
+                  id: true,
+                  authorName: true,
+                  url: true,
+                  publishedAt: true,
+                  source: {
+                    select: { name: true, platform: true },
+                  },
+                },
+              },
+            },
+            orderBy: { similarityScore: 'desc' },
+            take: 5,
+          },
           _count: {
             select: { storySources: true },
           },

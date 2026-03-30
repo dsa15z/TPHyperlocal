@@ -12,10 +12,67 @@ import {
 } from "@tanstack/react-table";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import clsx from "clsx";
-import type { Story } from "@/lib/api";
+import type { Story, SourceSummary } from "@/lib/api";
 import { formatRelativeTime, getScoreBarColor } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 import { ScoreBadge } from "./ScoreBadge";
+
+const PLATFORM_LABELS: Record<string, string> = {
+  RSS: "RSS",
+  NEWSAPI: "NewsAPI",
+  TWITTER: "X/Twitter",
+  FACEBOOK: "Facebook",
+  GDELT: "GDELT",
+  LLM_OPENAI: "AI (OpenAI)",
+  LLM_CLAUDE: "AI (Claude)",
+  LLM_GROK: "AI (Grok)",
+  LLM_GEMINI: "AI (Gemini)",
+  MANUAL: "Manual",
+};
+
+function SourceTooltip({
+  sources,
+  totalCount,
+}: {
+  sources: SourceSummary[];
+  totalCount: number;
+}) {
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+      <div className="bg-surface-100 border border-surface-300 rounded-lg shadow-xl p-3 min-w-[240px] max-w-[320px]">
+        <div className="text-xs font-semibold text-gray-300 mb-2">
+          {totalCount} Source{totalCount !== 1 ? "s" : ""}
+        </div>
+        <div className="space-y-1.5">
+          {sources.map((src, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 text-xs"
+            >
+              <span className="px-1.5 py-0.5 rounded bg-surface-300/60 text-gray-400 font-medium whitespace-nowrap flex-shrink-0">
+                {PLATFORM_LABELS[src.platform] || src.platform}
+              </span>
+              <div className="min-w-0">
+                <div className="text-gray-200 truncate">{src.name}</div>
+                <div className="text-gray-600 text-[10px]">
+                  {formatRelativeTime(src.published_at)}
+                </div>
+              </div>
+            </div>
+          ))}
+          {totalCount > sources.length && (
+            <div className="text-[10px] text-gray-500 pt-1 border-t border-surface-300/30">
+              +{totalCount - sources.length} more source
+              {totalCount - sources.length !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface StoryTableProps {
   stories: Story[];
@@ -91,11 +148,23 @@ export function StoryTable({
       }),
       columnHelper.accessor("source_count", {
         header: "Sources",
-        cell: (info) => (
-          <span className="text-gray-300 font-mono text-sm">
-            {info.getValue()}
-          </span>
-        ),
+        cell: (info) => {
+          const story = info.row.original;
+          const summaries = story.source_summaries || [];
+          const count = info.getValue();
+          return (
+            <div className="relative group">
+              <span className="text-gray-300 font-mono text-sm cursor-default">
+                {count}
+              </span>
+              {summaries.length > 0 && (
+                <div className="hidden group-hover:block">
+                  <SourceTooltip sources={summaries} totalCount={count} />
+                </div>
+              )}
+            </div>
+          );
+        },
         size: 70,
       }),
       columnHelper.accessor("first_seen", {

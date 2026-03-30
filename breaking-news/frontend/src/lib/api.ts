@@ -2,6 +2,13 @@ import { getAuthHeaders } from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
+export interface SourceSummary {
+  name: string;
+  platform: string;
+  url: string | null;
+  published_at: string;
+}
+
 export interface Story {
   id: string;
   title: string;
@@ -18,6 +25,7 @@ export interface Story {
   first_seen: string;
   last_updated: string;
   sources?: SourcePost[];
+  source_summaries?: SourceSummary[];
 }
 
 export interface SourcePost {
@@ -130,6 +138,7 @@ const SORT_FIELD_MAP: Record<string, string> = {
 };
 
 function transformStory(raw: any): Story {
+  const storySources = raw.storySources || [];
   return {
     id: raw.id,
     title: raw.editedTitle || raw.title,
@@ -145,7 +154,16 @@ function transformStory(raw: any): Story {
     source_count: raw._count?.storySources ?? raw.sourceCount ?? 0,
     first_seen: raw.firstSeenAt,
     last_updated: raw.lastUpdatedAt,
-    sources: raw.storySources?.map(transformStorySource),
+    sources: storySources.map(transformStorySource),
+    source_summaries: storySources.map((ss: any) => {
+      const post = ss.sourcePost || ss;
+      return {
+        name: post.source?.name || post.authorName || "Unknown",
+        platform: post.source?.platform || "Unknown",
+        url: post.url || null,
+        published_at: post.publishedAt,
+      };
+    }),
   };
 }
 
