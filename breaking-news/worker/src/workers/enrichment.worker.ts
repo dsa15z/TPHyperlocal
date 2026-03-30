@@ -4,6 +4,7 @@ import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
 import { normalizeText, detectNeighborhoods } from '../utils/text.js';
+import { generate } from '../lib/llm-factory.js';
 
 const logger = createChildLogger('enrichment');
 
@@ -147,6 +148,50 @@ function extractEntities(text: string): {
   };
 }
 
+/**
+ * Use LLM to extract category and location when keyword matching fails.
+ * Only called when heuristic returns OTHER or no location.
+ */
+async function llmEnrich(title: string, content: string): Promise<{
+  category: string;
+  location: string;
+}> {
+  try {
+    const prompt = `Analyze this news article and extract:
+1. CATEGORY: Choose exactly one from: CRIME, WEATHER, TRAFFIC, POLITICS, BUSINESS, SPORTS, COMMUNITY, EMERGENCY, HEALTH, EDUCATION, TECHNOLOGY, ENTERTAINMENT, ENVIRONMENT, FINANCE
+2. LOCATION: The specific city, neighborhood, or area mentioned. If this is national/international news with no specific local area, respond "National". If a specific location is mentioned, use that.
+
+Article title: ${title}
+Article content: ${content.substring(0, 1000)}
+
+Respond in exactly this format (no other text):
+CATEGORY: <category>
+LOCATION: <location>`;
+
+    const result = await generate(prompt, {
+      maxTokens: 50,
+      temperature: 0.1,
+      systemPrompt: 'You extract structured data from news articles. Be precise and concise.',
+    });
+
+    const lines = result.text.split('\n');
+    let category = 'OTHER';
+    let location = 'National';
+
+    for (const line of lines) {
+      const catMatch = line.match(/CATEGORY:\s*(.+)/i);
+      if (catMatch) category = catMatch[1].trim().toUpperCase();
+      const locMatch = line.match(/LOCATION:\s*(.+)/i);
+      if (locMatch) location = locMatch[1].trim();
+    }
+
+    return { category, location };
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, 'LLM enrichment failed, using heuristic');
+    return { category: 'OTHER', location: '' };
+  }
+}
+
 async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   const { sourcePostId } = job.data;
 
@@ -164,19 +209,32 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
 
   const fullText = `${post.title || ''} ${post.content}`;
 
-  // Categorize
-  const category = categorizeContent(fullText);
+  // Step 1: Keyword-based categorization (fast, free)
+  let category = categorizeContent(fullText);
 
-  // Extract entities
+  // Step 2: Extract entities via regex
   const entities = extractEntities(fullText);
 
-  // Detect neighborhoods for locality
+  // Step 3: Detect neighborhoods for locality
   const neighborhoods = detectNeighborhoods(fullText);
-  const locationName = neighborhoods.length > 0
+  let locationName = neighborhoods.length > 0
     ? neighborhoods[0]
     : entities.locations.length > 0
       ? entities.locations[0]
       : undefined;
+
+  // Step 4: If keyword categorization returned OTHER or no location, use LLM
+  if (category === 'OTHER' || !locationName) {
+    const llmResult = await llmEnrich(post.title || '', post.content);
+    if (category === 'OTHER' && llmResult.category !== 'OTHER') {
+      category = llmResult.category;
+      logger.info({ sourcePostId, category }, 'LLM assigned category');
+    }
+    if (!locationName && llmResult.location) {
+      locationName = llmResult.location;
+      logger.info({ sourcePostId, location: locationName }, 'LLM assigned location');
+    }
+  }
 
   // Update the SourcePost with enrichment data
   await prisma.sourcePost.update({

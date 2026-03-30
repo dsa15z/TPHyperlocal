@@ -32,6 +32,8 @@ export interface Story {
   sources?: SourcePost[];
   source_summaries?: SourceSummary[];
   coverage?: CoverageInfo[];
+  sparkline?: number[]; // recent composite scores for trend visualization
+  trend?: "rising" | "declining" | "flat";
 }
 
 export interface SourcePost {
@@ -69,6 +71,7 @@ export interface StoryFilters {
   min_score?: number;
   source_ids?: string[];
   uncovered_only?: boolean;
+  trend?: "rising" | "declining" | "all";
   page?: number;
   page_size?: number;
   sort_by?: string;
@@ -207,6 +210,17 @@ function transformStory(raw: any): Story {
       isCovered: cm.isCovered,
       feedName: cm.coverageFeed?.name || "Unknown",
     })),
+    sparkline: (raw.scoreSnapshots || [])
+      .slice(0, 12)
+      .reverse()
+      .map((s: any) => s.compositeScore || 0),
+    trend: (() => {
+      const snaps = raw.scoreSnapshots || [];
+      if (snaps.length < 2) return "flat" as const;
+      const latest = snaps[0]?.compositeScore || 0;
+      const prev = snaps[Math.min(snaps.length - 1, 3)]?.compositeScore || 0;
+      return latest > prev ? "rising" as const : latest < prev ? "declining" as const : "flat" as const;
+    })(),
   };
 }
 
@@ -256,6 +270,9 @@ export async function fetchStories(
   }
   if (filters.uncovered_only) {
     backendParams.uncoveredOnly = true;
+  }
+  if (filters.trend && filters.trend !== "all") {
+    backendParams.trend = filters.trend;
   }
 
   // If there's a search query, use the search endpoint instead

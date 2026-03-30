@@ -50,7 +50,6 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" />, section: "main" },
-  { href: "/rising", label: "Rising", icon: <TrendingUp className="w-4 h-4" />, section: "main" },
   { href: "/bookmarks", label: "Bookmarks", icon: <Bookmark className="w-4 h-4" />, section: "main" },
   { href: "/pulses", label: "Smart Pulses", icon: <Zap className="w-4 h-4" />, section: "main" },
   { href: "/show-prep", label: "Show Prep", icon: <Mic2 className="w-4 h-4" />, section: "main" },

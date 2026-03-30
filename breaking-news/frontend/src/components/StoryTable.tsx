@@ -146,6 +146,42 @@ export function StoryTable({
         ),
         size: 90,
       }),
+      columnHelper.display({
+        id: "trend",
+        header: "Trend",
+        cell: (info) => {
+          const sparkline = info.row.original.sparkline || [];
+          const trend = info.row.original.trend;
+          if (sparkline.length < 2) return <span className="text-gray-600 text-xs">-</span>;
+
+          const max = Math.max(...sparkline, 0.01);
+          return (
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-end gap-px h-4 w-14">
+                {sparkline.map((val: number, i: number) => (
+                  <div
+                    key={i}
+                    className={clsx(
+                      "flex-1 rounded-sm min-h-[1px]",
+                      trend === "rising" ? "bg-green-500" :
+                      trend === "declining" ? "bg-red-500" : "bg-gray-500"
+                    )}
+                    style={{ height: `${(val / max) * 100}%` }}
+                  />
+                ))}
+              </div>
+              <span className={clsx(
+                "text-[10px] font-bold",
+                trend === "rising" ? "text-green-400" :
+                trend === "declining" ? "text-red-400" : "text-gray-500"
+              )}>
+                {trend === "rising" ? "\u2197" : trend === "declining" ? "\u2198" : "\u2192"}
+              </span>
+            </div>
+          );
+        },
+        size: 90,
+      }),
       columnHelper.accessor("source_count", {
         header: "Sources",
         cell: (info) => {

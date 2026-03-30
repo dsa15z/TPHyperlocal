@@ -181,6 +181,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [uncoveredOnly, setUncoveredOnly] = useState(false);
+  const [trend, setTrend] = useState<"all" | "rising" | "declining">("all");
   const [timeRange, setTimeRange] = useState(
     searchParams.get("time_range") || "24h"
   );
@@ -220,6 +221,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
       min_score: minScore > 0 ? minScore : undefined,
       source_ids: selectedSources.length > 0 ? selectedSources : undefined,
       uncovered_only: uncoveredOnly || undefined,
+      trend: trend !== "all" ? trend : undefined,
     };
   }, [
     searchInput,
@@ -227,6 +229,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedStatuses,
     selectedSources,
     uncoveredOnly,
+    trend,
     timeRange,
     minScore,
   ]);
@@ -244,6 +247,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedStatuses,
     selectedSources,
     uncoveredOnly,
+    trend,
     timeRange,
     minScore,
     buildFilters,
@@ -268,6 +272,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setSelectedStatuses([]);
     setSelectedSources([]);
     setUncoveredOnly(false);
+    setTrend("all");
     setTimeRange("24h");
     setMinScore(0);
   };
@@ -278,6 +283,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedStatuses.length > 0 ||
     selectedSources.length > 0 ||
     uncoveredOnly ||
+    trend !== "all" ||
     timeRange !== "24h" ||
     minScore > 0;
 
@@ -332,6 +338,22 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
               )}
             >
               {tr.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Trend filter */}
+        <div className="flex items-center gap-1">
+          {(["all", "rising", "declining"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTrend(t)}
+              className={clsx(
+                "filter-btn text-xs capitalize",
+                trend === t && "filter-btn-active"
+              )}
+            >
+              {t === "rising" ? "\u2197 Rising" : t === "declining" ? "\u2198 Declining" : "All Trends"}
             </button>
           ))}
         </div>

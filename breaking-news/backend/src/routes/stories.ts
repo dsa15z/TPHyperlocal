@@ -7,7 +7,8 @@ const ListStoriesQuerySchema = z.object({
   status: z.string().optional(), // comma-separated statuses
   category: z.string().optional(), // comma-separated categories
   sourceIds: z.string().optional(), // comma-separated source IDs
-  uncoveredOnly: z.coerce.boolean().optional(), // filter to stories not covered by account
+  uncoveredOnly: z.coerce.boolean().optional(),
+  trend: z.enum(['rising', 'declining', 'all']).optional(),
   minScore: z.coerce.number().min(0).max(1).optional(),
   maxAge: z.coerce.number().int().positive().optional(), // in hours
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -42,7 +43,7 @@ export async function storiesRoutes(
       });
     }
 
-    const { status, category, sourceIds, uncoveredOnly, minScore, maxAge, limit, offset, sort, order } =
+    const { status, category, sourceIds, uncoveredOnly, trend, minScore, maxAge, limit, offset, sort, order } =
       parseResult.data;
 
     const where: Prisma.StoryWhereInput = {
@@ -192,6 +193,11 @@ export async function storiesRoutes(
               coverageFeed: { select: { name: true } },
             },
           },
+          scoreSnapshots: {
+            select: { compositeScore: true, snapshotAt: true },
+            orderBy: { snapshotAt: 'desc' as const },
+            take: 12,
+          },
           _count: {
             select: { storySources: true },
           },
@@ -239,10 +245,22 @@ export async function storiesRoutes(
       `,
     ]);
 
+    // Compute trend direction for each story from snapshots
+    let filteredStories = stories;
+    if (trend && trend !== 'all') {
+      filteredStories = stories.filter((s: any) => {
+        const snaps = s.scoreSnapshots || [];
+        if (snaps.length < 2) return trend === 'rising'; // new stories counted as rising
+        const latest = snaps[0]?.compositeScore || 0;
+        const previous = snaps[Math.min(snaps.length - 1, 3)]?.compositeScore || 0;
+        return trend === 'rising' ? latest >= previous : latest < previous;
+      });
+    }
+
     return reply.send({
-      data: stories,
+      data: filteredStories,
       pagination: {
-        total,
+        total: trend && trend !== 'all' ? filteredStories.length : total,
         limit,
         offset,
         hasMore: offset + limit < total,
