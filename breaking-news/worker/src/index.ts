@@ -30,6 +30,7 @@ import { createBreakingPackageWorker } from './workers/breaking-package.worker.j
 import { createDeadlineAlertWorker } from './workers/deadline-alert.worker.js';
 import { createBeatAlertWorker } from './workers/beat-alert.worker.js';
 import { createCourtRecordWorker } from './workers/court-record.worker.js';
+import { createCommunityRadarWorker } from './workers/community-radar.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -166,6 +167,10 @@ async function main(): Promise<void> {
   const courtRecordWorker = createCourtRecordWorker();
   workers.push(courtRecordWorker);
   logger.info('Court record worker started');
+
+  const communityRadarWorker = createCommunityRadarWorker();
+  workers.push(communityRadarWorker);
+  logger.info('Community radar worker started');
 
   // Start poll schedulers
   startSchedulers();

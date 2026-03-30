@@ -15,6 +15,7 @@ import { audioSourceRoutes } from './audio-sources.js';
 import { digestSubscriptionRoutes } from './digest-subscriptions.js';
 import { auditLogRoutes } from './audit-logs.js';
 import { slackIntegrationRoutes } from './slack-integrations.js';
+import { communityRadarRoutes } from './community-radar.js';
 
 /**
  * Admin route aggregator.
@@ -81,4 +82,7 @@ export async function adminRoutes(
 
   // Slack integrations (ADMIN+)
   app.register(slackIntegrationRoutes);
+
+  // Community Radar / social monitoring (ADMIN+)
+  app.register(communityRadarRoutes);
 }
