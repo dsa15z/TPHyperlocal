@@ -11,29 +11,23 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
-import { getAuthHeaders } from "@/lib/auth";
 
 export default function AnalyticsPage() {
   const { data: overview, isLoading } = useQuery({
     queryKey: ["analytics-overview"],
-    queryFn: () =>
-      apiFetch<any>("/api/v1/analytics/overview", { headers: getAuthHeaders() }),
+    queryFn: () => apiFetch<any>("/api/v1/analytics/overview"),
     refetchInterval: 30_000,
   });
 
   const { data: timeline } = useQuery({
     queryKey: ["analytics-timeline"],
-    queryFn: () =>
-      apiFetch<any>("/api/v1/analytics/timeline", { headers: getAuthHeaders() }),
+    queryFn: () => apiFetch<any>("/api/v1/analytics/timeline"),
     refetchInterval: 60_000,
   });
 
   const { data: domainScores } = useQuery({
     queryKey: ["analytics-domains"],
-    queryFn: () =>
-      apiFetch<any>("/api/v1/analytics/domain-scores", {
-        headers: getAuthHeaders(),
-      }),
+    queryFn: () => apiFetch<any>("/api/v1/analytics/domain-scores"),
   });
 
   const stats = overview?.overview || {};

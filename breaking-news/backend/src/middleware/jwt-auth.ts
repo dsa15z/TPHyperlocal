@@ -40,11 +40,13 @@ function isPublicPath(url: string): boolean {
   // Auth endpoints are public
   if (url.startsWith('/api/v1/auth')) return true;
 
-  // Stories, search, feeds, pipeline status are public (read-only)
+  // Stories, search, feeds, pipeline, analytics are public (read-only)
   if (url.startsWith('/api/v1/stories')) return true;
   if (url.startsWith('/api/v1/search')) return true;
   if (url.startsWith('/api/v1/feeds')) return true;
   if (url.startsWith('/api/v1/pipeline')) return true;
+  if (url.startsWith('/api/v1/analytics')) return true;
+  if (url.startsWith('/api/v1/notifications') && request.method === 'GET') return true;
 
   return false;
 }
