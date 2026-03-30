@@ -19,7 +19,6 @@ async function main() {
       trustScore: 0.8,
       isActive: true,
       isGlobal: true,
-      isGlobal: true,
       metadata: { feedUrl: 'https://www.houstonchronicle.com/rss/feed/Houston-breaking-news-702.php' },
     },
     {
@@ -181,7 +180,6 @@ async function main() {
       name: 'Development Key',
       ownerId: 'system',
       isActive: true,
-      isGlobal: true,
       rateLimit: 1000,
     },
   });
