@@ -123,7 +123,7 @@ function AISummaryPanel({
   aiSummaryAt: string | null;
 }) {
   const queryClient = useQueryClient();
-  const hasTriggered = useRef(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const generateMutation = useMutation({
     mutationFn: () =>
@@ -132,24 +132,47 @@ function AISummaryPanel({
         headers: getAuthHeaders(),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["story", storyId] });
+      // The worker processes async — start polling every 5s until summary appears
+      setIsGenerating(true);
     },
   });
 
-  // Auto-generate summary on first load if none exists
+  // Auto-trigger: generate summary on first render if none exists
+  const hasTriggered = useRef(false);
   useEffect(() => {
-    if (!aiSummary && !hasTriggered.current && !generateMutation.isPending) {
+    if (!aiSummary && !hasTriggered.current) {
       hasTriggered.current = true;
       generateMutation.mutate();
     }
-  }, [aiSummary]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll for the summary while generating (worker runs async, may take 5-15s)
+  useEffect(() => {
+    if (!isGenerating) return;
+    if (aiSummary) {
+      setIsGenerating(false);
+      return;
+    }
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["story", storyId] });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isGenerating, aiSummary, storyId, queryClient]);
+
+  const showLoading = isGenerating && !aiSummary;
 
   return (
     <div className="glass-card p-5 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-400" />
+          <Sparkles className={clsx("w-4 h-4 text-purple-400", showLoading && "animate-pulse")} />
           <h3 className="text-sm font-semibold text-white">AI Source Summary</h3>
+          {showLoading && (
+            <span className="text-xs text-gray-500 flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Generating...
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {aiSummaryAt && (
@@ -161,10 +184,10 @@ function AISummaryPanel({
           {aiSummary && (
             <button
               onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending}
+              disabled={generateMutation.isPending || isGenerating}
               className="filter-btn text-xs flex items-center gap-1.5 text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
             >
-              {generateMutation.isPending ? (
+              {generateMutation.isPending || isGenerating ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
                 <Sparkles className="w-3 h-3" />
@@ -174,13 +197,6 @@ function AISummaryPanel({
           )}
         </div>
       </div>
-
-      {generateMutation.isPending && !aiSummary && (
-        <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Analyzing all sources and generating consolidated summary...
-        </div>
-      )}
 
       {aiSummary && (
         <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
