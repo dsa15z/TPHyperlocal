@@ -30,6 +30,8 @@ function isPublicPath(url: string): boolean {
   if (url.startsWith('/api/v1/feeds')) return true;
   if (url.startsWith('/api/v1/pipeline')) return true;
   if (url.startsWith('/api/v1/analytics')) return true;
+  if (url.startsWith('/api/v1/stocks')) return true;
+  if (url.startsWith('/api/v1/public-data')) return true;
 
   return false;
 }
