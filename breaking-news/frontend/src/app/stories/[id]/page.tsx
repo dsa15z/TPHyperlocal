@@ -231,13 +231,27 @@ function stripHtml(html: string): string {
 function SourceCard({ source }: { source: SourcePost }) {
   const [expanded, setExpanded] = useState(false);
 
-  const rawText = expanded
-    ? source.full_article || source.content
-    : source.content;
-  const displayText = stripHtml(rawText);
+  // Determine the best available text to show
+  const strippedContent = stripHtml(source.content);
+  const strippedTitle = stripHtml(source.title);
+  const strippedFullArticle = source.full_article ? stripHtml(source.full_article) : null;
 
-  const hasMore = (source.full_article && source.full_article.length > source.content.length)
-    || displayText.length > 400;
+  // Detect if content is just the title repeated (common with Google News / Bing aggregators)
+  const contentIsJustTitle =
+    !strippedContent ||
+    strippedContent.length < 50 ||
+    strippedContent.toLowerCase().replace(/\s+/g, ' ').trim() ===
+      strippedTitle.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  const rawText = expanded
+    ? strippedFullArticle || strippedContent
+    : contentIsJustTitle && strippedFullArticle
+    ? strippedFullArticle
+    : strippedContent;
+  const displayText = rawText;
+
+  const hasFullArticle = !!strippedFullArticle && strippedFullArticle.length > strippedContent.length;
+  const hasMore = hasFullArticle || displayText.length > 400;
 
   return (
     <div className="glass-card p-4 space-y-3 animate-in">
@@ -295,16 +309,35 @@ function SourceCard({ source }: { source: SourcePost }) {
 
       {/* Full content — no line clamp when expanded */}
       <div className="relative">
-        <p
-          className={clsx(
-            "text-gray-300 text-sm leading-relaxed whitespace-pre-wrap",
-            !expanded && "line-clamp-6"
-          )}
-        >
-          {displayText}
-        </p>
+        {contentIsJustTitle && !strippedFullArticle ? (
+          <div className="text-sm space-y-2">
+            <p className="text-gray-500 italic">
+              Full article text is being extracted from the original source...
+            </p>
+            {source.url && (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent text-xs hover:underline inline-flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Read the full story at the original source
+              </a>
+            )}
+          </div>
+        ) : (
+          <p
+            className={clsx(
+              "text-gray-300 text-sm leading-relaxed whitespace-pre-wrap",
+              !expanded && "line-clamp-6"
+            )}
+          >
+            {displayText}
+          </p>
+        )}
 
-        {hasMore && (
+        {hasMore && !contentIsJustTitle && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="mt-2 flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"

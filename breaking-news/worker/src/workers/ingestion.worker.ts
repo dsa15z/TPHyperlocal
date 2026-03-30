@@ -147,6 +147,9 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   const enrichmentQueue = new Queue('enrichment', {
     connection: getSharedConnection(),
   });
+  const extractionQueue = new Queue('article-extraction', {
+    connection: getSharedConnection(),
+  });
 
   let ingested = 0;
 
@@ -203,6 +206,15 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
       });
+
+      // Queue full article extraction if the post has a URL
+      if (item.link) {
+        await extractionQueue.add('extract_article', { sourcePostId: post.id }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+          delay: 2000, // Small delay to let enrichment start first
+        });
+      }
     } catch (err) {
       logger.warn({ err, item: item.title }, 'Failed to process RSS item');
     }
@@ -215,6 +227,7 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   });
 
   await enrichmentQueue.close();
+  await extractionQueue.close();
 
   logger.info({ sourceId, ingested, total: items.length }, 'RSS poll complete');
 }
