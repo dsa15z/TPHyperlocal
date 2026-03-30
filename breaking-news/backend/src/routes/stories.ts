@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
+import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
 import { prisma } from '../lib/prisma.js';
 import { Prisma, StoryStatus } from '@prisma/client';
 
@@ -443,5 +445,43 @@ export async function storiesRoutes(
     }
 
     return reply.send({ data: story });
+  });
+
+  // POST /api/v1/stories/:id/summarize - trigger on-demand AI summary generation
+  app.post('/stories/:id/summarize', async (request, reply) => {
+    const parseResult = StoryIdParamsSchema.safeParse(request.params);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: 'Invalid story ID' });
+    }
+
+    const { id } = parseResult.data;
+
+    const story = await prisma.story.findUnique({
+      where: { id },
+      select: { id: true, title: true, _count: { select: { storySources: true } } },
+    });
+
+    if (!story) {
+      return reply.status(404).send({ error: 'Story not found' });
+    }
+
+    // Queue summarization job
+    const redisUrl = process.env['REDIS_URL'] || 'redis://localhost:6379';
+    const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+    const queue = new Queue('summarization', { connection });
+
+    await queue.add('summarize', { storyId: id, force: true }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+    });
+
+    await queue.close();
+    await connection.quit();
+
+    return reply.send({
+      message: 'Summary generation queued',
+      storyId: id,
+      sourceCount: story._count.storySources,
+    });
   });
 }

@@ -132,14 +132,43 @@ export function getWordSet(text: string): Set<string> {
   return new Set(words);
 }
 
+// Short neighborhood names that are also common English words or surnames.
+// These require stronger contextual signals (preposition + name) to match.
+const AMBIGUOUS_NEIGHBORHOODS = new Set([
+  'porter', 'spring', 'humble', 'richmond', 'stafford', 'cleveland',
+  'webster', 'dayton', 'willis', 'magnolia', 'santa fe', 'alvin',
+  'bellaire', 'kemah', 'sienna', 'fulshear', 'champions', 'memorial',
+  'cypress', 'pearland', 'friendswood', 'liberty county',
+]);
+
 /**
- * Detect Houston neighborhoods mentioned in text
+ * Detect Houston neighborhoods mentioned in text.
+ *
+ * For unambiguous multi-word names we do a simple includes() check.
+ * For ambiguous single-word names that double as common surnames/words
+ * (e.g. Porter, Spring, Cleveland) we require either:
+ *   - a locational preposition before the name ("in Porter", "near Spring"), OR
+ *   - the word "area"/"community"/"neighborhood" nearby
+ * This prevents "Arttu Porter" or "spring training" from matching.
  */
 export function detectNeighborhoods(text: string): string[] {
   const lowerText = text.toLowerCase();
-  return HOUSTON_NEIGHBORHOODS.filter((neighborhood) =>
-    lowerText.includes(neighborhood.toLowerCase())
-  );
+  return HOUSTON_NEIGHBORHOODS.filter((neighborhood) => {
+    const lower = neighborhood.toLowerCase();
+    if (!lowerText.includes(lower)) return false;
+
+    if (AMBIGUOUS_NEIGHBORHOODS.has(lower)) {
+      // Require locational context: preposition before the name, or "area/community" after
+      const contextPattern = new RegExp(
+        `(?:in|near|at|around|from|of)\\s+${lower}\\b` +
+        `|\\b${lower}\\s+(?:area|community|neighborhood|resident|region)`,
+        'i'
+      );
+      return contextPattern.test(text);
+    }
+
+    return true;
+  });
 }
 
 /**

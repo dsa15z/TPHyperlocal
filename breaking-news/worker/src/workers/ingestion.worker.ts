@@ -157,13 +157,25 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
       const guid = getGuid(item, feedUrl);
       const platformPostId = `rss::${feedUrl}::${guid}`;
 
-      // Check for duplicate
+      // Check for duplicate by platformPostId
       const existing = await prisma.sourcePost.findUnique({
         where: { platformPostId },
       });
       if (existing) continue;
 
       const contentHash = generateContentHash(`${title} ${content}`);
+
+      // Check for duplicate by content hash within the same source —
+      // prevents the same article from being stored multiple times when
+      // the RSS guid changes between polls but the content is identical.
+      const existingByContent = await prisma.sourcePost.findFirst({
+        where: { sourceId, contentHash },
+      });
+      if (existingByContent) {
+        logger.debug({ sourceId, title: title.substring(0, 60) }, 'Skipping duplicate content (same source, same hash)');
+        continue;
+      }
+
       const publishedAt = item.pubDate || item['dc:date']
         ? new Date(item.pubDate || item['dc:date'] || Date.now())
         : new Date();
@@ -265,6 +277,13 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
       if (existing) continue;
 
       const contentHash = generateContentHash(`${article.title} ${content}`);
+
+      // Content-hash dedup: skip if same content already ingested from this source
+      const existingByContent = await prisma.sourcePost.findFirst({
+        where: { sourceId, contentHash },
+      });
+      if (existingByContent) continue;
+
       const mediaUrls = article.urlToImage ? [article.urlToImage] : [];
 
       const post = await prisma.sourcePost.create({
@@ -328,6 +347,12 @@ async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
 
       const content = tweet.text;
       const contentHash = generateContentHash(content);
+
+      // Content-hash dedup
+      const existingByContent = await prisma.sourcePost.findFirst({
+        where: { sourceId, contentHash },
+      });
+      if (existingByContent) continue;
 
       const post = await prisma.sourcePost.create({
         data: {
@@ -422,6 +447,13 @@ async function handleFacebookPagePoll(job: Job<FacebookPagePollJob>): Promise<vo
       if (existing) continue;
 
       const contentHash = generateContentHash(content);
+
+      // Content-hash dedup
+      const existingByContent = await prisma.sourcePost.findFirst({
+        where: { sourceId, contentHash },
+      });
+      if (existingByContent) continue;
+
       const mediaUrls = fbPost.full_picture ? [fbPost.full_picture] : [];
 
       const post = await prisma.sourcePost.create({

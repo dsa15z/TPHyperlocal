@@ -165,6 +165,31 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       similarity: bestSimilarity,
     }, 'Adding post to existing story');
 
+    // Content-hash dedup: skip if the story already has a source post with
+    // identical content from the same news source. This prevents the same
+    // article from inflating source counts when RSS guids vary between polls.
+    const duplicateInStory = await prisma.storySource.findFirst({
+      where: {
+        storyId,
+        sourcePost: {
+          sourceId: post.sourceId,
+          contentHash: post.contentHash,
+        },
+      },
+    });
+
+    if (duplicateInStory) {
+      logger.info({ sourcePostId, storyId }, 'Skipping duplicate content already in story');
+      // Enqueue scoring anyway (in case thresholds changed) but don't create a new link
+      const scoringQueue = new Queue('scoring', { connection: getSharedConnection() });
+      await scoringQueue.add('score', { storyId }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      });
+      await scoringQueue.close();
+      return;
+    }
+
     // Create StorySource link
     await prisma.storySource.create({
       data: {

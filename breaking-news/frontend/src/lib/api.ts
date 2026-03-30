@@ -18,6 +18,9 @@ export interface Story {
   id: string;
   title: string;
   summary: string;
+  ai_summary: string | null;
+  ai_summary_model: string | null;
+  ai_summary_at: string | null;
   status: "ALERT" | "BREAKING" | "DEVELOPING" | "TOP_STORY" | "ONGOING" | "FOLLOW_UP" | "STALE" | "ARCHIVED";
   category: string;
   location: string;
@@ -40,7 +43,9 @@ export interface SourcePost {
   id: string;
   platform: string;
   author: string;
+  title: string;
   content: string;
+  full_article: string | null;
   url: string;
   engagement: {
     likes: number;
@@ -185,6 +190,9 @@ function transformStory(raw: any): Story {
     id: raw.id,
     title: raw.editedTitle || raw.title,
     summary: raw.editedSummary || raw.aiSummary || raw.summary || "",
+    ai_summary: raw.aiSummary || null,
+    ai_summary_model: raw.aiSummaryModel || null,
+    ai_summary_at: raw.aiSummaryAt || null,
     status: raw.status,
     category: raw.category || "Unknown",
     location: raw.locationName || raw.neighborhood || "",
@@ -230,7 +238,9 @@ function transformStorySource(raw: any): SourcePost {
     id: post.id,
     platform: post.source?.platform || post.platform || "Unknown",
     author: post.authorName || post.source?.name || "Unknown",
+    title: post.title || "",
     content: post.content || "",
+    full_article: post.fullArticleText || null,
     url: post.url || "",
     engagement: {
       likes: post.engagementLikes ?? 0,

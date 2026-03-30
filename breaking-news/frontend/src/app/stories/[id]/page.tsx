@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -12,9 +13,14 @@ import {
   MapPin,
   Tag,
   Bookmark,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, type SourcePost } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { AnnotationPanel } from "@/components/AnnotationPanel";
@@ -34,14 +40,39 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ScoreBadge } from "@/components/ScoreBadge";
 
 const PLATFORM_ICONS: Record<string, string> = {
-  twitter: "𝕏",
+  twitter: "\ud835\udd4f",
+  TWITTER: "\ud835\udd4f",
   reddit: "R",
   facebook: "f",
+  FACEBOOK: "f",
   instagram: "IG",
   youtube: "YT",
   news: "N",
   rss: "RSS",
+  RSS: "RSS",
+  NEWSAPI: "API",
+  GDELT: "G",
+  LLM_OPENAI: "AI",
+  LLM_CLAUDE: "AI",
+  LLM_GROK: "AI",
+  LLM_GEMINI: "AI",
+  MANUAL: "M",
 };
+
+const PLATFORM_LABELS: Record<string, string> = {
+  RSS: "RSS Feed",
+  NEWSAPI: "NewsAPI",
+  TWITTER: "X/Twitter",
+  FACEBOOK: "Facebook",
+  GDELT: "GDELT",
+  LLM_OPENAI: "AI (OpenAI)",
+  LLM_CLAUDE: "AI (Claude)",
+  LLM_GROK: "AI (Grok)",
+  LLM_GEMINI: "AI (Gemini)",
+  MANUAL: "Manual Entry",
+};
+
+// ─── Bookmark Button ───────────────────────────────────────────────────────
 
 function BookmarkButton({ storyId }: { storyId: string }) {
   const queryClient = useQueryClient();
@@ -77,6 +108,201 @@ function BookmarkButton({ storyId }: { storyId: string }) {
     </button>
   );
 }
+
+// ─── AI Summary Panel ──────────────────────────────────────────────────────
+
+function AISummaryPanel({
+  storyId,
+  aiSummary,
+  aiSummaryModel,
+  aiSummaryAt,
+}: {
+  storyId: string;
+  aiSummary: string | null;
+  aiSummaryModel: string | null;
+  aiSummaryAt: string | null;
+}) {
+  const queryClient = useQueryClient();
+
+  const generateMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<any>(`/api/v1/stories/${storyId}/summarize`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["story", storyId] });
+    },
+  });
+
+  return (
+    <div className="glass-card p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <h3 className="text-sm font-semibold text-white">AI Source Summary</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          {aiSummaryAt && (
+            <span className="text-[10px] text-gray-500">
+              Generated {formatRelativeTime(aiSummaryAt)}
+              {aiSummaryModel && ` via ${aiSummaryModel}`}
+            </span>
+          )}
+          {isAuthenticated() && (
+            <button
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending}
+              className="filter-btn text-xs flex items-center gap-1.5 text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+            >
+              {generateMutation.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {aiSummary ? "Regenerate" : "Generate Summary"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {generateMutation.isPending && !aiSummary && (
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Analyzing all sources and generating consolidated summary...
+        </div>
+      )}
+
+      {aiSummary ? (
+        <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+          {aiSummary}
+        </p>
+      ) : !generateMutation.isPending ? (
+        <p className="text-gray-500 text-sm italic">
+          No AI summary generated yet. Click &quot;Generate Summary&quot; to create a consolidated analysis of all source articles.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Source Card (expandable, full text, links) ────────────────────────────
+
+function SourceCard({ source }: { source: SourcePost }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const displayText = expanded
+    ? source.full_article || source.content
+    : source.content;
+
+  const hasMore = (source.full_article && source.full_article.length > source.content.length)
+    || source.content.length > 400;
+
+  return (
+    <div className="glass-card p-4 space-y-3 animate-in">
+      {/* Header: platform, author, time, link */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="w-8 h-8 rounded-lg bg-surface-300 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
+            {PLATFORM_ICONS[source.platform] || source.platform[0]?.toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-200 truncate">
+                {source.author}
+              </span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-300/60 text-gray-400 flex-shrink-0">
+                {PLATFORM_LABELS[source.platform] || source.platform}
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              {formatRelativeTime(source.published_at)}
+            </span>
+          </div>
+        </div>
+
+        {source.url && (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors flex-shrink-0"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Read Original
+          </a>
+        )}
+      </div>
+
+      {/* Source title if available */}
+      {source.title && (
+        <h4 className="text-sm font-semibold text-gray-200">
+          {source.url ? (
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-accent transition-colors"
+            >
+              {source.title}
+            </a>
+          ) : (
+            source.title
+          )}
+        </h4>
+      )}
+
+      {/* Full content — no line clamp when expanded */}
+      <div className="relative">
+        <p
+          className={clsx(
+            "text-gray-300 text-sm leading-relaxed whitespace-pre-wrap",
+            !expanded && "line-clamp-6"
+          )}
+        >
+          {displayText}
+        </p>
+
+        {hasMore && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-2 flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="w-3 h-3" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3 h-3" />
+                Show full article
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Engagement metrics */}
+      <div className="flex items-center gap-4 text-xs text-gray-500 pt-1 border-t border-surface-300/30">
+        <span className="flex items-center gap-1">
+          <Heart className="w-3 h-3" />
+          {source.engagement.likes.toLocaleString()}
+        </span>
+        <span className="flex items-center gap-1">
+          <Share2 className="w-3 h-3" />
+          {source.engagement.shares.toLocaleString()}
+        </span>
+        <span className="flex items-center gap-1">
+          <MessageCircle className="w-3 h-3" />
+          {source.engagement.comments.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function StoryDetailPage() {
   const params = useParams();
@@ -165,6 +391,14 @@ export default function StoryDetailPage() {
           {isAuthenticated() && <BookmarkButton storyId={id} />}
         </div>
 
+        {/* AI consolidated summary of all sources */}
+        <AISummaryPanel
+          storyId={id}
+          aiSummary={story.ai_summary}
+          aiSummaryModel={story.ai_summary_model}
+          aiSummaryAt={story.ai_summary_at}
+        />
+
         {/* One-click breaking package */}
         <BreakingPackagePanel storyId={id} />
 
@@ -248,72 +482,19 @@ export default function StoryDetailPage() {
         {/* Editorial annotations */}
         <AnnotationPanel storyId={id} />
 
-        {/* Source posts */}
+        {/* Source posts — full text, links, expandable */}
         {story.sources && story.sources.length > 0 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-white">
-              Source Posts ({story.sources.length})
-            </h2>
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-gray-400" />
+              <h2 className="text-lg font-semibold text-white">
+                Source Articles ({story.sources.length})
+              </h2>
+            </div>
 
             <div className="space-y-3">
               {story.sources.map((source) => (
-                <div
-                  key={source.id}
-                  className="glass-card p-4 space-y-3 animate-in"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {/* Platform icon */}
-                      <span className="w-8 h-8 rounded-lg bg-surface-300 flex items-center justify-center text-xs font-bold text-gray-300">
-                        {PLATFORM_ICONS[source.platform.toLowerCase()] ||
-                          source.platform[0]?.toUpperCase()}
-                      </span>
-                      <div>
-                        <span className="text-sm font-medium text-gray-200">
-                          {source.author}
-                        </span>
-                        <span className="text-xs text-gray-500 ml-2">
-                          on {source.platform}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">
-                        {formatRelativeTime(source.published_at)}
-                      </span>
-                      {source.url && (
-                        <a
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-500 hover:text-accent transition-colors"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-gray-300 text-sm leading-relaxed line-clamp-4">
-                    {source.content}
-                  </p>
-
-                  {/* Engagement metrics */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Heart className="w-3 h-3" />
-                      {source.engagement.likes.toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Share2 className="w-3 h-3" />
-                      {source.engagement.shares.toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" />
-                      {source.engagement.comments.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                <SourceCard key={source.id} source={source} />
               ))}
             </div>
           </section>
@@ -335,14 +516,32 @@ export default function StoryDetailPage() {
                   <div key={source.id} className="relative flex items-start gap-4">
                     <div className="absolute left-[-15px] top-1.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-surface" />
                     <div className="flex-1 glass-card p-3">
-                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                        <Clock className="w-3 h-3" />
-                        {formatRelativeTime(source.published_at)}
-                        <span className="text-gray-600">|</span>
-                        <span>{source.platform}</span>
-                        <span className="text-gray-600">|</span>
-                        <span>{source.author}</span>
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-500 mb-1">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3 h-3" />
+                          {formatRelativeTime(source.published_at)}
+                          <span className="text-gray-600">|</span>
+                          <span>{PLATFORM_LABELS[source.platform] || source.platform}</span>
+                          <span className="text-gray-600">|</span>
+                          <span>{source.author}</span>
+                        </div>
+                        {source.url && (
+                          <a
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-accent hover:text-accent/80 flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Link</span>
+                          </a>
+                        )}
                       </div>
+                      {source.title && (
+                        <p className="text-gray-200 text-sm font-medium mb-1">
+                          {source.title}
+                        </p>
+                      )}
                       <p className="text-gray-300 text-sm line-clamp-2">
                         {source.content}
                       </p>

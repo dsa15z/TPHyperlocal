@@ -27,6 +27,9 @@ import { createStockMonitorWorker } from './workers/stock-monitor.worker.js';
 import { createPublicDataWorker } from './workers/public-data.worker.js';
 import { createShiftBriefingWorker } from './workers/shift-briefing.worker.js';
 import { createBreakingPackageWorker } from './workers/breaking-package.worker.js';
+import { createDeadlineAlertWorker } from './workers/deadline-alert.worker.js';
+import { createBeatAlertWorker } from './workers/beat-alert.worker.js';
+import { createCourtRecordWorker } from './workers/court-record.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -151,6 +154,18 @@ async function main(): Promise<void> {
   const breakingPackageWorker = createBreakingPackageWorker();
   workers.push(breakingPackageWorker);
   logger.info('Breaking package worker started');
+
+  const deadlineAlertWorker = createDeadlineAlertWorker();
+  workers.push(deadlineAlertWorker);
+  logger.info('Deadline alert worker started');
+
+  const beatAlertWorker = createBeatAlertWorker();
+  workers.push(beatAlertWorker);
+  logger.info('Beat alert worker started');
+
+  const courtRecordWorker = createCourtRecordWorker();
+  workers.push(courtRecordWorker);
+  logger.info('Court record worker started');
 
   // Start poll schedulers
   startSchedulers();
