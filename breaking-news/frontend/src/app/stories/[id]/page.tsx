@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -123,6 +123,7 @@ function AISummaryPanel({
   aiSummaryAt: string | null;
 }) {
   const queryClient = useQueryClient();
+  const hasTriggered = useRef(false);
 
   const generateMutation = useMutation({
     mutationFn: () =>
@@ -134,6 +135,14 @@ function AISummaryPanel({
       queryClient.invalidateQueries({ queryKey: ["story", storyId] });
     },
   });
+
+  // Auto-generate summary on first load if none exists
+  useEffect(() => {
+    if (!aiSummary && !hasTriggered.current && !generateMutation.isPending) {
+      hasTriggered.current = true;
+      generateMutation.mutate();
+    }
+  }, [aiSummary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="glass-card p-5 space-y-3">
@@ -149,7 +158,7 @@ function AISummaryPanel({
               {aiSummaryModel && ` via ${aiSummaryModel}`}
             </span>
           )}
-          {isAuthenticated() && (
+          {aiSummary && (
             <button
               onClick={() => generateMutation.mutate()}
               disabled={generateMutation.isPending}
@@ -160,7 +169,7 @@ function AISummaryPanel({
               ) : (
                 <Sparkles className="w-3 h-3" />
               )}
-              {aiSummary ? "Regenerate" : "Generate Summary"}
+              Regenerate
             </button>
           )}
         </div>
@@ -173,15 +182,11 @@ function AISummaryPanel({
         </div>
       )}
 
-      {aiSummary ? (
+      {aiSummary && (
         <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
           {aiSummary}
         </p>
-      ) : !generateMutation.isPending ? (
-        <p className="text-gray-500 text-sm italic">
-          No AI summary generated yet. Click &quot;Generate Summary&quot; to create a consolidated analysis of all source articles.
-        </p>
-      ) : null}
+      )}
     </div>
   );
 }
