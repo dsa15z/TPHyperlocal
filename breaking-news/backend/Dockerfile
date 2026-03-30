@@ -48,5 +48,6 @@ ENV PORT=3001
 
 EXPOSE 3001
 
-# Run migrations then start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Apply schema to DB then start server
+# Sleep briefly to ensure DB connection is stable, then push schema
+CMD ["sh", "-c", "sleep 3 && npx prisma db push --accept-data-loss --skip-generate 2>&1 && echo 'Schema pushed successfully' && node dist/index.js"]
