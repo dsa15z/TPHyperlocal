@@ -43,6 +43,7 @@ function DashboardContent() {
   const totalPages = data?.total_pages || 1;
   const currentPage = data?.page || 1;
   const total = data?.total || 0;
+  const facets = data?.facets;
 
   return (
     <div className="min-h-screen">
@@ -51,7 +52,7 @@ function DashboardContent() {
         <NewsProgressPanel />
 
         {/* Filter bar */}
-        <FilterBar onFiltersChange={handleFiltersChange} />
+        <FilterBar onFiltersChange={handleFiltersChange} facets={facets} />
 
         {/* Results count */}
         <div className="flex items-center justify-between text-sm text-gray-500">

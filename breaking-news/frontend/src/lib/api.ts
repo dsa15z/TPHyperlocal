@@ -48,6 +48,11 @@ export interface StoriesResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  facets?: {
+    categories: FacetItem[];
+    statuses: FacetItem[];
+    sources: SourceWithCount[];
+  };
 }
 
 export interface StoryFilters {
@@ -256,6 +261,7 @@ export async function fetchStories(
     page,
     page_size: pageSize,
     total_pages: Math.max(1, Math.ceil(total / pageSize)),
+    facets: raw.facets || undefined,
   };
 }
 
@@ -473,6 +479,42 @@ export interface TriggerResponse {
   queued: number;
   totalSources: number;
   lookbackHours: number;
+}
+
+export interface PipelineJob {
+  id: string;
+  name: string;
+  state: string;
+  data: {
+    type?: string;
+    sourceId?: string;
+    feedUrl?: string;
+    query?: string;
+  };
+  failedReason: string | null;
+  stacktrace: string | null;
+  attemptsMade: number;
+  timestamp: number;
+  processedOn: number | null;
+  finishedOn: number | null;
+}
+
+export interface PipelineJobsResponse {
+  queue: string;
+  state: string;
+  jobs: PipelineJob[];
+  total: number;
+}
+
+export async function fetchPipelineJobs(
+  queue: string,
+  state: string = "failed",
+  limit: number = 20
+): Promise<PipelineJobsResponse> {
+  const qs = buildQueryString({ state, limit });
+  return apiFetch<PipelineJobsResponse>(
+    `/api/v1/pipeline/jobs/${queue}${qs}`
+  );
 }
 
 export async function triggerPipelineIngestion(

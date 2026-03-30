@@ -5,19 +5,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Loader2,
   CheckCircle2,
   AlertCircle,
   Clock,
   Activity,
   Play,
+  XCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import {
   fetchPipelineStatus,
+  fetchPipelineJobs,
   triggerPipelineIngestion,
   type QueueStatus,
+  type PipelineJob,
 } from "@/lib/api";
+import { useUser } from "./UserProvider";
 
 const QUEUE_LABELS: Record<string, { label: string; icon: string }> = {
   ingestion: { label: "Ingestion", icon: "\u{1F4E5}" },
@@ -35,48 +40,175 @@ const LOOKBACK_OPTIONS = [
   { label: "7d", hours: 168 },
 ];
 
-function QueueRow({ queue }: { queue: QueueStatus }) {
-  const info = QUEUE_LABELS[queue.name] || {
-    label: queue.name,
-    icon: "\u2699\uFE0F",
-  };
+function formatTimestamp(ts: number | null): string {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  return d.toLocaleTimeString();
+}
+
+function JobRow({ job }: { job: PipelineJob }) {
+  const [showStack, setShowStack] = useState(false);
+  const isFailed = job.state === "failed";
+
+  return (
+    <div className="border-l-2 border-surface-300/30 ml-2 pl-3 py-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-xs">
+            {isFailed && <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+            <span className="text-gray-300 font-mono truncate">
+              {job.name || job.data?.type || job.id}
+            </span>
+            {job.data?.feedUrl && (
+              <span className="text-gray-600 truncate hidden sm:inline">
+                {job.data.feedUrl.replace(/^https?:\/\//, "").substring(0, 40)}
+              </span>
+            )}
+          </div>
+          {isFailed && job.failedReason && (
+            <div className="mt-1">
+              <button
+                onClick={() => setShowStack(!showStack)}
+                className="text-[11px] text-red-400/80 hover:text-red-300 text-left leading-snug"
+              >
+                {job.failedReason.substring(0, 120)}
+                {job.failedReason.length > 120 ? "..." : ""}
+              </button>
+              {showStack && job.stacktrace && (
+                <pre className="mt-1 text-[10px] text-gray-600 bg-surface-300/30 rounded p-2 overflow-x-auto max-h-24 whitespace-pre-wrap">
+                  {job.stacktrace}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-gray-600 flex-shrink-0 tabular-nums">
+          <span>att: {job.attemptsMade}</span>
+          <span>{formatTimestamp(job.finishedOn || job.processedOn || job.timestamp)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
+  const [expanded, setExpanded] = useState(false);
+  const [jobState, setJobState] = useState<string>("failed");
+
+  const info = QUEUE_LABELS[queue.name] || { label: queue.name, icon: "\u2699\uFE0F" };
   const isActive = queue.active > 0;
   const hasWaiting = queue.waiting > 0;
   const hasFailed = queue.failed > 0;
+  const hasJobs = queue.active + queue.waiting + queue.completed + queue.failed > 0;
+
+  const { data: jobsData, isLoading: jobsLoading } = useQuery({
+    queryKey: ["pipeline-jobs", queue.name, jobState],
+    queryFn: () => fetchPipelineJobs(queue.name, jobState, 15),
+    enabled: expanded,
+    refetchInterval: expanded ? 10_000 : false,
+  });
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-surface-200/50">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-sm">{info.icon}</span>
-        <span className="text-sm font-medium text-gray-300 truncate">
-          {info.label}
-        </span>
-        {isActive && (
-          <Loader2 className="w-3.5 h-3.5 text-accent animate-spin flex-shrink-0" />
+    <div className="rounded-lg bg-surface-200/50">
+      {/* Queue summary row */}
+      <button
+        onClick={() => hasJobs && setExpanded(!expanded)}
+        className={clsx(
+          "w-full flex items-center justify-between py-2 px-3",
+          hasJobs && "hover:bg-surface-200/80 cursor-pointer",
+          !hasJobs && "cursor-default"
         )}
-      </div>
-      <div className="flex items-center gap-3 text-xs tabular-nums flex-shrink-0">
-        {isActive && (
-          <span className="text-accent font-medium">
-            {queue.active} active
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {hasJobs && (
+            <ChevronRight
+              className={clsx(
+                "w-3 h-3 text-gray-600 transition-transform",
+                expanded && "rotate-90"
+              )}
+            />
+          )}
+          <span className="text-sm">{info.icon}</span>
+          <span className="text-sm font-medium text-gray-300 truncate">
+            {info.label}
           </span>
-        )}
-        {hasWaiting && (
-          <span className="text-yellow-400">{queue.waiting} queued</span>
-        )}
-        <span className="text-gray-500">{queue.completed} done</span>
-        {hasFailed && (
-          <span className="text-red-400">{queue.failed} failed</span>
-        )}
-      </div>
+          {isActive && (
+            <Loader2 className="w-3.5 h-3.5 text-accent animate-spin flex-shrink-0" />
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs tabular-nums flex-shrink-0">
+          {isActive && (
+            <span className="text-accent font-medium">{queue.active} active</span>
+          )}
+          {hasWaiting && (
+            <span className="text-yellow-400">{queue.waiting} queued</span>
+          )}
+          <span className="text-gray-500">{queue.completed} done</span>
+          {hasFailed && (
+            <span className="text-red-400">{queue.failed} failed</span>
+          )}
+        </div>
+      </button>
+
+      {/* Expanded job details */}
+      {expanded && (
+        <div className="px-3 pb-3 animate-in">
+          {/* State tabs */}
+          <div className="flex items-center gap-1 mb-2 border-t border-surface-300/20 pt-2">
+            {(["failed", "active", "waiting", "completed"] as const).map((s) => {
+              const count =
+                s === "failed" ? queue.failed :
+                s === "active" ? queue.active :
+                s === "waiting" ? queue.waiting :
+                queue.completed;
+              if (count === 0 && s !== jobState) return null;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setJobState(s)}
+                  className={clsx(
+                    "px-2 py-0.5 text-[11px] rounded transition-colors",
+                    jobState === s
+                      ? "bg-surface-300 text-white"
+                      : "text-gray-500 hover:text-gray-300"
+                  )}
+                >
+                  {s} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Job list */}
+          {jobsLoading && (
+            <div className="text-xs text-gray-500 py-2 flex items-center gap-2">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Loading jobs...
+            </div>
+          )}
+          {!jobsLoading && jobsData?.jobs.length === 0 && (
+            <div className="text-xs text-gray-600 py-2">
+              No {jobState} jobs
+            </div>
+          )}
+          {!jobsLoading && jobsData?.jobs.map((job) => (
+            <JobRow key={job.id} job={job} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export function NewsProgressPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedLookback, setSelectedLookback] = useState(168); // default 7d
+  const [selectedLookback, setSelectedLookback] = useState(168);
   const queryClient = useQueryClient();
+  const { isLoggedIn } = useUser();
+
+  // Only show for logged-in users (admin check happens via role in UserProvider)
+  // For now, checking isLoggedIn since admin panel links already gate on login
+  if (!isLoggedIn) return null;
 
   const { data: status } = useQuery({
     queryKey: ["pipeline-status"],
@@ -145,10 +277,10 @@ export function NewsProgressPanel() {
 
       {/* Expanded detail */}
       {isOpen && (
-        <div className="px-4 pb-4 space-y-3 animate-in border-t border-surface-300/30">
-          {/* Queue rows */}
+        <div className="px-4 pb-4 space-y-2 animate-in border-t border-surface-300/30">
+          {/* Queue rows - each expandable */}
           {status?.queues.map((queue) => (
-            <QueueRow key={queue.name} queue={queue} />
+            <ExpandableQueueRow key={queue.name} queue={queue} />
           ))}
 
           {/* Trigger ingestion */}
@@ -188,9 +320,7 @@ export function NewsProgressPanel() {
                 ) : (
                   <Play className="w-3 h-3" />
                 )}
-                {triggerMutation.isPending
-                  ? "Triggering..."
-                  : "Pull Now"}
+                {triggerMutation.isPending ? "Triggering..." : "Pull Now"}
               </button>
             </div>
             {triggerMutation.isSuccess && (

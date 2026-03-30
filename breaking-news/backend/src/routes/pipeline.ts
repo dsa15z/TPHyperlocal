@@ -12,6 +12,12 @@ interface QueueStatus {
   delayed: number;
 }
 
+const JobsQuerySchema = z.object({
+  state: z.enum(['active', 'waiting', 'completed', 'failed', 'delayed']).default('failed'),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export async function pipelineRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
@@ -67,6 +73,54 @@ export async function pipelineRoutes(
       },
       queues: statuses,
     });
+  });
+
+  // GET /api/v1/pipeline/jobs/:queue - get job details for a specific queue
+  app.get('/pipeline/jobs/:queue', async (request, reply) => {
+    const { queue: queueName } = request.params as { queue: string };
+    const queueNames = Object.values(QUEUE_NAMES);
+    if (!queueNames.includes(queueName as any)) {
+      return reply.status(400).send({ error: `Invalid queue: ${queueName}` });
+    }
+
+    const parseResult = JobsQuerySchema.safeParse(request.query);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: 'Invalid query', details: parseResult.error.flatten() });
+    }
+
+    const { state, limit, offset } = parseResult.data;
+    const queue = getQueue(queueName as any);
+
+    try {
+      const jobs = await queue.getJobs([state], offset, offset + limit - 1);
+
+      const result = jobs.map((job) => ({
+        id: job.id,
+        name: job.name,
+        state,
+        data: {
+          type: job.data?.type,
+          sourceId: job.data?.sourceId,
+          feedUrl: job.data?.feedUrl,
+          query: job.data?.query,
+        },
+        failedReason: job.failedReason || null,
+        stacktrace: job.stacktrace?.[0]?.substring(0, 300) || null,
+        attemptsMade: job.attemptsMade,
+        timestamp: job.timestamp,
+        processedOn: job.processedOn || null,
+        finishedOn: job.finishedOn || null,
+      }));
+
+      return reply.send({
+        queue: queueName,
+        state,
+        jobs: result,
+        total: result.length,
+      });
+    } catch {
+      return reply.send({ queue: queueName, state, jobs: [], total: 0 });
+    }
   });
 
   // POST /api/v1/pipeline/trigger - trigger ingestion for all active sources

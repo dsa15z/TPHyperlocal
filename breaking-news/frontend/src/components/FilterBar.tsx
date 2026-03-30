@@ -2,13 +2,10 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Search, X, ChevronDown, Check } from "lucide-react";
 import {
   type StoryFilters,
-  fetchStorySources,
-  fetchStoryFacets,
   type SourceWithCount,
   type FacetItem,
 } from "@/lib/api";
@@ -166,9 +163,14 @@ function MultiSelect({
 
 interface FilterBarProps {
   onFiltersChange: (filters: StoryFilters) => void;
+  facets?: {
+    categories: FacetItem[];
+    statuses: FacetItem[];
+    sources: SourceWithCount[];
+  };
 }
 
-export function FilterBar({ onFiltersChange }: FilterBarProps) {
+export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -185,20 +187,6 @@ export function FilterBar({ onFiltersChange }: FilterBarProps) {
     Number(searchParams.get("min_score") || "0")
   );
 
-  // Fetch facets (category + status counts)
-  const { data: facets } = useQuery({
-    queryKey: ["story-facets"],
-    queryFn: fetchStoryFacets,
-    staleTime: 30_000,
-  });
-
-  // Fetch source counts
-  const { data: sources = [] } = useQuery({
-    queryKey: ["story-sources"],
-    queryFn: fetchStorySources,
-    staleTime: 60_000,
-  });
-
   const categoryOptions: MultiSelectOption[] = (facets?.categories || []).map(
     (c) => ({ value: c.name, label: c.name, count: c.count })
   );
@@ -207,7 +195,7 @@ export function FilterBar({ onFiltersChange }: FilterBarProps) {
     (s) => ({ value: s.name, label: s.name, count: s.count })
   );
 
-  const sourceOptions: MultiSelectOption[] = sources
+  const sourceOptions: MultiSelectOption[] = (facets?.sources || [])
     .filter((s) => s.storyCount > 0)
     .map((s) => ({
       value: s.id,

@@ -88,7 +88,56 @@ export async function storiesRoutes(
       where.firstSeenAt = { gte: cutoff };
     }
 
-    const [stories, total] = await Promise.all([
+    // Build facet where clauses — each facet excludes its own filter
+    // so counts show what's available if you change that filter
+    const baseFacetWhere: Prisma.StoryWhereInput = { mergedIntoId: null };
+    if (maxAge !== undefined) {
+      baseFacetWhere.firstSeenAt = { gte: new Date(Date.now() - maxAge * 60 * 60 * 1000) };
+    }
+    if (minScore !== undefined) {
+      baseFacetWhere.compositeScore = { gte: minScore };
+    }
+    if (sourceIds) {
+      const ids = sourceIds.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        baseFacetWhere.storySources = { some: { sourcePost: { sourceId: { in: ids } } } };
+      }
+    }
+
+    // Category facet where: includes status + source filters, excludes category
+    const catFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
+    if (status) {
+      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+      catFacetWhere.status = statuses.length === 1
+        ? (statuses[0] as StoryStatus)
+        : { in: statuses as StoryStatus[] };
+    }
+
+    // Status facet where: includes category + source filters, excludes status
+    const statusFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
+    if (category) {
+      const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
+      statusFacetWhere.category = categories.length === 1
+        ? categories[0]
+        : { in: categories };
+    }
+
+    // Source facet where: includes status + category filters, excludes source
+    const sourceFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
+    if (status) {
+      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+      sourceFacetWhere.status = statuses.length === 1
+        ? (statuses[0] as StoryStatus)
+        : { in: statuses as StoryStatus[] };
+    }
+    if (category) {
+      const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
+      sourceFacetWhere.category = categories.length === 1
+        ? categories[0]
+        : { in: categories };
+    }
+
+    const [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
       prisma.story.findMany({
         where,
         orderBy: { [sort]: order },
@@ -118,6 +167,34 @@ export async function storiesRoutes(
         },
       }),
       prisma.story.count({ where }),
+      prisma.story.groupBy({
+        by: ['category'],
+        where: { ...catFacetWhere, category: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { category: 'desc' } },
+      }),
+      prisma.story.groupBy({
+        by: ['status'],
+        where: statusFacetWhere,
+        _count: { _all: true },
+        orderBy: { _count: { status: 'desc' } },
+      }),
+      // For source facets, we need to go through SourcePost → Source
+      prisma.$queryRaw<Array<{ id: string; name: string; platform: string; count: bigint }>>`
+        SELECT s.id, s.name, s.platform, COUNT(DISTINCT st.id)::bigint as count
+        FROM "Source" s
+        JOIN "SourcePost" sp ON sp."sourceId" = s.id
+        JOIN "StorySource" ss ON ss."sourcePostId" = sp.id
+        JOIN "Story" st ON st.id = ss."storyId"
+        WHERE s."isActive" = true
+          AND st."mergedIntoId" IS NULL
+          ${maxAge !== undefined ? Prisma.sql`AND st."firstSeenAt" >= ${new Date(Date.now() - maxAge * 60 * 60 * 1000)}` : Prisma.empty}
+          ${minScore !== undefined ? Prisma.sql`AND st."compositeScore" >= ${minScore}` : Prisma.empty}
+          ${status ? Prisma.sql`AND st.status IN (${Prisma.join(status.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
+          ${category ? Prisma.sql`AND st.category IN (${Prisma.join(category.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
+        GROUP BY s.id, s.name, s.platform
+        ORDER BY count DESC
+      `,
     ]);
 
     return reply.send({
@@ -127,6 +204,22 @@ export async function storiesRoutes(
         limit,
         offset,
         hasMore: offset + limit < total,
+      },
+      facets: {
+        categories: categoryFacets.map((r) => ({
+          name: r.category || 'Unknown',
+          count: r._count._all,
+        })),
+        statuses: statusFacets.map((r) => ({
+          name: r.status,
+          count: r._count._all,
+        })),
+        sources: sourceData.map((r) => ({
+          id: r.id,
+          name: r.name,
+          platform: r.platform,
+          storyCount: Number(r.count),
+        })),
       },
     });
   });
