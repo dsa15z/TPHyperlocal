@@ -5,6 +5,7 @@ import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
 import { generateContentHash } from '../utils/text.js';
+import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
 
 const logger = createChildLogger('ingestion');
 
@@ -28,7 +29,14 @@ interface FacebookPagePollJob {
   accessToken: string;
 }
 
-type IngestionJob = RSSPollJob | NewsAPIPollJob | FacebookPagePollJob;
+interface TwitterPollJob {
+  type: 'twitter_poll';
+  sourceId: string;
+  query: string;
+  bearerToken?: string;
+}
+
+type IngestionJob = RSSPollJob | NewsAPIPollJob | FacebookPagePollJob | TwitterPollJob;
 
 // RSS item shape after parsing
 interface RSSItem {
@@ -295,6 +303,74 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
   logger.info({ sourceId, ingested, total: data.articles.length }, 'NewsAPI poll complete');
 }
 
+async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
+  const { sourceId, query } = job.data;
+  const bearerToken = job.data.bearerToken || process.env.TWITTER_BEARER_TOKEN;
+
+  if (!bearerToken) {
+    throw new Error('TWITTER_BEARER_TOKEN not configured');
+  }
+
+  logger.info({ sourceId, query }, 'Polling Twitter/X');
+
+  const tweets = await searchRecentTweets(query, bearerToken, 25);
+
+  logger.info({ sourceId, tweetCount: tweets.length }, 'Fetched tweets');
+
+  const enrichmentQueue = new Queue('enrichment', { connection: getSharedConnection() });
+  let ingested = 0;
+
+  for (const tweet of tweets) {
+    try {
+      const platformPostId = `twitter::${tweet.id}`;
+      const existing = await prisma.sourcePost.findUnique({ where: { platformPostId } });
+      if (existing) continue;
+
+      const content = tweet.text;
+      const contentHash = generateContentHash(content);
+
+      const post = await prisma.sourcePost.create({
+        data: {
+          sourceId,
+          platformPostId,
+          content,
+          contentHash,
+          title: content.substring(0, 100),
+          url: tweet.url,
+          authorName: tweet.authorName || tweet.authorUsername || 'Unknown',
+          authorId: tweet.authorId,
+          engagementLikes: tweet.metrics.likes,
+          engagementShares: tweet.metrics.retweets + tweet.metrics.quotes,
+          engagementComments: tweet.metrics.replies,
+          publishedAt: new Date(tweet.createdAt),
+          rawData: tweet,
+          entities: tweet.entities ? {
+            hashtags: tweet.entities.hashtags,
+            urls: tweet.entities.urls,
+            mentions: tweet.entities.mentions,
+          } : undefined,
+        },
+      });
+
+      await enrichmentQueue.add('enrich', { sourcePostId: post.id });
+      ingested++;
+    } catch (err) {
+      if ((err as any).code === 'P2002') continue; // Dedup
+      logger.error({ sourceId, tweetId: tweet.id, err: (err as Error).message }, 'Failed to ingest tweet');
+    }
+  }
+
+  await enrichmentQueue.close();
+
+  // Update source last polled
+  await prisma.source.update({
+    where: { id: sourceId },
+    data: { lastPolledAt: new Date() },
+  });
+
+  logger.info({ sourceId, query, ingested, total: tweets.length }, 'Twitter poll complete');
+}
+
 async function handleFacebookPagePoll(job: Job<FacebookPagePollJob>): Promise<void> {
   const { sourceId, pageId, accessToken } = job.data;
 
@@ -402,6 +478,9 @@ export function createIngestionWorker(): Worker {
           break;
         case 'facebook_page_poll':
           await handleFacebookPagePoll(job as Job<FacebookPagePollJob>);
+          break;
+        case 'twitter_poll':
+          await handleTwitterPoll(job as Job<TwitterPollJob>);
           break;
         default:
           logger.error({ type: (job.data as IngestionJob).type }, 'Unknown ingestion job type');

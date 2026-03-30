@@ -23,6 +23,7 @@ import { createPushNotificationWorker } from './workers/push-notification.worker
 import { createDomainScoringWorker } from './workers/domain-scoring.worker.js';
 import { createAudioTranscriptionWorker } from './workers/audio-transcription.worker.js';
 import { createPredictionWorker } from './workers/prediction.worker.js';
+import { createStockMonitorWorker } from './workers/stock-monitor.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -131,6 +132,10 @@ async function main(): Promise<void> {
   const predictionWorker = createPredictionWorker();
   workers.push(predictionWorker);
   logger.info('Prediction worker started');
+
+  const stockMonitorWorker = createStockMonitorWorker();
+  workers.push(stockMonitorWorker);
+  logger.info('Stock monitor worker started');
 
   // Start poll schedulers
   startSchedulers();

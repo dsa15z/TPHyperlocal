@@ -204,6 +204,60 @@ async function scheduleFacebookPagePolls(): Promise<void> {
 }
 
 /**
+ * Schedule Twitter/X polling jobs for all active Twitter sources
+ */
+async function scheduleTwitterPolls(): Promise<void> {
+  const { ingestionQueue } = getQueues();
+
+  try {
+    const twitterSources = await prisma.source.findMany({
+      where: { platform: 'TWITTER', isActive: true },
+    });
+
+    logger.info({ count: twitterSources.length }, 'Scheduling Twitter poll jobs');
+
+    for (const source of twitterSources) {
+      const metadata = source.metadata as Record<string, unknown> | null;
+      const query = (metadata?.['query'] as string) || source.url || '';
+      if (!query) continue;
+
+      await ingestionQueue.add(
+        `twitter-poll-${source.id}-${Date.now()}`,
+        { type: 'twitter_poll', sourceId: source.id, query },
+        {
+          jobId: `twitter-poll-${source.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        }
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule Twitter polls');
+  }
+}
+
+/**
+ * Schedule stock price monitoring (runs during market hours)
+ */
+async function scheduleStockMonitor(): Promise<void> {
+  try {
+    const connection = getSharedConnection();
+    const stockQueue = new Queue('stock-monitor', { connection });
+    await stockQueue.add('stock-check', {}, {
+      jobId: `stock-check-${Date.now()}`,
+      removeOnComplete: { age: 3600 },
+      removeOnFail: { age: 86400 },
+    });
+    await stockQueue.close();
+    logger.info('Scheduled stock monitor check');
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule stock monitor');
+  }
+}
+
+/**
  * Schedule LLM polling jobs for all active LLM sources
  */
 async function scheduleLLMPolls(): Promise<void> {
@@ -679,6 +733,14 @@ export function startSchedulers(): void {
   const fbInterval = setInterval(scheduleFacebookPagePolls, 5 * 60 * 1000);
   intervals.push(fbInterval);
 
+  // Twitter/X: every 3 minutes
+  const twitterInterval = setInterval(scheduleTwitterPolls, 3 * 60 * 1000);
+  intervals.push(twitterInterval);
+
+  // Stock monitor: every 30 minutes (during market hours)
+  const stockInterval = setInterval(scheduleStockMonitor, 30 * 60 * 1000);
+  intervals.push(stockInterval);
+
   // Score decay: every 10 minutes
   const decayInterval = setInterval(runScoreDecay, 10 * 60 * 1000);
   intervals.push(decayInterval);
@@ -723,7 +785,9 @@ export function startSchedulers(): void {
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
   void scheduleFacebookPagePolls();
+  void scheduleTwitterPolls();
   void scheduleLLMPolls();
+  void scheduleStockMonitor();
   void scheduleArticleExtractions();
   void scheduleGeocodingJobs();
 

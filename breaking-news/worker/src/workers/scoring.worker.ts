@@ -461,6 +461,30 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     compositeScore: compositeScore.toFixed(3),
     status: newStatus,
   }, 'Scoring complete');
+
+  // Auto-trigger prediction after scoring (for stories < 6h old)
+  if (ageMinutes < 360) {
+    try {
+      const { Queue } = await import('bullmq');
+      const predQueue = new Queue('prediction', { connection: getSharedConnection() });
+      await predQueue.add(`predict-${storyId}`, { storyId }, { removeOnComplete: 50 });
+      await predQueue.close();
+    } catch {
+      // Non-critical — prediction is best-effort
+    }
+  }
+
+  // Auto-trigger push notifications for ALERT/BREAKING
+  if (previousStatus !== newStatus && (newStatus === 'ALERT' || newStatus === 'BREAKING')) {
+    try {
+      const { Queue } = await import('bullmq');
+      const pushQueue = new Queue('push-notifications', { connection: getSharedConnection() });
+      await pushQueue.add(`push-${storyId}`, { storyId, event: newStatus }, { removeOnComplete: 50 });
+      await pushQueue.close();
+    } catch {
+      // Non-critical
+    }
+  }
 }
 
 export function createScoringWorker(): Worker {
