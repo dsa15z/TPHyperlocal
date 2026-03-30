@@ -39,6 +39,11 @@ import { beatAlertRoutes } from './routes/beat-alerts.js';
 import { ssoRoutes } from './routes/sso.js';
 import { videoRoutes } from './routes/video.js';
 import { storyAnalyticsRoutes } from './routes/story-analytics.js';
+import { mosIntegrationRoutes } from './routes/mos-integration.js';
+import { cmsPublishRoutes } from './routes/cms-publish.js';
+import { headlineTestingRoutes } from './routes/headline-testing.js';
+import { sourceExpansionRoutes } from './routes/source-expansion.js';
+import { broadcastMonitorRoutes } from './routes/broadcast-monitor.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -153,6 +158,11 @@ async function buildServer() {
   await app.register(ssoRoutes, { prefix: '/api/v1' });
   await app.register(videoRoutes, { prefix: '/api/v1' });
   await app.register(storyAnalyticsRoutes, { prefix: '/api/v1' });
+  await app.register(mosIntegrationRoutes, { prefix: '/api/v1' });
+  await app.register(cmsPublishRoutes, { prefix: '/api/v1' });
+  await app.register(headlineTestingRoutes, { prefix: '/api/v1' });
+  await app.register(sourceExpansionRoutes, { prefix: '/api/v1' });
+  await app.register(broadcastMonitorRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

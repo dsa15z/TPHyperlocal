@@ -207,17 +207,37 @@ function AISummaryPanel({
   );
 }
 
+// ─── Utility: strip HTML tags from RSS content ─────────────────────────────
+
+function stripHtml(html: string): string {
+  // Remove HTML tags, decode common entities, and clean up whitespace
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")           // <br> → newline
+    .replace(/<\/p>/gi, "\n\n")              // </p> → double newline (paragraph break)
+    .replace(/<\/?(div|section|article|header|footer|blockquote|li|tr)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")                 // strip all remaining tags
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\n{3,}/g, "\n\n")             // collapse excessive newlines
+    .trim();
+}
+
 // ─── Source Card (expandable, full text, links) ────────────────────────────
 
 function SourceCard({ source }: { source: SourcePost }) {
   const [expanded, setExpanded] = useState(false);
 
-  const displayText = expanded
+  const rawText = expanded
     ? source.full_article || source.content
     : source.content;
+  const displayText = stripHtml(rawText);
 
   const hasMore = (source.full_article && source.full_article.length > source.content.length)
-    || source.content.length > 400;
+    || displayText.length > 400;
 
   return (
     <div className="glass-card p-4 space-y-3 animate-in">
@@ -265,10 +285,10 @@ function SourceCard({ source }: { source: SourcePost }) {
               rel="noopener noreferrer"
               className="hover:text-accent transition-colors"
             >
-              {source.title}
+              {stripHtml(source.title)}
             </a>
           ) : (
-            source.title
+            stripHtml(source.title)
           )}
         </h4>
       )}
@@ -395,7 +415,7 @@ export default function StoryDetailPage() {
           </h1>
 
           <p className="text-gray-400 text-lg leading-relaxed">
-            {story.summary}
+            {stripHtml(story.summary)}
           </p>
 
           <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -560,11 +580,11 @@ export default function StoryDetailPage() {
                       </div>
                       {source.title && (
                         <p className="text-gray-200 text-sm font-medium mb-1">
-                          {source.title}
+                          {stripHtml(source.title)}
                         </p>
                       )}
                       <p className="text-gray-300 text-sm line-clamp-2">
-                        {source.content}
+                        {stripHtml(source.content)}
                       </p>
                     </div>
                   </div>

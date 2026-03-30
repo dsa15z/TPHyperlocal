@@ -9,6 +9,7 @@ import {
   calculateJaccardSimilarity,
   calculateTimeProximity,
 } from '../utils/text.js';
+import { getEmbedding, cosineSimilarity } from '../lib/embeddings-client.js';
 
 const logger = createChildLogger('clustering');
 
@@ -24,7 +25,11 @@ interface ClusteringJob {
   };
 }
 
-const SIMILARITY_THRESHOLD = 0.4;
+const JACCARD_PREFILTER_THRESHOLD = 0.25;
+const EMBEDDING_MERGE_THRESHOLD = 0.75;
+const EMBEDDING_RELATED_THRESHOLD = 0.60;
+const SIMILARITY_THRESHOLD = 0.4; // Legacy combined threshold (kept as final fallback)
+const MAX_EMBEDDING_CANDIDATES = 5;
 
 /**
  * Calculate entity overlap similarity between a new post and an existing story's sources
@@ -69,6 +74,26 @@ function calculateEntitySimilarity(
   return factors > 0 ? score / factors : 0;
 }
 
+/**
+ * Extract a short topic description from text for merge explanation
+ */
+function extractTopic(text: string): string {
+  // Take the first meaningful chunk of text as a topic summary
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  const firstSentence = cleaned.split(/[.!?]/)[0]?.trim() || cleaned;
+  return firstSentence.length > 80 ? firstSentence.substring(0, 77) + '...' : firstSentence;
+}
+
+interface CandidateStory {
+  story: any;
+  jaccardScore: number;
+  maxTextSim: number;
+  entitySim: number;
+  timeProximity: number;
+  combinedSimilarity: number;
+  bestSourceText: string;
+}
+
 async function processCluster(job: Job<ClusteringJob>): Promise<void> {
   const { sourcePostId, category, locationName: enrichedLocation, neighborhoods, entities } = job.data;
 
@@ -109,20 +134,22 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
 
   logger.info({ sourcePostId, recentStories: recentStories.length }, 'Comparing against recent stories');
 
-  let bestStory: typeof recentStories[number] | null = null;
-  let bestSimilarity = 0;
+  // --- Stage 1: Jaccard pre-filter to find candidate stories ---
+  const candidates: CandidateStory[] = [];
 
   for (const story of recentStories) {
-    // Calculate text similarity against the story's posts
     let maxTextSim = 0;
+    let bestSourceText = '';
     for (const storySource of story.storySources) {
       const storyText = `${storySource.sourcePost.title || ''} ${storySource.sourcePost.content}`;
       const storyWordSet = getWordSet(storyText);
       const textSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
-      maxTextSim = Math.max(maxTextSim, textSim);
+      if (textSim > maxTextSim) {
+        maxTextSim = textSim;
+        bestSourceText = storyText;
+      }
     }
 
-    // Calculate entity similarity
     const entitySim = calculateEntitySimilarity(
       entities,
       category,
@@ -132,10 +159,8 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       story.neighborhood,
     );
 
-    // Calculate time proximity (compare against the story's most recent activity)
     const timeProximity = calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2);
 
-    // Combined similarity
     const combinedSimilarity = 0.6 * maxTextSim + 0.2 * entitySim + 0.2 * timeProximity;
 
     logger.debug({
@@ -145,11 +170,152 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       entitySim,
       timeProximity,
       combinedSimilarity,
-    }, 'Similarity scores');
+    }, 'Jaccard similarity scores');
 
-    if (combinedSimilarity > bestSimilarity) {
-      bestSimilarity = combinedSimilarity;
-      bestStory = story;
+    // Pre-filter: only consider stories with Jaccard above threshold
+    if (maxTextSim >= JACCARD_PREFILTER_THRESHOLD || combinedSimilarity > SIMILARITY_THRESHOLD) {
+      candidates.push({
+        story,
+        jaccardScore: maxTextSim,
+        maxTextSim,
+        entitySim,
+        timeProximity,
+        combinedSimilarity,
+        bestSourceText,
+      });
+    }
+  }
+
+  // Sort candidates by combined similarity and take top N for embedding comparison
+  candidates.sort((a, b) => b.combinedSimilarity - a.combinedSimilarity);
+  const topCandidates = candidates.slice(0, MAX_EMBEDDING_CANDIDATES);
+
+  logger.info({
+    sourcePostId,
+    totalCandidates: candidates.length,
+    topCandidates: topCandidates.length,
+  }, 'Jaccard pre-filter complete');
+
+  // --- Stage 2: Embedding similarity for final decision ---
+  let bestStory: typeof recentStories[number] | null = null;
+  let bestSimilarity = 0;
+  let bestEmbeddingSim = 0;
+  let mergeReason = '';
+  let relatedStoryId: string | null = null;
+
+  if (topCandidates.length > 0) {
+    // Get embedding for the new post
+    let postEmbedding: number[] | null = null;
+    try {
+      const embeddingResult = await getEmbedding(postText);
+      postEmbedding = embeddingResult.embedding;
+
+      // Store embedding on the source post if embeddingJson field exists
+      try {
+        await prisma.sourcePost.update({
+          where: { id: post.id },
+          data: { embeddingJson: JSON.stringify(postEmbedding) },
+        });
+      } catch (updateErr) {
+        // embeddingJson field may not exist in schema yet -- non-fatal
+        logger.debug({ err: updateErr }, 'Could not store embedding on SourcePost (field may not exist)');
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Failed to get embedding for post, using Jaccard-only clustering');
+    }
+
+    for (const candidate of topCandidates) {
+      let embeddingSim = 0;
+
+      if (postEmbedding) {
+        // Get embedding for the best matching source text in the story
+        try {
+          const storyEmbeddingResult = await getEmbedding(candidate.bestSourceText);
+          embeddingSim = cosineSimilarity(postEmbedding, storyEmbeddingResult.embedding);
+        } catch (err) {
+          logger.warn({ err, storyId: candidate.story.id }, 'Failed to get story embedding');
+        }
+      }
+
+      // Compute final score: blend of old combined similarity and embedding similarity
+      // If we have embeddings, weight them heavily; otherwise fall back to Jaccard-based scoring
+      let finalScore: number;
+      if (postEmbedding && embeddingSim > 0) {
+        finalScore = 0.35 * candidate.combinedSimilarity + 0.65 * embeddingSim;
+      } else {
+        finalScore = candidate.combinedSimilarity;
+      }
+
+      logger.debug({
+        sourcePostId,
+        storyId: candidate.story.id,
+        jaccardScore: candidate.jaccardScore,
+        embeddingSim,
+        finalScore,
+      }, 'Embedding similarity scores');
+
+      // Check embedding thresholds
+      if (postEmbedding && embeddingSim >= EMBEDDING_MERGE_THRESHOLD && finalScore > bestSimilarity) {
+        bestSimilarity = finalScore;
+        bestEmbeddingSim = embeddingSim;
+        bestStory = candidate.story;
+        const topic = extractTopic(postText);
+        mergeReason = `Merged: ${Math.round(embeddingSim * 100)}% semantic similarity on topic '${topic}'`;
+      } else if (postEmbedding && embeddingSim >= EMBEDDING_RELATED_THRESHOLD && embeddingSim < EMBEDDING_MERGE_THRESHOLD) {
+        // Mark as related but don't merge
+        if (!relatedStoryId) {
+          relatedStoryId = candidate.story.id;
+          logger.info({
+            sourcePostId,
+            relatedStoryId,
+            embeddingSim,
+          }, 'Found related story (below merge threshold)');
+        }
+      }
+
+      // Fallback: if no embedding match found, use legacy combined threshold
+      if (!bestStory && finalScore > bestSimilarity && finalScore > SIMILARITY_THRESHOLD) {
+        bestSimilarity = finalScore;
+        bestEmbeddingSim = embeddingSim;
+        bestStory = candidate.story;
+        const topic = extractTopic(postText);
+        if (embeddingSim > 0) {
+          mergeReason = `Merged: ${Math.round(embeddingSim * 100)}% semantic + ${Math.round(candidate.jaccardScore * 100)}% text overlap on '${topic}'`;
+        } else {
+          mergeReason = `Merged: ${Math.round(candidate.jaccardScore * 100)}% text overlap on '${topic}'`;
+        }
+      }
+    }
+  } else {
+    // No candidates from Jaccard pre-filter -- check all stories with legacy method
+    // (handles edge case where Jaccard is low but combined score is still decent)
+    for (const story of recentStories) {
+      let maxTextSim = 0;
+      for (const storySource of story.storySources) {
+        const storyText = `${storySource.sourcePost.title || ''} ${storySource.sourcePost.content}`;
+        const storyWordSet = getWordSet(storyText);
+        const textSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
+        maxTextSim = Math.max(maxTextSim, textSim);
+      }
+
+      const entitySim = calculateEntitySimilarity(
+        entities,
+        category,
+        neighborhoods,
+        story.category,
+        story.locationName,
+        story.neighborhood,
+      );
+
+      const timeProximity = calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2);
+      const combinedSimilarity = 0.6 * maxTextSim + 0.2 * entitySim + 0.2 * timeProximity;
+
+      if (combinedSimilarity > bestSimilarity) {
+        bestSimilarity = combinedSimilarity;
+        bestStory = story;
+        const topic = extractTopic(postText);
+        mergeReason = `Merged: ${Math.round(maxTextSim * 100)}% text overlap on '${topic}'`;
+      }
     }
   }
 
@@ -163,6 +329,8 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       sourcePostId,
       storyId,
       similarity: bestSimilarity,
+      embeddingSimilarity: bestEmbeddingSim,
+      mergeReason,
     }, 'Adding post to existing story');
 
     // Content-hash dedup: skip if the story already has a source post with
@@ -199,6 +367,11 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         isPrimary: false,
       },
     });
+
+    // Log the merge reason for traceability
+    if (mergeReason) {
+      logger.info({ sourcePostId, storyId, mergeReason }, 'Story merge reason');
+    }
 
     // Update story metadata
     const sourceCount = await prisma.storySource.count({
@@ -254,6 +427,16 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     });
 
     storyId = story.id;
+
+    // If we found a related story (embedding similarity between 0.60-0.75),
+    // log it for future "related stories" feature
+    if (relatedStoryId) {
+      logger.info({
+        newStoryId: storyId,
+        relatedStoryId,
+        sourcePostId,
+      }, 'New story has a related story (not merged due to below-threshold embedding similarity)');
+    }
   }
 
   // Enqueue to scoring queue
@@ -268,7 +451,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
 
   await scoringQueue.close();
 
-  logger.info({ sourcePostId, storyId }, 'Clustering complete');
+  logger.info({ sourcePostId, storyId, mergeReason: mergeReason || 'new story' }, 'Clustering complete');
 }
 
 export function createClusteringWorker(): Worker {
