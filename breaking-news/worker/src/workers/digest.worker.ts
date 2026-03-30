@@ -33,7 +33,7 @@ function buildDigestHtml(stories: Array<{
         ${s.summary ? `<br><span style="color: #aaa; font-size: 13px;">${escapeHtml(s.summary.substring(0, 150))}...</span>` : ''}
       </td>
       <td style="padding: 12px 8px; color: #aaa;">${s.category || '-'}</td>
-      <td style="padding: 12px 8px; color: ${s.status === 'BREAKING' ? '#ef4444' : s.status === 'TRENDING' ? '#f59e0b' : '#6b7280'};">${s.status}</td>
+      <td style="padding: 12px 8px; color: ${s.status === 'ALERT' || s.status === 'BREAKING' ? '#ef4444' : s.status === 'TOP_STORY' ? '#f59e0b' : '#6b7280'};">${s.status}</td>
       <td style="padding: 12px 8px; color: #aaa;">${s.sourceCount}</td>
       <td style="padding: 12px 8px; color: #aaa;">${Math.round(s.compositeScore * 100)}%</td>
     </tr>
