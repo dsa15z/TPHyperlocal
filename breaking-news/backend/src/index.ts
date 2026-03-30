@@ -37,6 +37,8 @@ import { showDeadlineRoutes } from './routes/show-deadlines.js';
 import { publishQueueRoutes } from './routes/publish-queue.js';
 import { beatAlertRoutes } from './routes/beat-alerts.js';
 import { ssoRoutes } from './routes/sso.js';
+import { videoRoutes } from './routes/video.js';
+import { storyAnalyticsRoutes } from './routes/story-analytics.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -149,6 +151,8 @@ async function buildServer() {
   await app.register(publishQueueRoutes, { prefix: '/api/v1' });
   await app.register(beatAlertRoutes, { prefix: '/api/v1' });
   await app.register(ssoRoutes, { prefix: '/api/v1' });
+  await app.register(videoRoutes, { prefix: '/api/v1' });
+  await app.register(storyAnalyticsRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown
