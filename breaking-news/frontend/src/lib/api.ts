@@ -18,7 +18,7 @@ export interface Story {
   id: string;
   title: string;
   summary: string;
-  status: "BREAKING" | "TRENDING" | "ACTIVE" | "STALE";
+  status: "ALERT" | "BREAKING" | "DEVELOPING" | "TOP_STORY" | "ONGOING" | "FOLLOW_UP" | "STALE" | "ARCHIVED";
   category: string;
   location: string;
   breaking_score: number;

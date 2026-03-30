@@ -8,6 +8,7 @@ const QUEUE_NAMES = {
   SCORING: 'scoring',
   ALERTS: 'alerts',
   COVERAGE: 'coverage',
+  FIRST_DRAFT: 'first-draft',
 } as const;
 
 type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

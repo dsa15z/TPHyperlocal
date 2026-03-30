@@ -8,7 +8,7 @@ const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(255),
   url: z.string().url(),
   secret: z.string().min(16).max(256).optional(),
-  events: z.array(z.enum(['BREAKING', 'TRENDING', 'NEW_STORY'])).min(1),
+  events: z.array(z.enum(['BREAKING', 'TOP_STORY', 'NEW_STORY'])).min(1),
   filters: z.object({
     category: z.string().optional(),
     minScore: z.number().min(0).max(1).optional(),
@@ -19,7 +19,7 @@ const UpdateWebhookSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   url: z.string().url().optional(),
   secret: z.string().min(16).max(256).optional().nullable(),
-  events: z.array(z.enum(['BREAKING', 'TRENDING', 'NEW_STORY'])).min(1).optional(),
+  events: z.array(z.enum(['BREAKING', 'TOP_STORY', 'NEW_STORY'])).min(1).optional(),
   filters: z.object({
     category: z.string().optional(),
     minScore: z.number().min(0).max(1).optional(),

@@ -18,6 +18,7 @@ import { createCredibilityWorker } from './workers/credibility.worker.js';
 import { createRSSDiscoveryWorker } from './workers/rss-discovery.worker.js';
 import { createDigestWorker } from './workers/digest.worker.js';
 import { createCoverageWorker } from './workers/coverage.worker.js';
+import { createFirstDraftWorker } from './workers/first-draft.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -106,6 +107,10 @@ async function main(): Promise<void> {
   const coverageWorker = createCoverageWorker();
   workers.push(coverageWorker);
   logger.info('Coverage worker started');
+
+  const firstDraftWorker = createFirstDraftWorker();
+  workers.push(firstDraftWorker);
+  logger.info('First draft worker started');
 
   // Start poll schedulers
   startSchedulers();

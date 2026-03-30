@@ -16,10 +16,12 @@ const CreateFeedSchema = z.object({
     statuses: z
       .array(
         z.enum([
-          'EMERGING',
+          'ALERT',
           'BREAKING',
-          'TRENDING',
-          'ACTIVE',
+          'DEVELOPING',
+          'TOP_STORY',
+          'ONGOING',
+          'FOLLOW_UP',
           'STALE',
           'ARCHIVED',
         ]),

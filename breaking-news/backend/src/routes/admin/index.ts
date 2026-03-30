@@ -6,6 +6,9 @@ import { credentialRoutes } from './credentials.js';
 import { editorRoutes } from './editor.js';
 import { webhookRoutes } from './webhooks.js';
 import { coverageRoutes } from './coverage.js';
+import { voiceRoutes } from './voices.js';
+import { featureFlagRoutes } from './feature-flags.js';
+import { widgetRoutes } from './widgets.js';
 
 /**
  * Admin route aggregator.
@@ -45,4 +48,13 @@ export async function adminRoutes(
 
   // Coverage gap detection (ADMIN+)
   app.register(coverageRoutes);
+
+  // Voice management (ADMIN+)
+  app.register(voiceRoutes);
+
+  // Feature flags (ADMIN+)
+  app.register(featureFlagRoutes);
+
+  // Embeddable widgets (ADMIN+)
+  app.register(widgetRoutes);
 }

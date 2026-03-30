@@ -37,12 +37,14 @@ enum SourceType {
 }
 
 enum StoryStatus {
-  EMERGING
-  BREAKING
-  TRENDING
-  ACTIVE
-  STALE
-  ARCHIVED
+  ALERT       // Editor-confirmed, highest urgency — go live now
+  BREAKING    // Auto-detected or editor-set breaking news
+  DEVELOPING  // Story still gathering sources, could escalate
+  TOP_STORY   // Biggest story of the cycle, high engagement
+  ONGOING     // Multi-day story with continued interest
+  FOLLOW_UP   // Update to a previously covered story
+  STALE       // No meaningful activity
+  ARCHIVED    // Terminal state
 }
 
 enum UserRole {
@@ -323,7 +325,19 @@ model Story {
   topicLabel      String?     // human-readable topic label
   // Embedding for story-level similarity (JSON until pgvector available)
   embeddingJson   Json?
-  status          StoryStatus @default(EMERGING)
+  status              StoryStatus @default(DEVELOPING)
+  editorialOverride   Boolean     @default(false) // true = system scoring won't auto-change state
+  statusChangedAt     DateTime    @default(now()) // explicit status change timestamp
+  horizon             String      @default("BREAKING") // BREAKING or TRENDING — one-way latch
+  parentStoryId       String?     // for FOLLOW_UP stories linking to original
+  parentStory         Story?      @relation("StoryFollowUp", fields: [parentStoryId], references: [id])
+  followUps           Story[]     @relation("StoryFollowUp")
+  // Extended scoring fields
+  longTrendingScore       Float?  // trending-horizon composite
+  sustainedActivityScore  Float?  // how consistently new sources arrive
+  peakBreakingScore       Float   @default(0)
+  peakStatus              String?
+  pastScores              Json?   // cached score snapshots at N-minutes-ago
   sourceCount     Int         @default(0)
   firstSeenAt     DateTime    @default(now())
   lastUpdatedAt   DateTime    @default(now())
@@ -333,10 +347,13 @@ model Story {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  storySources    StorySource[]
-  scoreSnapshots  ScoreSnapshot[]
-  notifications   Notification[]
-  coverageMatches CoverageMatch[]
+  storySources       StorySource[]
+  scoreSnapshots     ScoreSnapshot[]
+  notifications      Notification[]
+  coverageMatches    CoverageMatch[]
+  stateTransitions   StoryStateTransition[]
+  firstDrafts        FirstDraft[]
+  bookmarks          Bookmark[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -347,6 +364,9 @@ model Story {
   @@index([category])
   @@index([status, compositeScore(sort: Desc)])
   @@index([marketId, status, compositeScore(sort: Desc)])
+  @@index([horizon, compositeScore(sort: Desc)])
+  @@index([statusChangedAt])
+  @@index([parentStoryId])
 }
 
 // ─── Story-Source Links ─────────────────────────────────────────────────────
@@ -524,6 +544,250 @@ model TopicCluster {
   updatedAt   DateTime @updatedAt
 
   @@index([isActive, storyCount(sort: Desc)])
+}
+
+// ─── Phase 1: Story State Transitions ──────────────────────────────────────
+
+model StoryStateTransition {
+  id          String      @id @default(cuid())
+  storyId     String
+  story       Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  fromState   StoryStatus
+  toState     StoryStatus
+  trigger     String      // SYSTEM_SCORING, EDITOR_OVERRIDE, TIME_DECAY, GROK_ALERT
+  triggeredBy String?     // userId if editor
+  reason      String?
+  metadata    Json?       // scoring data at time of transition
+  createdAt   DateTime    @default(now())
+
+  @@index([storyId, createdAt(sort: Desc)])
+}
+
+// ─── Phase 2: LLM Factory + FirstDraft + Prompts + Voices ──────────────────
+
+model Prompt {
+  id          String   @id @default(cuid())
+  accountId   String?  // null = system default
+  name        String   // "summary", "tweet", "rewrite", etc.
+  type        String   // "first_draft", "idea_starter", "notification"
+  template    String   @db.Text
+  variables   Json     // list of available variables
+  isDefault   Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type, isDefault])
+  @@index([accountId])
+}
+
+model FirstDraft {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId      String?
+  type        String   // summary, short_summary, rewrite, tweet, bullets, idea_starter
+  voiceId     String?
+  content     String   @db.Text
+  model       String   // which LLM generated it
+  promptId    String?
+  tokens      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storyId, type])
+}
+
+model Voice {
+  id           String   @id @default(cuid())
+  accountId    String
+  name         String
+  systemPrompt String   @db.Text
+  sampleText   String?  @db.Text
+  interests    Json?
+  tone         Json?    // ["professional", "conversational"]
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+// ─── Phase 3: CommunityRadar ───────────────────────────────────────────────
+
+model CommunityRadarConfig {
+  id                  String   @id @default(cuid())
+  accountId           String
+  name                String
+  platform            Platform
+  url                 String
+  urlType             String   // FB_PAGE, FB_GROUP, TWITTER_LIST, TWITTER_SEARCH
+  scrapeFrequencyMin  Int      @default(120)
+  isActive            Boolean  @default(true)
+  lastScrapedAt       DateTime?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  posts CommunityRadarPost[]
+
+  @@index([accountId, isActive])
+}
+
+model CommunityRadarPost {
+  id              String               @id @default(cuid())
+  configId        String
+  config          CommunityRadarConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  platformPostId  String               @unique
+  content         String               @db.Text
+  authorName      String?
+  engagementScore Float                @default(0)
+  sentimentScore  Float?
+  sentimentLabel  String?
+  storyId         String?
+  postedAt        DateTime
+  scrapedAt       DateTime             @default(now())
+
+  @@index([configId])
+  @@index([storyId])
+}
+
+// ─── Phase 4: Feature Flags ────────────────────────────────────────────────
+
+model FeatureFlag {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  defaultValue Boolean  @default(false)
+  overrides    Json?    // { accounts: { "acc1": true }, users: { "user1": false } }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Phase 5: Push Notifications + Distribution ────────────────────────────
+
+model Device {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique // FCM token
+  platform    String   // web, ios, android
+  isActive    Boolean  @default(true)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  userId      String
+  accountId   String
+  channels    Json     // ["push", "email", "slack"]
+  categories  Json?    // null = all
+  minStates   Json     // ["ALERT", "BREAKING"]
+  minScore    Float    @default(0.5)
+  quietHours  Json?    // { start: "22:00", end: "07:00", timezone: "America/Chicago" }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, accountId])
+}
+
+model SlackIntegration {
+  id          String   @id @default(cuid())
+  accountId   String
+  channelId   String
+  channelName String
+  webhookUrl  String
+  states      Json     // which story states trigger
+  categories  Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
+}
+
+// ─── Phase 6: Smart Pulses + Bookmarks + ShowPrep ──────────────────────────
+
+model SmartPulse {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String?
+  name        String
+  description String?
+  topics      Json     // keyword/semantic config
+  filters     Json?    // category, market, min score
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  folder    String?
+  tags      Json?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([userId, storyId])
+  @@index([userId])
+}
+
+model ShowPrepRundown {
+  id        String   @id @default(cuid())
+  accountId String
+  createdBy String
+  name      String
+  showDate  DateTime
+  items     Json     // ordered array of { storyId, notes, duration, talkingPoints }
+  status    String   @default("DRAFT") // DRAFT, FINAL, ARCHIVED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, showDate(sort: Desc)])
+}
+
+// ─── Phase 7: Widgets + Analytics ──────────────────────────────────────────
+
+model Widget {
+  id        String   @id @default(cuid())
+  accountId String
+  name      String
+  type      String   // PULSE, SMART_PULSE, CATEGORY, BREAKING
+  config    Json     // theme, filters, display options
+  embedCode String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model StoryAnalytics {
+  id          String   @id @default(cuid())
+  storyId     String
+  views       Int      @default(0)
+  apiHits     Int      @default(0)
+  widgetViews Int      @default(0)
+  shares      Int      @default(0)
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  @@unique([storyId, date])
+}
+
+model DomainScore {
+  id          String   @id @default(cuid())
+  domain      String   @unique
+  score       Float    @default(0)
+  appearances Int      @default(0)
+  lastUpdated DateTime @default(now())
 }
 
 // ─── Coverage Gap Detection ────────────────────────────────────────────────

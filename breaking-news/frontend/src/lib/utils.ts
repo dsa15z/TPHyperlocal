@@ -60,37 +60,17 @@ export function getStatusColor(
   border: string;
   className: string;
 } {
-  switch (status.toUpperCase()) {
-    case "BREAKING":
-      return {
-        bg: "bg-red-500/15",
-        text: "text-red-400",
-        border: "border-red-500/30",
-        className: "status-breaking",
-      };
-    case "TRENDING":
-      return {
-        bg: "bg-orange-500/15",
-        text: "text-orange-400",
-        border: "border-orange-500/30",
-        className: "status-trending",
-      };
-    case "ACTIVE":
-      return {
-        bg: "bg-blue-500/15",
-        text: "text-blue-400",
-        border: "border-blue-500/30",
-        className: "status-active",
-      };
-    case "STALE":
-    default:
-      return {
-        bg: "bg-gray-500/15",
-        text: "text-gray-400",
-        border: "border-gray-500/30",
-        className: "status-stale",
-      };
-  }
+  const map: Record<string, { bg: string; text: string; border: string; className: string }> = {
+    ALERT:     { bg: "bg-red-600/20", text: "text-red-300", border: "border-red-500/40", className: "status-breaking" },
+    BREAKING:  { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30", className: "status-breaking" },
+    DEVELOPING:{ bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", className: "status-trending" },
+    TOP_STORY: { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30", className: "status-trending" },
+    ONGOING:   { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30", className: "status-active" },
+    FOLLOW_UP: { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30", className: "status-active" },
+    STALE:     { bg: "bg-gray-500/15", text: "text-gray-400", border: "border-gray-500/30", className: "status-stale" },
+    ARCHIVED:  { bg: "bg-gray-600/15", text: "text-gray-500", border: "border-gray-600/30", className: "status-stale" },
+  };
+  return map[status.toUpperCase()] || map.STALE;
 }
 
 /**

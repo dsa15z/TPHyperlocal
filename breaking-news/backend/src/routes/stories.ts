@@ -333,7 +333,7 @@ export async function storiesRoutes(
       where: {
         breakingScore: { gt: 0.5 },
         mergedIntoId: null,
-        status: { in: ['EMERGING', 'BREAKING', 'ACTIVE'] },
+        status: { in: ['ALERT', 'BREAKING', 'DEVELOPING'] },
       },
       orderBy: { breakingScore: 'desc' },
       take: 20,
@@ -362,7 +362,7 @@ export async function storiesRoutes(
       where: {
         trendingScore: { gt: 0.3 },
         mergedIntoId: null,
-        status: { in: ['TRENDING', 'BREAKING', 'ACTIVE'] },
+        status: { in: ['TOP_STORY', 'BREAKING', 'ONGOING'] },
       },
       orderBy: { trendingScore: 'desc' },
       take: 20,

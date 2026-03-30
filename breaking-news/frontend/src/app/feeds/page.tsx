@@ -35,7 +35,7 @@ const CATEGORIES = [
   "Environment",
 ];
 
-const STATUSES = ["", "BREAKING", "TRENDING", "ACTIVE"];
+const STATUSES = ["", "ALERT", "BREAKING", "DEVELOPING", "TOP_STORY", "ONGOING", "FOLLOW_UP"];
 
 export default function FeedsPage() {
   const queryClient = useQueryClient();

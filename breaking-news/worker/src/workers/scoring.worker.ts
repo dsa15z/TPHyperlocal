@@ -295,8 +295,8 @@ function determineStatus(
   // ── Tier 1: Very fresh (< 15 minutes) ──
   if (ageMinutes < 15) {
     if (breakingScore > 0.6) return 'BREAKING';
-    if (trendingScore > 0.4 || breakingScore > 0.4) return 'TRENDING';
-    return 'EMERGING';
+    if (trendingScore > 0.4 || breakingScore > 0.4) return 'TOP_STORY';
+    return 'DEVELOPING';
   }
 
   // ── Tier 2: Developing (15-60 minutes) ──
@@ -310,14 +310,14 @@ function determineStatus(
       if (shouldRetainBreaking(breakingScore, lastStatusChangeMinutes, growthPercent15)) {
         return 'BREAKING';
       }
-      return 'TRENDING'; // Graceful decay to trending
+      return 'TOP_STORY'; // Graceful decay to trending
     }
 
     // Trending: sustained growth or high score
-    if (trendingScore > 0.4) return 'TRENDING';
-    if (growthPercent15 > 50) return 'TRENDING'; // Rapid growth alone triggers trending
+    if (trendingScore > 0.4) return 'TOP_STORY';
+    if (growthPercent15 > 50) return 'TOP_STORY'; // Rapid growth alone triggers trending
 
-    return 'EMERGING';
+    return 'DEVELOPING';
   }
 
   // ── Tier 3: Maturing (> 60 minutes) ──
@@ -328,35 +328,35 @@ function determineStatus(
     if (shouldRetainBreaking(breakingScore, lastStatusChangeMinutes, growthPercent15)) {
       return 'BREAKING';
     }
-    return 'TRENDING';
+    return 'TOP_STORY';
   }
 
   // Trending: needs growth to stay trending (ported from TopicPulse tier3)
-  if (currentStatus === 'TRENDING') {
+  if (currentStatus === 'TOP_STORY') {
     // TopicPulse: decay if 90-min growth < 8%. We use 60-min growth < 10%.
     if (growthPercent60 < 10 && lastStatusChangeMinutes > 60) {
-      return 'ACTIVE'; // Explicit decay: trending → active
+      return 'ONGOING'; // Explicit decay: trending → active
     }
-    if (trendingScore > 0.4) return 'TRENDING';
-    return 'ACTIVE';
+    if (trendingScore > 0.4) return 'TOP_STORY';
+    return 'ONGOING';
   }
 
   // New trending detection
-  if (trendingScore > 0.5) return 'TRENDING';
-  if (growthPercent15 > 50 && trendingScore > 0.3) return 'TRENDING';
+  if (trendingScore > 0.5) return 'TOP_STORY';
+  if (growthPercent15 > 50 && trendingScore > 0.3) return 'TOP_STORY';
 
   // Age-based decay (ported from TopicPulse flat→stop→dead)
   if (ageMinutes > 48 * 60) return 'STALE';
-  if (ageMinutes > 12 * 60) return 'ACTIVE';
+  if (ageMinutes > 12 * 60) return 'ONGOING';
   if (ageMinutes > 3 * 60) {
     // After 3 hours at ACTIVE with no growth → STALE
-    if (currentStatus === 'ACTIVE' && lastStatusChangeMinutes > 180 && growthPercent60 < 5) {
+    if (currentStatus === 'ONGOING' && lastStatusChangeMinutes > 180 && growthPercent60 < 5) {
       return 'STALE';
     }
-    return 'ACTIVE';
+    return 'ONGOING';
   }
 
-  return currentStatus === 'EMERGING' ? 'EMERGING' : 'ACTIVE';
+  return currentStatus === 'DEVELOPING' ? 'DEVELOPING' : 'ONGOING';
 }
 
 // ─── Main Processing ────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       confidenceScore,
       localityScore,
       compositeScore,
-      status: newStatus as 'EMERGING' | 'BREAKING' | 'TRENDING' | 'ACTIVE' | 'STALE' | 'ARCHIVED',
+      status: newStatus as 'ALERT' | 'BREAKING' | 'DEVELOPING' | 'TOP_STORY' | 'ONGOING' | 'FOLLOW_UP' | 'STALE' | 'ARCHIVED',
     },
   });
 
