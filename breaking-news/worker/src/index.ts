@@ -38,6 +38,7 @@ import { createStoryResearchWorker } from './workers/story-research.worker.js';
 import { createStorySplitterWorker } from './workers/story-splitter.worker.js';
 import { createNewscatcherWorker } from './workers/newscatcher.worker.js';
 import { createSimilarWebScoringWorker } from './workers/similarweb-scoring.worker.js';
+import { createHyperLocalIntelWorker } from './workers/hyperlocal-intel.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -206,6 +207,10 @@ async function main(): Promise<void> {
   const similarwebWorker = createSimilarWebScoringWorker();
   workers.push(similarwebWorker);
   logger.info('SimilarWeb scoring worker started');
+
+  const hyperLocalIntelWorker = createHyperLocalIntelWorker();
+  workers.push(hyperLocalIntelWorker);
+  logger.info('HyperLocal Intel worker started');
 
   // Start poll schedulers
   startSchedulers();

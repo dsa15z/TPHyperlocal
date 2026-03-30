@@ -17,6 +17,7 @@ let sentimentQueue: Queue;
 let credibilityQueue: Queue;
 let digestQueue: Queue;
 let newscatcherQueue: Queue;
+let hyperLocalIntelQueue: Queue;
 
 /**
  * Initialize BullMQ queues used by the scheduler
@@ -850,6 +851,46 @@ async function scheduleGrokFastPoll(): Promise<void> {
   }
 }
 
+/**
+ * Schedule HyperLocal Intel batch lookup for all active markets.
+ * Runs every 15 minutes — fetches curated news from 12 sources per market.
+ */
+async function scheduleHyperLocalIntelPolls(): Promise<void> {
+  try {
+    if (!hyperLocalIntelQueue) {
+      hyperLocalIntelQueue = new Queue('hyperlocal-intel', { connection: getSharedConnection() });
+    }
+
+    // Get all active markets across all accounts
+    const markets = await prisma.market.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, latitude: true, longitude: true, accountId: true },
+    });
+
+    if (markets.length === 0) return;
+
+    // Group by account and queue batch jobs
+    const accountIds = [...new Set(markets.map((m) => m.accountId))];
+
+    for (const accountId of accountIds) {
+      await hyperLocalIntelQueue.add('batch', {
+        type: 'batch_markets',
+        accountId,
+      }, {
+        jobId: `hyperlocal-batch-${accountId}-${Date.now()}`,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 15000 },
+        removeOnComplete: { age: 3600 },
+        removeOnFail: { age: 86400 },
+      });
+    }
+
+    logger.info({ accounts: accountIds.length, markets: markets.length }, 'Scheduled HyperLocal Intel batch polls');
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule HyperLocal Intel polls');
+  }
+}
+
 // Interval handles for cleanup on shutdown
 const intervals: NodeJS.Timeout[] = [];
 
@@ -927,6 +968,10 @@ export function startSchedulers(): void {
   const newscatcherInterval = setInterval(scheduleNewscatcherPolls, 10 * 60 * 1000);
   intervals.push(newscatcherInterval);
 
+  // HyperLocal Intel: every 15 minutes (12-source geo-scored aggregation per market)
+  const hyperLocalInterval = setInterval(scheduleHyperLocalIntelPolls, 15 * 60 * 1000);
+  intervals.push(hyperLocalInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -937,6 +982,7 @@ export function startSchedulers(): void {
   void scheduleArticleExtractions();
   void scheduleGeocodingJobs();
   void scheduleNewscatcherPolls();
+  void scheduleHyperLocalIntelPolls();
 
   logger.info('All schedulers started');
 }
