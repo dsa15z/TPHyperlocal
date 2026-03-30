@@ -30,10 +30,12 @@ export enum UserRole {
 }
 
 export enum StoryStatus {
-  EMERGING = "EMERGING",
+  ALERT = "ALERT",
   BREAKING = "BREAKING",
-  TRENDING = "TRENDING",
-  ACTIVE = "ACTIVE",
+  DEVELOPING = "DEVELOPING",
+  TOP_STORY = "TOP_STORY",
+  ONGOING = "ONGOING",
+  FOLLOW_UP = "FOLLOW_UP",
   STALE = "STALE",
   ARCHIVED = "ARCHIVED",
 }

@@ -39,7 +39,7 @@ server.tool(
   {
     query: z.string().optional().describe("Text search across title and summary"),
     status: z
-      .enum(["EMERGING", "BREAKING", "TRENDING", "ACTIVE", "STALE", "ARCHIVED"])
+      .enum(["ALERT", "BREAKING", "DEVELOPING", "TOP_STORY", "ONGOING", "FOLLOW_UP", "STALE", "ARCHIVED"])
       .optional()
       .describe("Filter by story status"),
     category: z.string().optional().describe("Filter by category"),
@@ -234,7 +234,7 @@ server.tool(
   async ({ limit }) => {
     const stories = await prisma.story.findMany({
       where: {
-        status: "TRENDING",
+        status: "TOP_STORY",
         mergedIntoId: null,
       },
       orderBy: { trendingScore: "desc" },

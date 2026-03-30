@@ -28,29 +28,13 @@ export const SCORE_THRESHOLDS = {
 // Maps each status to the set of statuses it can transition to.
 
 export const STATUS_TRANSITIONS: Record<StoryStatus, StoryStatus[]> = {
-  [StoryStatus.EMERGING]: [
-    StoryStatus.BREAKING,
-    StoryStatus.TRENDING,
-    StoryStatus.ACTIVE,
-    StoryStatus.STALE,
-  ],
-  [StoryStatus.BREAKING]: [
-    StoryStatus.TRENDING,
-    StoryStatus.ACTIVE,
-    StoryStatus.STALE,
-  ],
-  [StoryStatus.TRENDING]: [
-    StoryStatus.ACTIVE,
-    StoryStatus.STALE,
-  ],
-  [StoryStatus.ACTIVE]: [
-    StoryStatus.TRENDING,
-    StoryStatus.STALE,
-  ],
-  [StoryStatus.STALE]: [
-    StoryStatus.ACTIVE,
-    StoryStatus.ARCHIVED,
-  ],
+  [StoryStatus.ALERT]: [StoryStatus.BREAKING, StoryStatus.DEVELOPING],
+  [StoryStatus.BREAKING]: [StoryStatus.TOP_STORY, StoryStatus.DEVELOPING, StoryStatus.ONGOING],
+  [StoryStatus.DEVELOPING]: [StoryStatus.ALERT, StoryStatus.BREAKING, StoryStatus.TOP_STORY, StoryStatus.ONGOING],
+  [StoryStatus.TOP_STORY]: [StoryStatus.ONGOING, StoryStatus.FOLLOW_UP, StoryStatus.STALE],
+  [StoryStatus.ONGOING]: [StoryStatus.TOP_STORY, StoryStatus.FOLLOW_UP, StoryStatus.STALE],
+  [StoryStatus.FOLLOW_UP]: [StoryStatus.ONGOING, StoryStatus.STALE],
+  [StoryStatus.STALE]: [StoryStatus.ONGOING, StoryStatus.ARCHIVED],
   [StoryStatus.ARCHIVED]: [],
 };
 
