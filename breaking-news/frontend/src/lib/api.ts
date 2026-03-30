@@ -56,10 +56,37 @@ export interface StoryFilters {
   status?: string;
   time_range?: string;
   min_score?: number;
+  source_ids?: string[];
   page?: number;
   page_size?: number;
   sort_by?: string;
   sort_order?: "asc" | "desc";
+}
+
+export interface SourceWithCount {
+  id: string;
+  name: string;
+  platform: string;
+  storyCount: number;
+}
+
+export async function fetchStorySources(): Promise<SourceWithCount[]> {
+  const raw = await apiFetch<any>("/api/v1/stories/sources");
+  return raw.data || [];
+}
+
+export interface FacetItem {
+  name: string;
+  count: number;
+}
+
+export interface StoryFacets {
+  categories: FacetItem[];
+  statuses: FacetItem[];
+}
+
+export async function fetchStoryFacets(): Promise<StoryFacets> {
+  return apiFetch<StoryFacets>("/api/v1/stories/facets");
 }
 
 export interface Feed {
@@ -207,6 +234,9 @@ export async function fetchStories(
   }
   if (filters.min_score && filters.min_score > 0) {
     backendParams.minScore = filters.min_score / 100;
+  }
+  if (filters.source_ids && filters.source_ids.length > 0) {
+    backendParams.sourceIds = filters.source_ids.join(",");
   }
 
   // If there's a search query, use the search endpoint instead

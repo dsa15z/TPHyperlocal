@@ -4,10 +4,9 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma, StoryStatus } from '@prisma/client';
 
 const ListStoriesQuerySchema = z.object({
-  status: z
-    .enum(['EMERGING', 'BREAKING', 'TRENDING', 'ACTIVE', 'STALE', 'ARCHIVED'])
-    .optional(),
-  category: z.string().optional(),
+  status: z.string().optional(), // comma-separated statuses
+  category: z.string().optional(), // comma-separated categories
+  sourceIds: z.string().optional(), // comma-separated source IDs
   minScore: z.coerce.number().min(0).max(1).optional(),
   maxAge: z.coerce.number().int().positive().optional(), // in hours
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -42,7 +41,7 @@ export async function storiesRoutes(
       });
     }
 
-    const { status, category, minScore, maxAge, limit, offset, sort, order } =
+    const { status, category, sourceIds, minScore, maxAge, limit, offset, sort, order } =
       parseResult.data;
 
     const where: Prisma.StoryWhereInput = {
@@ -50,11 +49,34 @@ export async function storiesRoutes(
     };
 
     if (status) {
-      where.status = status as StoryStatus;
+      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
+      if (statuses.length === 1) {
+        where.status = statuses[0] as StoryStatus;
+      } else if (statuses.length > 1) {
+        where.status = { in: statuses as StoryStatus[] };
+      }
     }
 
     if (category) {
-      where.category = category;
+      const categories = category.split(',').map((s) => s.trim()).filter(Boolean);
+      if (categories.length === 1) {
+        where.category = categories[0];
+      } else if (categories.length > 1) {
+        where.category = { in: categories };
+      }
+    }
+
+    if (sourceIds) {
+      const ids = sourceIds.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        where.storySources = {
+          some: {
+            sourcePost: {
+              sourceId: { in: ids },
+            },
+          },
+        };
+      }
     }
 
     if (minScore !== undefined) {
@@ -106,6 +128,67 @@ export async function storiesRoutes(
         offset,
         hasMore: offset + limit < total,
       },
+    });
+  });
+
+  // GET /api/v1/stories/sources - list sources with story counts
+  app.get('/stories/sources', async (_request, reply) => {
+    const sources = await prisma.source.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        platform: true,
+        _count: {
+          select: {
+            posts: {
+              where: {
+                storySources: { some: {} },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Map to a simpler shape with story count
+    const result = sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      platform: s.platform,
+      storyCount: s._count.posts,
+    }));
+
+    return reply.send({ data: result });
+  });
+
+  // GET /api/v1/stories/facets - category and status counts
+  app.get('/stories/facets', async (_request, reply) => {
+    const [categoryRows, statusRows] = await Promise.all([
+      prisma.story.groupBy({
+        by: ['category'],
+        where: { mergedIntoId: null, category: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { category: 'desc' } },
+      }),
+      prisma.story.groupBy({
+        by: ['status'],
+        where: { mergedIntoId: null },
+        _count: { _all: true },
+        orderBy: { _count: { status: 'desc' } },
+      }),
+    ]);
+
+    return reply.send({
+      categories: categoryRows.map((r) => ({
+        name: r.category || 'Unknown',
+        count: r._count._all,
+      })),
+      statuses: statusRows.map((r) => ({
+        name: r.status,
+        count: r._count._all,
+      })),
     });
   });
 
