@@ -18,13 +18,17 @@ function isPublicPath(url: string): boolean {
   // Swagger docs
   if (url.startsWith('/docs')) return true;
 
+  // Auth endpoints are public (register, login, etc.)
+  if (url.startsWith('/api/v1/auth')) return true;
+
   // RSS feed endpoints are public
   if (url.match(/^\/api\/v1\/feeds\/[^/]+\/rss/)) return true;
 
-  // Stories and search are public (read-only)
+  // Stories, search, feeds, pipeline status are public (read-only)
   if (url.startsWith('/api/v1/stories')) return true;
   if (url.startsWith('/api/v1/search')) return true;
   if (url.startsWith('/api/v1/feeds')) return true;
+  if (url.startsWith('/api/v1/pipeline')) return true;
 
   return false;
 }
@@ -55,9 +59,13 @@ export async function authMiddleware(
   const apiKeyHeader = request.headers['x-api-key'];
 
   if (!apiKeyHeader || typeof apiKeyHeader !== 'string') {
+    const authHeader = request.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return;
+    }
     reply.status(401).send({
       error: 'Unauthorized',
-      message: 'Missing x-api-key header',
+      message: 'Missing x-api-key header or Authorization Bearer token',
     });
     return;
   }
