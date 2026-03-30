@@ -721,6 +721,60 @@ async function runCleanup(): Promise<void> {
   }
 }
 
+/**
+ * Fast-poll Grok specifically for real-time X/Twitter intelligence.
+ * Grok has live access to X data, making it uniquely valuable for breaking news.
+ * Runs every 5 minutes (vs 10 min for other LLMs).
+ */
+async function scheduleGrokFastPoll(): Promise<void> {
+  const { llmIngestionQueue } = getQueues();
+
+  try {
+    const grokSources = await prisma.source.findMany({
+      where: {
+        platform: 'LLM_GROK',
+        isActive: true,
+      },
+      include: { market: true },
+    });
+
+    if (grokSources.length === 0) return;
+
+    const apiKey = process.env['XAI_API_KEY'];
+    if (!apiKey) return;
+
+    for (const source of grokSources) {
+      const marketKeywords = source.market?.keywords as string[] | null;
+
+      await llmIngestionQueue.add(
+        'llm_poll',
+        {
+          type: 'llm_poll',
+          sourceId: source.id,
+          platform: 'LLM_GROK',
+          marketName: source.market?.name || 'Houston, Texas',
+          marketKeywords: marketKeywords || [
+            'crime', 'shooting', 'accident', 'fire', 'weather', 'flood',
+            'traffic', 'police', 'breaking news', 'Houston',
+          ],
+          apiKey,
+        },
+        {
+          jobId: `grok-fast-${source.id}-${Date.now()}`,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 10000 },
+          removeOnComplete: { age: 1800 },
+          removeOnFail: { age: 3600 },
+        }
+      );
+    }
+
+    logger.info({ count: grokSources.length }, 'Scheduled Grok fast poll (X/Twitter real-time)');
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule Grok fast poll');
+  }
+}
+
 // Interval handles for cleanup on shutdown
 const intervals: NodeJS.Timeout[] = [];
 
@@ -758,9 +812,13 @@ export function startSchedulers(): void {
   const cleanupInterval = setInterval(runCleanup, 60 * 60 * 1000);
   intervals.push(cleanupInterval);
 
-  // LLM polls: every 10 minutes
+  // LLM polls: every 10 minutes (Grok runs more frequently — see scheduleLLMPolls)
   const llmInterval = setInterval(scheduleLLMPolls, 10 * 60 * 1000);
   intervals.push(llmInterval);
+
+  // Grok-specific fast poll: every 5 minutes (real-time X data is its advantage)
+  const grokFastInterval = setInterval(scheduleGrokFastPoll, 5 * 60 * 1000);
+  intervals.push(grokFastInterval);
 
   // Article extraction: every 5 minutes
   const articleExtractionInterval = setInterval(scheduleArticleExtractions, 5 * 60 * 1000);

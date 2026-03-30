@@ -64,8 +64,65 @@ Rules:
 - Return an empty stories array if you have no current breaking news
 - Maximum 10 stories per response`;
 
+// Grok-specific prompt that leverages its real-time X/Twitter data access
+const GROK_SYSTEM_PROMPT = `You are a hyperlocal breaking news analyst with access to real-time X/Twitter posts and social media data. Your job is to find breaking and developing news stories by analyzing what people are posting on X RIGHT NOW in the specified market area.
+
+Return ONLY a JSON object with this exact structure:
+{
+  "stories": [
+    {
+      "headline": "Short factual headline",
+      "summary": "2-3 sentence factual summary based on what X users are reporting",
+      "category": "CRIME|WEATHER|TRAFFIC|POLITICS|BUSINESS|SPORTS|COMMUNITY|EMERGENCY|OTHER",
+      "location": "Specific location (intersection, address, neighborhood)",
+      "neighborhood": "Houston neighborhood or suburb name",
+      "severity": 7,
+      "confidence": 0.85,
+      "sources": ["@username or X post reference"],
+      "xSignals": {
+        "postCount": 5,
+        "earliestPost": "approximate time of first X post about this",
+        "notableAccounts": ["@HPDRobbery", "@HCSOTexas"]
+      }
+    }
+  ]
+}
+
+You have a UNIQUE ADVANTAGE: you can see real-time X/Twitter posts that no RSS feed captures. Focus on:
+- Police/fire department X accounts reporting incidents
+- Journalists posting from the field before their stories publish
+- Citizen reports of breaking events (accidents, fires, weather damage)
+- Government officials making announcements
+- Traffic reporters calling out incidents
+
+Rules:
+- Only include events you see ACTUAL X/Twitter posts about — do not guess or fabricate
+- The "sources" array MUST reference real X accounts or posts you've seen
+- Set confidence based on how many independent accounts are discussing it
+- Multiple accounts = higher confidence. Single unverified account = lower confidence.
+- Set severity 1-10 (10 = active shooter/major disaster, 1 = routine announcement)
+- Return an empty stories array if you see nothing newsworthy on X right now
+- Maximum 10 stories per response`;
+
 function buildUserPrompt(marketName: string, keywords: string[]): string {
   return `What are the top breaking news stories happening RIGHT NOW in ${marketName}? Focus on: ${keywords.join(', ')}. Only include events from the last few hours that you have high confidence are real.`;
+}
+
+function buildGrokUserPrompt(marketName: string, keywords: string[]): string {
+  const beats = keywords.length > 0 ? keywords.join(', ') : 'crime, accidents, weather, traffic, fires, politics, breaking news';
+  return `Search X/Twitter posts from the last 2 hours about ${marketName}. What breaking news events are people talking about RIGHT NOW?
+
+Focus areas: ${beats}
+
+Key X accounts to check for ${marketName} area:
+- Police: @housaborlice, @HCSOTexas, @HPDRobbery, @HPDMajorAssaults, @SLPDTx, @PearlandPD
+- Fire: @HoustonFire, @haborisCountyFM
+- Traffic: @Houston_Traffic, @TxDOTHouston, @HoustonTranStar
+- Weather: @NWSHouston, @SpaceCityWX, @TravisHerzog
+- News reporters: Any journalist posting from the field
+- Government: @HoustonTX, @HarborrisCountyTX, @JudgeLina
+
+What is happening RIGHT NOW based on what you see on X? Only report events with actual X posts as evidence.`;
 }
 
 async function pollOpenAI(job: LLMPollJob): Promise<LLMResponse> {
@@ -161,9 +218,10 @@ async function pollClaude(job: LLMPollJob): Promise<LLMResponse> {
 
 async function pollGrok(job: LLMPollJob): Promise<LLMResponse> {
   const model = job.model || 'grok-3';
-  const userPrompt = buildUserPrompt(job.marketName, job.marketKeywords);
+  // Use Grok-specific prompts that leverage its real-time X/Twitter data access
+  const userPrompt = buildGrokUserPrompt(job.marketName, job.marketKeywords);
 
-  // Grok uses OpenAI-compatible API at api.x.ai
+  // Grok uses OpenAI-compatible API at api.x.ai — with real-time X data access
   const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -173,7 +231,7 @@ async function pollGrok(job: LLMPollJob): Promise<LLMResponse> {
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: GROK_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.3,
@@ -200,8 +258,18 @@ async function pollGrok(job: LLMPollJob): Promise<LLMResponse> {
   if (jsonMatch) jsonStr = jsonMatch[1]!;
 
   const parsed = JSON.parse(jsonStr.trim()) as { stories: LLMNewsItem[] };
+
+  // Grok stories may include xSignals — merge into sources and rawData
+  const stories = (parsed.stories || []).map((story) => {
+    const xSignals = (story as any).xSignals;
+    if (xSignals?.notableAccounts) {
+      story.sources = [...(story.sources || []), ...xSignals.notableAccounts];
+    }
+    return story;
+  });
+
   return {
-    stories: parsed.stories || [],
+    stories,
     model: data.model || model,
     timestamp: new Date().toISOString(),
   };
@@ -336,6 +404,7 @@ async function handleLLMPoll(job: Job<LLMPollJob>): Promise<void> {
             model: llmResponse.model,
             timestamp: llmResponse.timestamp,
             sources: item.sources,
+            xSignals: (item as any).xSignals || undefined,
           },
           publishedAt: new Date(),
         },
