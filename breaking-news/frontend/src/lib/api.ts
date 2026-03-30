@@ -759,7 +759,7 @@ export async function updateMarket(
   data: Record<string, unknown>
 ): Promise<unknown> {
   return apiFetch<unknown>(`/api/v1/admin/markets/${id}`, {
-    method: "PUT",
+    method: "PATCH",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });

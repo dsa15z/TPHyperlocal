@@ -141,9 +141,9 @@ export default function MarketsPage() {
     name: formName.trim(),
     slug: formSlug.trim(),
     state: formState.trim(),
-    latitude: parseFloat(formLat),
-    longitude: parseFloat(formLon),
-    radiusKm: parseFloat(formRadius),
+    latitude: parseFloat(formLat) || 0,
+    longitude: parseFloat(formLon) || 0,
+    radiusKm: parseFloat(formRadius) || 50,
     timezone: formTimezone.trim(),
     keywords: formKeywords
       .split(",")
@@ -392,7 +392,9 @@ export default function MarketsPage() {
               {isFormError && (
                 <span className="text-red-400 text-sm flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  Failed to save market
+                  {(createMutation.error as Error)?.message ||
+                    (updateMutation.error as Error)?.message ||
+                    "Failed to save market"}
                 </span>
               )}
             </div>

@@ -16,6 +16,7 @@ import { digestSubscriptionRoutes } from './digest-subscriptions.js';
 import { auditLogRoutes } from './audit-logs.js';
 import { slackIntegrationRoutes } from './slack-integrations.js';
 import { communityRadarRoutes } from './community-radar.js';
+import { rbacRoutes } from './rbac.js';
 
 /**
  * Admin route aggregator.
@@ -85,4 +86,7 @@ export async function adminRoutes(
 
   // Community Radar / social monitoring (ADMIN+)
   app.register(communityRadarRoutes);
+
+  // RBAC / multi-tenant permissions (SUPERADMIN + ADMIN)
+  app.register(rbacRoutes);
 }

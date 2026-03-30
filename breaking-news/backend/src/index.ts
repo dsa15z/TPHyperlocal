@@ -47,6 +47,7 @@ import { broadcastMonitorRoutes } from './routes/broadcast-monitor.js';
 import { socialPublishRoutes } from './routes/social-publish.js';
 import { analyticsEmbedRoutes } from './routes/analytics-embed.js';
 import { dbHealthRoutes } from './routes/db-health.js';
+import { storyResearchRoutes } from './routes/story-research.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -169,6 +170,7 @@ async function buildServer() {
   await app.register(socialPublishRoutes, { prefix: '/api/v1' });
   await app.register(analyticsEmbedRoutes, { prefix: '/api/v1' });
   await app.register(dbHealthRoutes, { prefix: '/api/v1' });
+  await app.register(storyResearchRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

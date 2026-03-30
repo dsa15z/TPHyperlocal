@@ -13,8 +13,8 @@ const createMarketSchema = z.object({
     .max(64)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric with hyphens'),
   state: z.string().max(10).optional(),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number().min(-90).max(90).default(0),
+  longitude: z.number().min(-180).max(180).default(0),
   radiusKm: z.number().positive().max(500).default(80),
   timezone: z.string().default('America/Chicago'),
   keywords: z.array(z.string()).optional(),

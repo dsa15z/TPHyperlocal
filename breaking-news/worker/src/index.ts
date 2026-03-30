@@ -34,6 +34,8 @@ import { createCommunityRadarWorker } from './workers/community-radar.worker.js'
 import { createVideoGenerationWorker } from './workers/video-generation.worker.js';
 import { createEngagementTrackingWorker } from './workers/engagement-tracking.worker.js';
 import { createSocialMonitorWorker } from './workers/social-monitor.worker.js';
+import { createStoryResearchWorker } from './workers/story-research.worker.js';
+import { createStorySplitterWorker } from './workers/story-splitter.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -186,6 +188,14 @@ async function main(): Promise<void> {
   const socialMonitorWorker = createSocialMonitorWorker();
   workers.push(socialMonitorWorker);
   logger.info('Social monitor worker started');
+
+  const storyResearchWorker = createStoryResearchWorker();
+  workers.push(storyResearchWorker);
+  logger.info('Story research worker started');
+
+  const storySplitterWorker = createStorySplitterWorker();
+  workers.push(storySplitterWorker);
+  logger.info('Story splitter worker started');
 
   // Start poll schedulers
   startSchedulers();

@@ -12,9 +12,13 @@ import {
   Newspaper,
   Bot,
   Radio,
+  Pencil,
+  Download,
+  Loader2,
 } from "lucide-react";
 import clsx from "clsx";
-import { fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
+import { apiFetch, fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
+import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 
 interface Source {
@@ -80,6 +84,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 export default function SourcesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
@@ -112,9 +117,36 @@ export default function SourcesPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      apiFetch(`/api/v1/admin/sources/${id}`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+      resetForm();
+      setEditingId(null);
+      setShowForm(false);
+    },
+  });
+
   const toggleMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       toggleSource(id, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message: string; imported: number }>("/api/v1/pipeline/import-sources", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({}),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
@@ -127,6 +159,18 @@ export default function SourcesPage() {
     setFormUrl("");
     setFormMarketId("");
     setFormTrustScore(50);
+    setEditingId(null);
+  };
+
+  const startEdit = (source: Source) => {
+    setEditingId(source.id);
+    setFormName(source.name);
+    setFormPlatform(source.platform);
+    setFormSourceType(source.sourceType);
+    setFormUrl(source.url || "");
+    setFormMarketId(source.marketId || "");
+    setFormTrustScore(Math.round(source.trustScore * 100));
+    setShowForm(true);
   };
 
   // Auto-set source type based on platform
@@ -139,17 +183,27 @@ export default function SourcesPage() {
     else setFormSourceType("");
   };
 
-  const handleCreate = () => {
+  const handleSubmit = () => {
     if (!formName.trim() || !formPlatform || !formSourceType) return;
-    createMutation.mutate({
+    const payload = {
       name: formName.trim(),
       platform: formPlatform,
       sourceType: formSourceType,
       url: formUrl.trim(),
       marketId: formMarketId || undefined,
       trustScore: formTrustScore / 100,
-    });
+    };
+
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isFormError = createMutation.isError || updateMutation.isError;
+  const formError = (createMutation.error as Error)?.message || (updateMutation.error as Error)?.message;
 
   const filtered = sources.filter((s: Source) => {
     if (platformFilter && s.platform !== platformFilter) return false;
@@ -186,7 +240,32 @@ export default function SourcesPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => {
+                if (
+                  confirm(
+                    "Import 200+ pre-configured local news sources? This may take a moment."
+                  )
+                ) {
+                  importMutation.mutate();
+                }
+              }}
+              disabled={importMutation.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-surface-300/50 hover:border-accent/50 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {importMutation.isPending ? "Importing..." : "Import 200+ Sources"}
+            </button>
+            <button
+              onClick={() => {
+                if (editingId) {
+                  resetForm();
+                }
+                setShowForm(!showForm);
+              }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -200,7 +279,7 @@ export default function SourcesPage() {
           <div className="glass-card-strong p-6 space-y-6 animate-in">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">
-                Add New Data Feed
+                {editingId ? "Edit Data Feed" : "Add New Data Feed"}
               </h2>
               <button
                 onClick={() => {
@@ -358,29 +437,43 @@ export default function SourcesPage() {
 
                 <div className="flex items-center gap-3 pt-2">
                   <button
-                    onClick={handleCreate}
+                    onClick={handleSubmit}
                     disabled={
                       !formName.trim() ||
                       !formPlatform ||
                       !formSourceType ||
-                      createMutation.isPending
+                      isPending
                     }
                     className={clsx(
                       "px-5 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors",
                       (!formName.trim() ||
                         !formPlatform ||
                         !formSourceType ||
-                        createMutation.isPending) &&
+                        isPending) &&
                         "opacity-50 cursor-not-allowed"
                     )}
                   >
-                    {createMutation.isPending ? "Adding..." : "Add Feed"}
+                    {isPending
+                      ? "Saving..."
+                      : editingId
+                      ? "Update Feed"
+                      : "Add Feed"}
                   </button>
-                  {createMutation.isError && (
+                  {editingId && (
+                    <button
+                      onClick={() => {
+                        resetForm();
+                        setShowForm(false);
+                      }}
+                      className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                  {isFormError && (
                     <span className="text-red-400 text-sm flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
-                      Failed to add source. Check your credentials and try
-                      again.
+                      {formError || "Failed to save source. Check your credentials and try again."}
                     </span>
                   )}
                 </div>
@@ -418,6 +511,17 @@ export default function SourcesPage() {
           <span className="text-sm text-gray-500 ml-2">
             {filtered.length} source{filtered.length !== 1 ? "s" : ""}
           </span>
+          {importMutation.isSuccess && (
+            <span className="text-green-400 text-sm ml-auto">
+              Sources imported successfully!
+            </span>
+          )}
+          {importMutation.isError && (
+            <span className="text-red-400 text-sm ml-auto flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {(importMutation.error as Error)?.message || "Import failed"}
+            </span>
+          )}
         </div>
 
         {/* Table */}
@@ -459,6 +563,9 @@ export default function SourcesPage() {
                     </th>
                     <th className="text-left px-4 py-3 text-gray-400 font-medium">
                       Last Polled
+                    </th>
+                    <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                      Actions
                     </th>
                   </tr>
                 </thead>
@@ -550,6 +657,18 @@ export default function SourcesPage() {
                         {source.lastPolledAt
                           ? formatRelativeTime(source.lastPolledAt)
                           : "Never"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end">
+                          <button
+                            onClick={() => startEdit(source)}
+                            className="filter-btn flex items-center gap-1 text-xs"
+                            title="Edit source"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Edit
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

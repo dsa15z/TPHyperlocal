@@ -23,6 +23,7 @@ import clsx from "clsx";
 import { apiFetch, type SourcePost } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
+import { StoryResearchPanel } from "@/components/StoryResearchPanel";
 import { AnnotationPanel } from "@/components/AnnotationPanel";
 import { StoryTimeline } from "@/components/StoryTimeline";
 import { PredictionBadge } from "@/components/PredictionBadge";
@@ -481,6 +482,9 @@ export default function StoryDetailPage() {
 
         {/* AI First Drafts */}
         <FirstDraftPanel storyId={id} />
+
+        {/* AI Story Research — deep dive with perspectives + talk tracks */}
+        <StoryResearchPanel storyId={id} />
 
         {/* Score cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
