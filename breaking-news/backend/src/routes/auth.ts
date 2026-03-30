@@ -502,4 +502,70 @@ export async function authRoutes(
       },
     });
   });
+
+  // ── POST /auth/setup-superadmin ──────────────────────────────────────────
+  // One-time setup: set a user as SUPERADMIN by email.
+  // Only works if NO superadmin exists yet (first-time setup), OR if the
+  // caller is already a superadmin.
+  app.post('/auth/setup-superadmin', async (request, reply) => {
+    const body = z.object({
+      email: z.string().email(),
+      setupKey: z.string().optional(), // Optional secret for first-time setup
+    }).parse(request.body);
+
+    // Check if any superadmin already exists
+    const existingSuperadmin = await prisma.user.findFirst({
+      where: { metadata: { path: ['isSuperAdmin'], equals: true } },
+    });
+
+    if (existingSuperadmin) {
+      // Only allow existing superadmin to promote others
+      const auth = request.headers['authorization'];
+      if (!auth?.startsWith('Bearer ')) {
+        return reply.status(403).send({ error: 'A superadmin already exists. Authenticate as superadmin to promote others.' });
+      }
+      try {
+        const payload = verifyToken(auth.slice(7));
+        const caller = await prisma.user.findUnique({ where: { id: payload.userId } });
+        const callerMeta = caller?.metadata as Record<string, unknown> | null;
+        if (!callerMeta?.isSuperAdmin) {
+          return reply.status(403).send({ error: 'Only an existing superadmin can promote others.' });
+        }
+      } catch {
+        return reply.status(403).send({ error: 'Invalid authentication.' });
+      }
+    }
+
+    // Find the user by email
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (!user) {
+      return reply.status(404).send({ error: `User with email ${body.email} not found. They must register first.` });
+    }
+
+    // Set superadmin flag
+    const existingMeta = (user.metadata as Record<string, unknown>) || {};
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        metadata: { ...existingMeta, isSuperAdmin: true },
+      },
+    });
+
+    // Also ensure they have OWNER role on their primary account
+    const primaryMembership = await prisma.accountUser.findFirst({
+      where: { userId: user.id, isActive: true },
+    });
+    if (primaryMembership && primaryMembership.role !== 'OWNER') {
+      await prisma.accountUser.update({
+        where: { id: primaryMembership.id },
+        data: { role: 'OWNER' },
+      });
+    }
+
+    return reply.send({
+      message: `${body.email} is now a SUPERADMIN`,
+      userId: user.id,
+      email: body.email,
+    });
+  });
 }
