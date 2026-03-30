@@ -186,6 +186,20 @@ const SORT_FIELD_MAP: Record<string, string> = {
 
 function transformStory(raw: any): Story {
   const storySources = raw.storySources || [];
+
+  // Deduplicate sources: same source name + platform = keep only the first
+  // (prevents duplicate RSS entries from inflating source counts and tooltips)
+  const seenSourceKeys = new Set<string>();
+  const uniqueStorySources = storySources.filter((ss: any) => {
+    const post = ss.sourcePost || ss;
+    const name = post.source?.name || post.authorName || "Unknown";
+    const platform = post.source?.platform || "Unknown";
+    const key = `${platform}::${name}`;
+    if (seenSourceKeys.has(key)) return false;
+    seenSourceKeys.add(key);
+    return true;
+  });
+
   return {
     id: raw.id,
     title: raw.editedTitle || raw.title,
@@ -201,11 +215,11 @@ function transformStory(raw: any): Story {
     confidence_score: raw.confidenceScore ?? 0,
     locality_score: raw.localityScore ?? 0,
     composite_score: raw.compositeScore ?? 0,
-    source_count: raw._count?.storySources ?? raw.sourceCount ?? 0,
+    source_count: uniqueStorySources.length || raw._count?.storySources ?? raw.sourceCount ?? 0,
     first_seen: raw.firstSeenAt,
     last_updated: raw.lastUpdatedAt,
-    sources: storySources.map(transformStorySource),
-    source_summaries: storySources.map((ss: any) => {
+    sources: uniqueStorySources.map(transformStorySource),
+    source_summaries: uniqueStorySources.map((ss: any) => {
       const post = ss.sourcePost || ss;
       return {
         name: post.source?.name || post.authorName || "Unknown",
