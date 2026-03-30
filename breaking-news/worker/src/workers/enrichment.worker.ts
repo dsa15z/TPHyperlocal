@@ -3,7 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
-import { normalizeText, detectNeighborhoods } from '../utils/text.js';
+import { normalizeText, detectNeighborhoods, extractLocation } from '../utils/text.js';
 import { generate } from '../lib/llm-factory.js';
 
 const logger = createChildLogger('enrichment');
@@ -215,13 +215,11 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   // Step 2: Extract entities via regex
   const entities = extractEntities(fullText);
 
-  // Step 3: Detect neighborhoods for locality
+  // Step 3: Extract location using multi-strategy approach
   const neighborhoods = detectNeighborhoods(fullText);
-  let locationName = neighborhoods.length > 0
-    ? neighborhoods[0]
-    : entities.locations.length > 0
-      ? entities.locations[0]
-      : undefined;
+  let locationName = extractLocation(fullText)
+    || (neighborhoods.length > 0 ? neighborhoods[0] : undefined)
+    || (entities.locations.length > 0 ? entities.locations[0] : undefined);
 
   // Step 4: If keyword categorization returned OTHER or no location, use LLM
   if (category === 'OTHER' || !locationName) {

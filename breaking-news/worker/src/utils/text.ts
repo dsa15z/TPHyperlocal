@@ -44,6 +44,20 @@ export const HOUSTON_NEIGHBORHOODS: string[] = [
   'Hermann Park', 'Discovery Green', 'Buffalo Bayou',
   'San Jacinto', 'Ship Channel', 'Port of Houston',
   'NASA', 'Johnson Space Center', 'Kemah',
+  // Directional areas
+  'Southeast Houston', 'Southwest Houston', 'Northeast Houston',
+  'Northwest Houston', 'North Houston', 'South Houston',
+  'East Houston', 'West Houston',
+  // Additional areas
+  'Harris County', 'Fort Bend County', 'Montgomery County',
+  'Galveston County', 'Brazoria County', 'Waller County',
+  'Liberty County', 'Chambers County',
+  'Dickinson', 'Santa Fe', 'Hitchcock', 'Alvin', 'Angleton',
+  'Lake Jackson', 'Freeport', 'Seabrook', 'Webster', 'Nassau Bay',
+  'Manvel', 'Rosharon', 'Sienna', 'Cinco Ranch', 'Fulshear',
+  'Magnolia', 'New Caney', 'Porter', 'Crosby', 'Mont Belvieu',
+  'Dayton', 'Cleveland', 'Huntsville', 'Willis', 'Shenandoah',
+  'Oak Ridge North', 'Panorama Village',
 ];
 
 /**
@@ -126,6 +140,73 @@ export function detectNeighborhoods(text: string): string[] {
   return HOUSTON_NEIGHBORHOODS.filter((neighborhood) =>
     lowerText.includes(neighborhood.toLowerCase())
   );
+}
+
+/**
+ * Extract the best location from text using multiple strategies:
+ * 1. Directional Houston patterns ("southeast Houston", "north side")
+ * 2. Neighborhood name matches
+ * 3. "in/near/at [Location]" patterns
+ * 4. Texas city/county mentions
+ * 5. Fall back to "Houston" if any Houston reference found
+ */
+export function extractLocation(text: string): string | null {
+  const lowerText = text.toLowerCase();
+
+  // Strategy 1: Directional Houston patterns (most specific)
+  const directionalPattern = /(?:in|near|at|of|around)\s+((?:north|south|east|west|northeast|northwest|southeast|southwest)\s*(?:side\s+(?:of\s+)?)?houston)/i;
+  const directionalMatch = text.match(directionalPattern);
+  if (directionalMatch) {
+    // Capitalize properly: "southeast Houston" -> "Southeast Houston"
+    const raw = directionalMatch[1];
+    return raw.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // Also match "southeast Houston" without a preposition
+  const bareDirectional = /\b((?:north|south|east|west|northeast|northwest|southeast|southwest)\s+houston)\b/i;
+  const bareMatch = text.match(bareDirectional);
+  if (bareMatch) {
+    return bareMatch[1].replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // Strategy 2: Known neighborhood matches (sorted by specificity — longer names first)
+  const neighborhoods = detectNeighborhoods(text);
+  if (neighborhoods.length > 0) {
+    // Prefer the most specific (longest) match
+    return neighborhoods.sort((a, b) => b.length - a.length)[0];
+  }
+
+  // Strategy 3: "in [City/Area]" pattern with known Texas cities
+  const texasCities = [
+    'Houston', 'Dallas', 'San Antonio', 'Austin', 'Fort Worth',
+    'El Paso', 'Arlington', 'Corpus Christi', 'Plano', 'Laredo',
+    'Lubbock', 'Garland', 'Irving', 'Amarillo', 'Brownsville',
+    'Grand Prairie', 'McKinney', 'Frisco', 'Midland', 'Odessa',
+  ];
+
+  for (const city of texasCities) {
+    if (lowerText.includes(city.toLowerCase())) {
+      return city;
+    }
+  }
+
+  // Strategy 4: "in [Place], Texas" pattern
+  const texasPattern = /(?:in|near|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?),?\s+(?:Texas|TX)/;
+  const texasMatch = text.match(texasPattern);
+  if (texasMatch) return texasMatch[1];
+
+  // Strategy 5: County mentions
+  const countyPattern = /\b([A-Z][a-z]+)\s+County\b/;
+  const countyMatch = text.match(countyPattern);
+  if (countyMatch) return `${countyMatch[1]} County`;
+
+  // Strategy 6: Any "Houston" mention at all → default to Houston
+  if (lowerText.includes('houston')) return 'Houston';
+
+  // Strategy 7: Texas mention → default to Texas
+  if (lowerText.includes('texas') || lowerText.includes(' tx ') || lowerText.includes(', tx')) return 'Texas';
+
+  return null;
 }
 
 /**

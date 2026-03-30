@@ -3,6 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
+import { extractLocation } from '../utils/text.js';
 import {
   getWordSet,
   calculateJaccardSimilarity,
@@ -69,7 +70,7 @@ function calculateEntitySimilarity(
 }
 
 async function processCluster(job: Job<ClusteringJob>): Promise<void> {
-  const { sourcePostId, category, locationName, neighborhoods, entities } = job.data;
+  const { sourcePostId, category, locationName: enrichedLocation, neighborhoods, entities } = job.data;
 
   logger.info({ sourcePostId, category }, 'Clustering source post');
 
@@ -189,8 +190,8 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
           ? { category }
           : {}),
         // Update location if the story doesn't have one yet
-        ...(!bestStory.locationName && locationName
-          ? { locationName }
+        ...(!bestStory.locationName && (enrichedLocation || extractLocation(`${post.title || ''} ${post.content}`))
+          ? { locationName: enrichedLocation || extractLocation(`${post.title || ''} ${post.content}`) }
           : {}),
         ...(!bestStory.neighborhood && neighborhoods.length > 0
           ? { neighborhood: neighborhoods[0] }
@@ -204,12 +205,16 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       bestSimilarity,
     }, 'Creating new story');
 
+    // Use enriched location, or extract from title/content as fallback
+    const fullText = `${post.title || ''} ${post.content}`;
+    const resolvedLocation = enrichedLocation || extractLocation(fullText) || undefined;
+
     const story = await prisma.story.create({
       data: {
         title: post.title || post.content.substring(0, 100),
         category: category !== 'OTHER' ? category : undefined,
-        locationName: locationName || undefined,
-        neighborhood: neighborhoods.length > 0 ? neighborhoods[0] : undefined,
+        locationName: resolvedLocation,
+        neighborhood: neighborhoods?.length > 0 ? neighborhoods[0] : undefined,
         sourceCount: 1,
         firstSeenAt: post.publishedAt,
         lastUpdatedAt: new Date(),
