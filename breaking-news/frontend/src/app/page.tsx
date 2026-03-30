@@ -1,25 +1,99 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
 import { Radio, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { fetchStories, type StoryFilters } from "@/lib/api";
+import {
+  type DashboardView,
+  type ColumnConfig,
+  type SavedFilters,
+  loadViews,
+  saveViews,
+  loadActiveViewId,
+  saveActiveViewId,
+  createDefaultView,
+  duplicateView,
+  generateViewId,
+} from "@/lib/views";
 import { StoryTable } from "@/components/StoryTable";
 import { FilterBar } from "@/components/FilterBar";
 import { NewsProgressPanel } from "@/components/NewsProgressPanel";
+import { ViewSelector } from "@/components/ViewSelector";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+
+// ─── View ↔ Filter bridging ───────────────────────────────────────────────
+
+/** Convert a SavedFilters snapshot to the filter state the FilterBar understands */
+function savedFiltersToStoryFilters(saved: SavedFilters): StoryFilters {
+  return {
+    q: saved.q,
+    category: saved.categories?.join(","),
+    status: saved.statuses?.join(","),
+    source_ids: saved.sourceIds,
+    time_range: saved.timeRange,
+    min_score: saved.minScore,
+    uncovered_only: saved.uncoveredOnly,
+    trend: saved.trend,
+  };
+}
+
+/** Extract the filter-related fields from StoryFilters into SavedFilters */
+function storyFiltersToSaved(filters: StoryFilters): SavedFilters {
+  return {
+    q: filters.q,
+    categories: filters.category ? filters.category.split(",") : undefined,
+    statuses: filters.status ? filters.status.split(",") : undefined,
+    sourceIds: filters.source_ids,
+    timeRange: filters.time_range,
+    minScore: filters.min_score,
+    uncoveredOnly: filters.uncovered_only,
+    trend: filters.trend,
+  };
+}
+
+// ─── Dashboard ─────────────────────────────────────────────────────────────
 
 function DashboardContent() {
-  const [filters, setFilters] = useState<StoryFilters>({
-    time_range: "24h",
+  // ── View state ──────────────────────────────────────────────────────────
+  const [views, setViews] = useState<DashboardView[]>(() => loadViews());
+  const [activeViewId, setActiveViewId] = useState(() => loadActiveViewId());
+  const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>([]);
+  const [hasViewChanges, setHasViewChanges] = useState(false);
+
+  // Resolve active view (fall back to default if not found)
+  const activeView =
+    views.find((v) => v.id === activeViewId) || views[0] || createDefaultView();
+
+  // Initialise column config from the active view
+  useEffect(() => {
+    setColumnConfig(activeView.columns.map((c) => ({ ...c })));
+    setHasViewChanges(false);
+  }, [activeViewId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Filter state ────────────────────────────────────────────────────────
+  const [filters, setFilters] = useState<StoryFilters>(() => ({
+    ...savedFiltersToStoryFilters(activeView.filters),
     page: 1,
     page_size: 25,
-  });
+  }));
+
+  // Re-apply saved filters when the active view changes
+  useEffect(() => {
+    setFilters((prev) => ({
+      ...savedFiltersToStoryFilters(activeView.filters),
+      page: 1,
+      page_size: prev.page_size || 25,
+    }));
+  }, [activeViewId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [sorting, setSorting] = useState<SortingState>([
     { id: "breaking_score", desc: true },
   ]);
 
+  // ── Data fetching ───────────────────────────────────────────────────────
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["stories", filters],
     queryFn: () =>
@@ -33,12 +107,104 @@ function DashboardContent() {
 
   const handleFiltersChange = useCallback((newFilters: StoryFilters) => {
     setFilters((prev) => ({ ...prev, ...newFilters, page: 1 }));
+    setHasViewChanges(true);
   }, []);
 
   const handlePageChange = (page: number) => {
     setFilters((prev) => ({ ...prev, page }));
   };
 
+  // ── Column config changes ───────────────────────────────────────────────
+  const handleColumnsChange = useCallback((cols: ColumnConfig[]) => {
+    setColumnConfig(cols);
+    setHasViewChanges(true);
+  }, []);
+
+  // ── View CRUD ───────────────────────────────────────────────────────────
+  const persistViews = useCallback(
+    (updated: DashboardView[]) => {
+      setViews(updated);
+      saveViews(updated);
+    },
+    []
+  );
+
+  const handleSelectView = useCallback(
+    (viewId: string) => {
+      setActiveViewId(viewId);
+      saveActiveViewId(viewId);
+    },
+    []
+  );
+
+  const handleSaveCurrentView = useCallback(() => {
+    const now = new Date().toISOString();
+    const updated = views.map((v) =>
+      v.id === activeViewId
+        ? {
+            ...v,
+            columns: columnConfig.map((c) => ({ ...c })),
+            filters: storyFiltersToSaved(filters),
+            updatedAt: now,
+          }
+        : v
+    );
+    persistViews(updated);
+    setHasViewChanges(false);
+  }, [views, activeViewId, columnConfig, filters, persistViews]);
+
+  const handleCreateView = useCallback(
+    (name: string) => {
+      const now = new Date().toISOString();
+      const newView: DashboardView = {
+        id: generateViewId(),
+        name,
+        columns: columnConfig.map((c) => ({ ...c })),
+        filters: storyFiltersToSaved(filters),
+        createdAt: now,
+        updatedAt: now,
+      };
+      const updated = [...views, newView];
+      persistViews(updated);
+      handleSelectView(newView.id);
+    },
+    [views, columnConfig, filters, persistViews, handleSelectView]
+  );
+
+  const handleDuplicateView = useCallback(
+    (viewId: string, newName: string) => {
+      const source = views.find((v) => v.id === viewId);
+      if (!source) return;
+      const dup = duplicateView(source, newName);
+      const updated = [...views, dup];
+      persistViews(updated);
+      handleSelectView(dup.id);
+    },
+    [views, persistViews, handleSelectView]
+  );
+
+  const handleRenameView = useCallback(
+    (viewId: string, newName: string) => {
+      const updated = views.map((v) =>
+        v.id === viewId ? { ...v, name: newName, updatedAt: new Date().toISOString() } : v
+      );
+      persistViews(updated);
+    },
+    [views, persistViews]
+  );
+
+  const handleDeleteView = useCallback(
+    (viewId: string) => {
+      const updated = views.filter((v) => v.id !== viewId);
+      persistViews(updated.length > 0 ? updated : [createDefaultView()]);
+      if (activeViewId === viewId) {
+        handleSelectView(updated[0]?.id || "default");
+      }
+    },
+    [views, activeViewId, persistViews, handleSelectView]
+  );
+
+  // ── Derived data ────────────────────────────────────────────────────────
   const stories = data?.stories || [];
   const totalPages = data?.total_pages || 1;
   const currentPage = data?.page || 1;
@@ -50,6 +216,26 @@ function DashboardContent() {
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
         {/* Pipeline progress */}
         <NewsProgressPanel />
+
+        {/* View toolbar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <ViewSelector
+            views={views}
+            activeViewId={activeViewId}
+            onSelectView={handleSelectView}
+            onSaveView={handleSaveCurrentView as any}
+            onCreateView={handleCreateView}
+            onDuplicateView={handleDuplicateView}
+            onRenameView={handleRenameView}
+            onDeleteView={handleDeleteView}
+            hasChanges={hasViewChanges}
+            onSaveCurrentView={handleSaveCurrentView}
+          />
+          <ColumnCustomizer
+            columns={columnConfig}
+            onChange={handleColumnsChange}
+          />
+        </div>
 
         {/* Filter bar */}
         <FilterBar onFiltersChange={handleFiltersChange} facets={facets} />
@@ -95,6 +281,7 @@ function DashboardContent() {
               stories={stories}
               sorting={sorting}
               onSortingChange={setSorting}
+              columnConfig={columnConfig}
             />
           </div>
         )}

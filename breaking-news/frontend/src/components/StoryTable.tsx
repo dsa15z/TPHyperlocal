@@ -9,10 +9,12 @@ import {
   flexRender,
   createColumnHelper,
   type SortingState,
+  type ColumnDef,
 } from "@tanstack/react-table";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import clsx from "clsx";
 import type { Story, SourceSummary } from "@/lib/api";
+import type { ColumnConfig } from "@/lib/views";
 import { formatRelativeTime, getScoreBarColor } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
 import { ScoreBadge } from "./ScoreBadge";
@@ -78,188 +80,213 @@ interface StoryTableProps {
   stories: Story[];
   sorting: SortingState;
   onSortingChange: (sorting: SortingState) => void;
+  /** Optional column configuration from the view system */
+  columnConfig?: ColumnConfig[];
 }
 
 const columnHelper = createColumnHelper<Story>();
+
+/** Registry of all column definitions keyed by id */
+function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
+  return {
+    rank: columnHelper.display({
+      id: "rank",
+      header: "#",
+      cell: (info) => (
+        <span className="text-gray-500 font-mono text-xs">
+          {info.row.index + 1}
+        </span>
+      ),
+      size: 40,
+    }),
+    status: columnHelper.accessor("status", {
+      header: "Status",
+      cell: (info) => <StatusBadge status={info.getValue()} />,
+      size: 120,
+    }),
+    title: columnHelper.accessor("title", {
+      header: "Title",
+      cell: (info) => (
+        <Link
+          href={`/stories/${info.row.original.id}`}
+          className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
+        >
+          {info.getValue()}
+        </Link>
+      ),
+      size: 320,
+    }),
+    category: columnHelper.accessor("category", {
+      header: "Category",
+      cell: (info) => (
+        <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">
+          {info.getValue()}
+        </span>
+      ),
+      size: 100,
+    }),
+    location: columnHelper.accessor("location", {
+      header: "Location",
+      cell: (info) => (
+        <span className="text-gray-400 text-xs">{info.getValue()}</span>
+      ),
+      size: 120,
+    }),
+    breaking_score: columnHelper.accessor("breaking_score", {
+      header: "Breaking",
+      cell: (info) => (
+        <ScoreBadge score={info.getValue()} />
+      ),
+      size: 90,
+    }),
+    trending_score: columnHelper.accessor("trending_score", {
+      header: "Trending",
+      cell: (info) => (
+        <ScoreBadge score={info.getValue()} />
+      ),
+      size: 90,
+    }),
+    trend: columnHelper.display({
+      id: "trend",
+      header: "Trend",
+      cell: (info) => {
+        const sparkline = info.row.original.sparkline || [];
+        const trend = info.row.original.trend;
+        if (sparkline.length < 2) return <span className="text-gray-600 text-xs">-</span>;
+
+        const max = Math.max(...sparkline, 0.01);
+        return (
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-end gap-px h-4 w-14">
+              {sparkline.map((val: number, i: number) => (
+                <div
+                  key={i}
+                  className={clsx(
+                    "flex-1 rounded-sm min-h-[1px]",
+                    trend === "rising" ? "bg-green-500" :
+                    trend === "declining" ? "bg-red-500" : "bg-gray-500"
+                  )}
+                  style={{ height: `${(val / max) * 100}%` }}
+                />
+              ))}
+            </div>
+            <span className={clsx(
+              "text-[10px] font-bold",
+              trend === "rising" ? "text-green-400" :
+              trend === "declining" ? "text-red-400" : "text-gray-500"
+            )}>
+              {trend === "rising" ? "\u2197" : trend === "declining" ? "\u2198" : "\u2192"}
+            </span>
+          </div>
+        );
+      },
+      size: 90,
+    }),
+    source_count: columnHelper.accessor("source_count", {
+      header: "Sources",
+      cell: (info) => {
+        const story = info.row.original;
+        const summaries = story.source_summaries || [];
+        const count = info.getValue();
+        return (
+          <div className="relative group">
+            <span className="text-gray-300 font-mono text-sm cursor-default">
+              {count}
+            </span>
+            {summaries.length > 0 && (
+              <div className="hidden group-hover:block">
+                <SourceTooltip sources={summaries} totalCount={count} />
+              </div>
+            )}
+          </div>
+        );
+      },
+      size: 70,
+    }),
+    coverage: columnHelper.display({
+      id: "coverage",
+      header: "Covered",
+      cell: (info) => {
+        const coverage = info.row.original.coverage || [];
+        if (coverage.length === 0) {
+          return <span className="text-gray-600 text-xs">-</span>;
+        }
+        const anyCovered = coverage.some((c) => c.isCovered);
+        return (
+          <div className="relative group">
+            <span className={clsx(
+              "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold",
+              anyCovered
+                ? "bg-green-500/15 text-green-400"
+                : "bg-red-500/15 text-red-400"
+            )}>
+              {anyCovered ? "\u2713" : "\u2717"}
+            </span>
+            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+              <div className="bg-surface-100 border border-surface-300 rounded-lg shadow-xl p-2 min-w-[160px]">
+                {coverage.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs py-0.5">
+                    <span className={c.isCovered ? "text-green-400" : "text-red-400"}>
+                      {c.isCovered ? "\u2713" : "\u2717"}
+                    </span>
+                    <span className="text-gray-300">{c.feedName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      },
+      size: 70,
+    }),
+    first_seen: columnHelper.accessor("first_seen", {
+      header: "First Seen",
+      cell: (info) => (
+        <span className="text-gray-500 text-xs whitespace-nowrap">
+          {formatRelativeTime(info.getValue())}
+        </span>
+      ),
+      size: 100,
+    }),
+    last_updated: columnHelper.accessor("last_updated", {
+      header: "Updated",
+      cell: (info) => (
+        <span className="text-gray-500 text-xs whitespace-nowrap">
+          {formatRelativeTime(info.getValue())}
+        </span>
+      ),
+      size: 100,
+    }),
+  };
+}
 
 export function StoryTable({
   stories,
   sorting,
   onSortingChange,
+  columnConfig,
 }: StoryTableProps) {
-  const columns = useMemo(
-    () => [
-      columnHelper.display({
-        id: "rank",
-        header: "#",
-        cell: (info) => (
-          <span className="text-gray-500 font-mono text-xs">
-            {info.row.index + 1}
-          </span>
-        ),
-        size: 40,
-      }),
-      columnHelper.accessor("status", {
-        header: "Status",
-        cell: (info) => <StatusBadge status={info.getValue()} />,
-        size: 120,
-      }),
-      columnHelper.accessor("title", {
-        header: "Title",
-        cell: (info) => (
-          <Link
-            href={`/stories/${info.row.original.id}`}
-            className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
-          >
-            {info.getValue()}
-          </Link>
-        ),
-        size: 320,
-      }),
-      columnHelper.accessor("category", {
-        header: "Category",
-        cell: (info) => (
-          <span className="text-gray-400 text-xs font-medium uppercase tracking-wider">
-            {info.getValue()}
-          </span>
-        ),
-        size: 100,
-      }),
-      columnHelper.accessor("location", {
-        header: "Location",
-        cell: (info) => (
-          <span className="text-gray-400 text-xs">{info.getValue()}</span>
-        ),
-        size: 120,
-      }),
-      columnHelper.accessor("breaking_score", {
-        header: "Breaking",
-        cell: (info) => (
-          <ScoreBadge score={info.getValue()} />
-        ),
-        size: 90,
-      }),
-      columnHelper.accessor("trending_score", {
-        header: "Trending",
-        cell: (info) => (
-          <ScoreBadge score={info.getValue()} />
-        ),
-        size: 90,
-      }),
-      columnHelper.display({
-        id: "trend",
-        header: "Trend",
-        cell: (info) => {
-          const sparkline = info.row.original.sparkline || [];
-          const trend = info.row.original.trend;
-          if (sparkline.length < 2) return <span className="text-gray-600 text-xs">-</span>;
+  const columns = useMemo(() => {
+    const allDefs = buildColumnDefs();
 
-          const max = Math.max(...sparkline, 0.01);
-          return (
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-end gap-px h-4 w-14">
-                {sparkline.map((val: number, i: number) => (
-                  <div
-                    key={i}
-                    className={clsx(
-                      "flex-1 rounded-sm min-h-[1px]",
-                      trend === "rising" ? "bg-green-500" :
-                      trend === "declining" ? "bg-red-500" : "bg-gray-500"
-                    )}
-                    style={{ height: `${(val / max) * 100}%` }}
-                  />
-                ))}
-              </div>
-              <span className={clsx(
-                "text-[10px] font-bold",
-                trend === "rising" ? "text-green-400" :
-                trend === "declining" ? "text-red-400" : "text-gray-500"
-              )}>
-                {trend === "rising" ? "\u2197" : trend === "declining" ? "\u2198" : "\u2192"}
-              </span>
-            </div>
-          );
-        },
-        size: 90,
-      }),
-      columnHelper.accessor("source_count", {
-        header: "Sources",
-        cell: (info) => {
-          const story = info.row.original;
-          const summaries = story.source_summaries || [];
-          const count = info.getValue();
-          return (
-            <div className="relative group">
-              <span className="text-gray-300 font-mono text-sm cursor-default">
-                {count}
-              </span>
-              {summaries.length > 0 && (
-                <div className="hidden group-hover:block">
-                  <SourceTooltip sources={summaries} totalCount={count} />
-                </div>
-              )}
-            </div>
-          );
-        },
-        size: 70,
-      }),
-      columnHelper.display({
-        id: "coverage",
-        header: "Covered",
-        cell: (info) => {
-          const coverage = info.row.original.coverage || [];
-          if (coverage.length === 0) {
-            return <span className="text-gray-600 text-xs">-</span>;
-          }
-          const anyCovered = coverage.some((c) => c.isCovered);
-          return (
-            <div className="relative group">
-              <span className={clsx(
-                "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold",
-                anyCovered
-                  ? "bg-green-500/15 text-green-400"
-                  : "bg-red-500/15 text-red-400"
-              )}>
-                {anyCovered ? "\u2713" : "\u2717"}
-              </span>
-              <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-                <div className="bg-surface-100 border border-surface-300 rounded-lg shadow-xl p-2 min-w-[160px]">
-                  {coverage.map((c, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                      <span className={c.isCovered ? "text-green-400" : "text-red-400"}>
-                        {c.isCovered ? "\u2713" : "\u2717"}
-                      </span>
-                      <span className="text-gray-300">{c.feedName}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        },
-        size: 70,
-      }),
-      columnHelper.accessor("first_seen", {
-        header: "First Seen",
-        cell: (info) => (
-          <span className="text-gray-500 text-xs whitespace-nowrap">
-            {formatRelativeTime(info.getValue())}
-          </span>
-        ),
-        size: 100,
-      }),
-      columnHelper.accessor("last_updated", {
-        header: "Updated",
-        cell: (info) => (
-          <span className="text-gray-500 text-xs whitespace-nowrap">
-            {formatRelativeTime(info.getValue())}
-          </span>
-        ),
-        size: 100,
-      }),
-    ],
-    []
-  );
+    if (!columnConfig) {
+      // No config — show all columns in default order
+      return Object.values(allDefs);
+    }
+
+    // Build columns from config: only visible, in config order, with config widths
+    return columnConfig
+      .filter((cfg) => cfg.visible)
+      .map((cfg) => {
+        const def = allDefs[cfg.id];
+        if (!def) return null;
+        return {
+          ...def,
+          size: cfg.width,
+        };
+      })
+      .filter(Boolean) as ColumnDef<Story, any>[];
+  }, [columnConfig]);
 
   const table = useReactTable({
     data: stories,
