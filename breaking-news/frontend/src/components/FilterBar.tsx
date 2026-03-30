@@ -180,6 +180,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [uncoveredOnly, setUncoveredOnly] = useState(false);
   const [timeRange, setTimeRange] = useState(
     searchParams.get("time_range") || "24h"
   );
@@ -218,12 +219,14 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
       time_range: timeRange || undefined,
       min_score: minScore > 0 ? minScore : undefined,
       source_ids: selectedSources.length > 0 ? selectedSources : undefined,
+      uncovered_only: uncoveredOnly || undefined,
     };
   }, [
     searchInput,
     selectedCategories,
     selectedStatuses,
     selectedSources,
+    uncoveredOnly,
     timeRange,
     minScore,
   ]);
@@ -240,6 +243,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedCategories,
     selectedStatuses,
     selectedSources,
+    uncoveredOnly,
     timeRange,
     minScore,
     buildFilters,
@@ -263,6 +267,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setSelectedCategories([]);
     setSelectedStatuses([]);
     setSelectedSources([]);
+    setUncoveredOnly(false);
     setTimeRange("24h");
     setMinScore(0);
   };
@@ -272,6 +277,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedCategories.length > 0 ||
     selectedStatuses.length > 0 ||
     selectedSources.length > 0 ||
+    uncoveredOnly ||
     timeRange !== "24h" ||
     minScore > 0;
 
@@ -349,6 +355,21 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
             {minScore}
           </span>
         </div>
+
+        {/* Uncovered only toggle */}
+        <button
+          onClick={() => setUncoveredOnly(!uncoveredOnly)}
+          className={clsx(
+            "filter-btn flex items-center gap-1.5 text-sm",
+            uncoveredOnly && "filter-btn-active border-red-500/50 text-red-400"
+          )}
+        >
+          <span className={clsx(
+            "w-3 h-3 rounded-full border",
+            uncoveredOnly ? "bg-red-500 border-red-500" : "border-gray-500"
+          )} />
+          Gaps Only
+        </button>
 
         {/* Clear */}
         {hasActiveFilters && (

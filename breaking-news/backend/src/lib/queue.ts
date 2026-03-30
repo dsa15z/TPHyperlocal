@@ -7,6 +7,7 @@ const QUEUE_NAMES = {
   CLUSTERING: 'clustering',
   SCORING: 'scoring',
   ALERTS: 'alerts',
+  COVERAGE: 'coverage',
 } as const;
 
 type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -48,6 +49,7 @@ export const enrichmentQueue = () => getQueue(QUEUE_NAMES.ENRICHMENT);
 export const clusteringQueue = () => getQueue(QUEUE_NAMES.CLUSTERING);
 export const scoringQueue = () => getQueue(QUEUE_NAMES.SCORING);
 export const alertsQueue = () => getQueue(QUEUE_NAMES.ALERTS);
+export const coverageQueue = () => getQueue(QUEUE_NAMES.COVERAGE);
 
 export async function closeAllQueues(): Promise<void> {
   const closePromises: Promise<void>[] = [];

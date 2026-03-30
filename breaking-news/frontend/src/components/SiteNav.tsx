@@ -9,8 +9,7 @@ import {
   Settings,
   KeyRound,
   MapPin,
-  Users,
-  ChevronRight,
+  Target,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -45,6 +44,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin/credentials",
     label: "API Keys",
     icon: <KeyRound className="w-4 h-4" />,
+    section: "admin",
+  },
+  {
+    href: "/admin/coverage",
+    label: "Coverage",
+    icon: <Target className="w-4 h-4" />,
     section: "admin",
   },
   {

@@ -17,6 +17,7 @@ import { createSentimentWorker } from './workers/sentiment.worker.js';
 import { createCredibilityWorker } from './workers/credibility.worker.js';
 import { createRSSDiscoveryWorker } from './workers/rss-discovery.worker.js';
 import { createDigestWorker } from './workers/digest.worker.js';
+import { createCoverageWorker } from './workers/coverage.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -101,6 +102,10 @@ async function main(): Promise<void> {
   const digestWorker = createDigestWorker();
   workers.push(digestWorker);
   logger.info('Digest worker started');
+
+  const coverageWorker = createCoverageWorker();
+  workers.push(coverageWorker);
+  logger.info('Coverage worker started');
 
   // Start poll schedulers
   startSchedulers();

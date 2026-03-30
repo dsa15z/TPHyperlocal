@@ -5,6 +5,7 @@ import { sourceRoutes } from './sources.js';
 import { credentialRoutes } from './credentials.js';
 import { editorRoutes } from './editor.js';
 import { webhookRoutes } from './webhooks.js';
+import { coverageRoutes } from './coverage.js';
 
 /**
  * Admin route aggregator.
@@ -41,4 +42,7 @@ export async function adminRoutes(
 
   // Webhooks & digests (ADMIN+)
   app.register(webhookRoutes);
+
+  // Coverage gap detection (ADMIN+)
+  app.register(coverageRoutes);
 }

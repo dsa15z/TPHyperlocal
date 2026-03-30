@@ -72,6 +72,7 @@ model Account {
   credentials    AccountCredential[]
   apiKeys        APIKey[]
   feeds          RSSFeed[]
+  coverageFeeds  CoverageFeed[]
   auditLogs      AuditLog[]
 
   @@index([slug])
@@ -332,9 +333,10 @@ model Story {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  storySources   StorySource[]
-  scoreSnapshots ScoreSnapshot[]
-  notifications  Notification[]
+  storySources    StorySource[]
+  scoreSnapshots  ScoreSnapshot[]
+  notifications   Notification[]
+  coverageMatches CoverageMatch[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -522,4 +524,48 @@ model TopicCluster {
   updatedAt   DateTime @updatedAt
 
   @@index([isActive, storyCount(sort: Desc)])
+}
+
+// ─── Coverage Gap Detection ────────────────────────────────────────────────
+// Tracks what stories an account's newsroom has already covered vs missed.
+
+model CoverageFeed {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name            String   // "Our CMS RSS", "Station Website", etc.
+  type            String   // RSS, API, SCRAPE
+  url             String   // Feed URL, API endpoint, or page to scrape
+  authConfig      Json?    // Optional auth: { apiKey, headers, cookies }
+  pollIntervalMin Int      @default(15) // How often to check (minutes)
+  cssSelector     String?  // For SCRAPE type: CSS selector for article links
+  isActive        Boolean  @default(true)
+  lastPolledAt    DateTime?
+  lastError       String?
+  itemCount       Int      @default(0) // Total items fetched
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  matches CoverageMatch[]
+
+  @@index([accountId, isActive])
+}
+
+model CoverageMatch {
+  id              String   @id @default(cuid())
+  coverageFeedId  String
+  coverageFeed    CoverageFeed @relation(fields: [coverageFeedId], references: [id], onDelete: Cascade)
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  accountId       String
+  // What matched from their feed
+  matchedUrl      String?
+  matchedTitle    String?
+  similarityScore Float    // 0-1 Jaccard similarity
+  isCovered       Boolean  // true = they covered it, false = gap
+  matchedAt       DateTime @default(now())
+
+  @@unique([coverageFeedId, storyId])
+  @@index([accountId, isCovered])
+  @@index([storyId])
 }

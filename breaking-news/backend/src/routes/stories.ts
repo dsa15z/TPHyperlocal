@@ -7,6 +7,7 @@ const ListStoriesQuerySchema = z.object({
   status: z.string().optional(), // comma-separated statuses
   category: z.string().optional(), // comma-separated categories
   sourceIds: z.string().optional(), // comma-separated source IDs
+  uncoveredOnly: z.coerce.boolean().optional(), // filter to stories not covered by account
   minScore: z.coerce.number().min(0).max(1).optional(),
   maxAge: z.coerce.number().int().positive().optional(), // in hours
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -41,7 +42,7 @@ export async function storiesRoutes(
       });
     }
 
-    const { status, category, sourceIds, minScore, maxAge, limit, offset, sort, order } =
+    const { status, category, sourceIds, uncoveredOnly, minScore, maxAge, limit, offset, sort, order } =
       parseResult.data;
 
     const where: Prisma.StoryWhereInput = {
@@ -87,6 +88,12 @@ export async function storiesRoutes(
           },
         };
       }
+    }
+
+    if (uncoveredOnly) {
+      where.coverageMatches = {
+        none: { isCovered: true },
+      };
     }
 
     if (minScore !== undefined) {
@@ -177,6 +184,13 @@ export async function storiesRoutes(
             },
             orderBy: { similarityScore: 'desc' },
             take: 5,
+          },
+          coverageMatches: {
+            select: {
+              isCovered: true,
+              accountId: true,
+              coverageFeed: { select: { name: true } },
+            },
           },
           _count: {
             select: { storySources: true },

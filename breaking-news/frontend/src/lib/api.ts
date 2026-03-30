@@ -2,6 +2,11 @@ import { getAuthHeaders } from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
+export interface CoverageInfo {
+  isCovered: boolean;
+  feedName: string;
+}
+
 export interface SourceSummary {
   name: string;
   platform: string;
@@ -26,6 +31,7 @@ export interface Story {
   last_updated: string;
   sources?: SourcePost[];
   source_summaries?: SourceSummary[];
+  coverage?: CoverageInfo[];
 }
 
 export interface SourcePost {
@@ -62,6 +68,7 @@ export interface StoryFilters {
   time_range?: string;
   min_score?: number;
   source_ids?: string[];
+  uncovered_only?: boolean;
   page?: number;
   page_size?: number;
   sort_by?: string;
@@ -196,6 +203,10 @@ function transformStory(raw: any): Story {
         published_at: post.publishedAt,
       };
     }),
+    coverage: (raw.coverageMatches || []).map((cm: any) => ({
+      isCovered: cm.isCovered,
+      feedName: cm.coverageFeed?.name || "Unknown",
+    })),
   };
 }
 
@@ -242,6 +253,9 @@ export async function fetchStories(
   }
   if (filters.source_ids && filters.source_ids.length > 0) {
     backendParams.sourceIds = filters.source_ids.join(",");
+  }
+  if (filters.uncovered_only) {
+    backendParams.uncoveredOnly = true;
   }
 
   // If there's a search query, use the search endpoint instead
@@ -627,6 +641,57 @@ export async function deleteCredential(id: string): Promise<void> {
   await apiFetch<void>(`/api/v1/admin/credentials/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
+  });
+}
+
+// ─── Admin: Coverage Feeds ──────────────────────────────────────────────────
+
+export interface CoverageFeedData {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  pollIntervalMin: number;
+  isActive: boolean;
+  lastPolledAt: string | null;
+  lastError: string | null;
+  itemCount: number;
+  stats: { covered: number; gaps: number; total: number };
+}
+
+export async function fetchCoverageFeeds(): Promise<CoverageFeedData[]> {
+  const raw = await apiFetch<any>("/api/v1/admin/coverage", {
+    headers: getAuthHeaders(),
+  });
+  return raw.data || [];
+}
+
+export async function createCoverageFeed(data: {
+  name: string;
+  type: string;
+  url: string;
+  pollIntervalMin?: number;
+  cssSelector?: string;
+}): Promise<unknown> {
+  return apiFetch<unknown>("/api/v1/admin/coverage", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCoverageFeed(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/admin/coverage/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function triggerCoverageCheck(id: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/v1/admin/coverage/${id}/check`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({}),
   });
 }
 
