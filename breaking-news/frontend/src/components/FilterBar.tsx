@@ -288,7 +288,7 @@ export function FilterBar({ onFiltersChange }: FilterBarProps) {
     minScore > 0;
 
   return (
-    <div className="glass-card p-4 space-y-4">
+    <div className="glass-card p-4 space-y-4 relative z-30 overflow-visible">
       <div className="flex flex-wrap items-center gap-3">
         {/* Search input */}
         <div className="relative flex-1 min-w-[220px]">
