@@ -420,6 +420,22 @@ export async function fetchPipelineStatus(): Promise<PipelineStatus> {
   return apiFetch<PipelineStatus>("/api/v1/pipeline/status");
 }
 
+export interface TriggerResponse {
+  message: string;
+  queued: number;
+  totalSources: number;
+  lookbackHours: number;
+}
+
+export async function triggerPipelineIngestion(
+  lookbackHours: number = 24
+): Promise<TriggerResponse> {
+  return apiFetch<TriggerResponse>("/api/v1/pipeline/trigger", {
+    method: "POST",
+    body: JSON.stringify({ lookbackHours }),
+  });
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
