@@ -1,0 +1,53 @@
+name: CI — Regression Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  API_URL: https://tphyperlocal-production.up.railway.app
+
+jobs:
+  api-contracts:
+    name: API Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: breaking-news/backend
+        run: npm install
+
+      - name: Run API contract + data integrity tests
+        working-directory: breaking-news/backend
+        run: npx vitest run --reporter=verbose
+        env:
+          API_URL: ${{ env.API_URL }}
+
+  frontend-typecheck:
+    name: Frontend TypeScript Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: breaking-news/frontend
+        run: npm install
+
+      - name: TypeScript compilation check
+        working-directory: breaking-news/frontend
+        run: npx tsc --noEmit
