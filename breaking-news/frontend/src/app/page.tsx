@@ -300,12 +300,15 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Error state */}
+        {/* Error state — show as empty results for search/filter errors */}
         {isError && (
-          <div className="glass-card p-6 text-center">
-            <p className="text-red-400 mb-2">Failed to load stories</p>
-            <p className="text-gray-500 text-sm">
-              {error instanceof Error ? error.message : "Unknown error"}
+          <div className="glass-card p-16 text-center animate-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-300/30 mb-4">
+              <Search className="w-7 h-7 text-gray-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories found</h3>
+            <p className="text-gray-500 text-sm max-w-md mx-auto">
+              Try a different search term, adjust filters, or expand the time range.
             </p>
           </div>
         )}

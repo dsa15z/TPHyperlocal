@@ -447,12 +447,23 @@ export default function MarketsPage() {
             Loading markets...
           </div>
         ) : markets.length === 0 ? (
-          <div className="glass-card p-12 text-center space-y-3">
+          <div className="glass-card p-12 text-center space-y-4">
             <MapPin className="w-10 h-10 text-gray-600 mx-auto" />
-            <p className="text-gray-400">No markets configured.</p>
-            <p className="text-gray-600 text-sm">
-              Add a market to start collecting local news data.
+            <p className="text-gray-400">
+              {seedMutation.isPending ? "Seeding 50 US markets + TV/radio stations..." : "No markets configured."}
             </p>
+            {seedMutation.isPending && <Loader2 className="w-6 h-6 animate-spin text-accent mx-auto" />}
+            {!seedMutation.isPending && (
+              <button
+                onClick={() => seedMutation.mutate()}
+                className="px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Import 50 US Markets + Stations
+              </button>
+            )}
+            {seedMutation.isError && (
+              <p className="text-red-400 text-sm">{(seedMutation.error as Error)?.message || "Seed failed"}</p>
+            )}
           </div>
         ) : (
           <div className="glass-card overflow-hidden">

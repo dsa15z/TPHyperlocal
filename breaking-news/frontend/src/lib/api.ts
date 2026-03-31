@@ -346,7 +346,20 @@ async function fetchStoriesViaSearch(
   page: number,
   pageSize: number
 ): Promise<StoriesResponse> {
-  const qs = buildQueryString({ q: query, ...params });
+  // Map story sort fields to search-compatible values
+  const searchParams = { ...params };
+  const sortMap: Record<string, string> = {
+    compositeScore: "score",
+    breakingScore: "score",
+    trendingScore: "score",
+    firstSeenAt: "date",
+    lastUpdatedAt: "date",
+    sourceCount: "relevance",
+  };
+  if (searchParams.sort && sortMap[searchParams.sort]) {
+    searchParams.sort = sortMap[searchParams.sort];
+  }
+  const qs = buildQueryString({ q: query, ...searchParams });
   const raw = await apiFetch<any>(`/api/v1/search${qs}`);
 
   const stories = (raw.data?.stories || []).map(transformStory);

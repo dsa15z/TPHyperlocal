@@ -330,59 +330,158 @@ export async function marketRoutes(
     return reply.status(200).send({ message: 'Market deactivated', id: market.id });
   });
 
-  // POST /admin/markets/seed — seed default markets if none exist
+  // POST /admin/markets/seed — seed all 50 US MSA markets + TV/radio sources
   app.post('/markets/seed', async (request, reply) => {
     const au = request.accountUser;
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });
     requireAdmin(au.role);
 
-    // Check if any markets exist (OWNER sees all, regular sees own account)
-    const where = au.role === 'OWNER' ? {} : { accountId: au.accountId };
-    const existing = await prisma.market.count({ where });
-    if (existing > 0) {
-      return reply.status(200).send({ message: 'Markets already exist', count: existing, seeded: 0 });
+    // Dynamically import the MSA database
+    let MSA_DATABASE: any[];
+    try {
+      const mod = await import('../../data/msa-database.js');
+      MSA_DATABASE = mod.MSA_DATABASE;
+    } catch (err: any) {
+      return reply.status(500).send({ error: 'MSA database not available: ' + err.message });
     }
 
-    // Seed default markets from KNOWN_CITIES
-    const defaults = [
-      'houston_tx', 'dallas_tx', 'san antonio_tx', 'austin_tx',
-      'new york_ny', 'los angeles_ca', 'chicago_il', 'miami_fl',
-      'phoenix_az', 'atlanta_ga',
-    ];
+    if (!MSA_DATABASE || MSA_DATABASE.length === 0) {
+      return reply.status(500).send({ error: 'MSA database is empty' });
+    }
 
-    let seeded = 0;
-    for (const key of defaults) {
-      const city = KNOWN_CITIES[key];
-      if (!city) continue;
+    let marketsSeeded = 0;
+    let sourcesCreated = 0;
+    const skipped: string[] = [];
 
-      const [name, stateRaw] = key.split('_');
-      const marketName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      const state = (stateRaw || '').toUpperCase();
-      const slug = key.replace(/_/g, '-').replace(/ /g, '-');
+    for (const msa of MSA_DATABASE) {
+      // Check if market already exists (by slug)
+      const existingMarket = await prisma.market.findFirst({
+        where: { slug: msa.slug, accountId: au.accountId },
+      });
 
-      try {
-        await prisma.market.create({
+      let marketId: string;
+
+      if (existingMarket) {
+        marketId = existingMarket.id;
+        // Update with latest MSA data (neighborhoods, keywords, etc.)
+        await prisma.market.update({
+          where: { id: existingMarket.id },
           data: {
-            accountId: au.accountId,
-            name: marketName,
-            slug,
-            state,
-            latitude: city.lat,
-            longitude: city.lon,
-            radiusKm: city.radius,
-            timezone: city.tz,
-            keywords: city.keywords,
-            neighborhoods: city.neighborhoods,
-            isActive: true,
+            keywords: msa.keywords,
+            neighborhoods: msa.neighborhoods,
+            latitude: msa.latitude,
+            longitude: msa.longitude,
+            radiusKm: msa.radiusKm,
+            timezone: msa.timezone,
           },
         });
-        seeded++;
-      } catch {
-        // Slug conflict or other issue — skip
+        skipped.push(msa.name);
+      } else {
+        try {
+          const market = await prisma.market.create({
+            data: {
+              accountId: au.accountId,
+              name: msa.name,
+              slug: msa.slug,
+              state: msa.state,
+              latitude: msa.latitude,
+              longitude: msa.longitude,
+              radiusKm: msa.radiusKm,
+              timezone: msa.timezone,
+              keywords: msa.keywords,
+              neighborhoods: msa.neighborhoods,
+              isActive: true,
+            },
+          });
+          marketId = market.id;
+          marketsSeeded++;
+        } catch {
+          skipped.push(msa.name + ' (create failed)');
+          continue;
+        }
+      }
+
+      // Create TV station sources
+      for (const station of (msa.tvStations || [])) {
+        const existingSource = await prisma.source.findFirst({
+          where: {
+            name: { contains: station.callSign, mode: 'insensitive' },
+            marketId,
+          },
+        });
+        if (existingSource) continue;
+
+        try {
+          const source = await prisma.source.create({
+            data: {
+              platform: 'RSS' as any,
+              sourceType: 'NEWS_ORG' as any,
+              name: `${station.callSign} - ${station.name}`,
+              url: station.rssUrl || station.website,
+              marketId,
+              trustScore: station.network === 'PBS' ? 0.90 : 0.85,
+              isGlobal: false,
+              metadata: {
+                callSign: station.callSign,
+                network: station.network,
+                type: 'tv',
+                website: station.website,
+                feedUrl: station.rssUrl,
+              },
+            },
+          });
+          // Link to account
+          await prisma.accountSource.create({
+            data: { accountId: au.accountId, sourceId: source.id, isEnabled: !!station.rssUrl },
+          });
+          sourcesCreated++;
+        } catch { /* dedup */ }
+      }
+
+      // Create radio station sources
+      for (const station of (msa.radioStations || [])) {
+        const existingSource = await prisma.source.findFirst({
+          where: {
+            name: { contains: station.callSign, mode: 'insensitive' },
+            marketId,
+          },
+        });
+        if (existingSource) continue;
+
+        try {
+          const source = await prisma.source.create({
+            data: {
+              platform: 'RSS' as any,
+              sourceType: 'NEWS_ORG' as any,
+              name: `${station.callSign} - ${station.name}`,
+              url: station.rssUrl || station.website,
+              marketId,
+              trustScore: station.format === 'NPR' ? 0.92 : 0.80,
+              isGlobal: false,
+              metadata: {
+                callSign: station.callSign,
+                format: station.format,
+                type: 'radio',
+                website: station.website,
+                feedUrl: station.rssUrl,
+              },
+            },
+          });
+          await prisma.accountSource.create({
+            data: { accountId: au.accountId, sourceId: source.id, isEnabled: !!station.rssUrl },
+          });
+          sourcesCreated++;
+        } catch { /* dedup */ }
       }
     }
 
-    return reply.status(201).send({ message: `Seeded ${seeded} markets`, seeded });
+    return reply.status(201).send({
+      message: `Seeded ${marketsSeeded} markets, created ${sourcesCreated} station sources`,
+      marketsSeeded,
+      sourcesCreated,
+      marketsUpdated: skipped.length,
+      total: MSA_DATABASE.length,
+    });
   });
 
   // POST /admin/markets/autofill — AI-powered market data autofill
