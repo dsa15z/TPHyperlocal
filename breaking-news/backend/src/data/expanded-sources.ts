@@ -24,6 +24,10 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   { name: 'KIAH CW 39', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://cw39.com/feed/', trustScore: 0.80 },
   { name: 'KPRC Breaking News', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.click2houston.com/rss/topic/breaking-news/', trustScore: 0.92 },
   { name: 'KHOU Breaking News', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.khou.com/feeds/syndication/rss/news/breaking-news', trustScore: 0.92 },
+  { name: 'KHOU Crime', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.khou.com/feeds/syndication/rss/news/crime', trustScore: 0.90, category: 'CRIME' },
+  { name: 'KHOU Local', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.khou.com/feeds/syndication/rss/news/local', trustScore: 0.90 },
+  { name: 'Houston Landing', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.houstonlanding.org/feed/', trustScore: 0.88 },
+  { name: 'Houston Agent Magazine', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://houstonagentmagazine.com/feed/', trustScore: 0.72, category: 'BUSINESS' },
 
   // ─── Dallas-Fort Worth TV ─────────────────────────────────────────────────
   { name: 'WFAA 8 Dallas (ABC)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.wfaa.com/feeds/syndication/rss/news', trustScore: 0.88 },
