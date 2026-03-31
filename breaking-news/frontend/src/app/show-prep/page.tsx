@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, PRODUCTION_TABS } from "@/components/PageTabBar";
 
 export default function ShowPrepPage() {
   const queryClient = useQueryClient();
@@ -53,6 +54,8 @@ export default function ShowPrepPage() {
             <Plus className="w-4 h-4" /> New Rundown
           </button>
         </div>
+
+        <PageTabBar tabs={PRODUCTION_TABS} />
 
         {showForm && (
           <div className="glass-card-strong p-6 space-y-4 animate-in">

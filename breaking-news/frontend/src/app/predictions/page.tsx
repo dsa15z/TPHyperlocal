@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TrendingUp,
@@ -67,7 +68,63 @@ const FACTOR_LABELS: Record<string, string> = {
   trust: "Trust",
 };
 
+// ─── Rising Stories Tab ─────────────────────────────────────────────────────
+
+function RisingTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["rising-stories"],
+    queryFn: () => apiFetch<any>("/api/v1/stories/rising"),
+    refetchInterval: 30_000,
+  });
+  const stories = data?.data || [];
+
+  if (isLoading) return <div className="glass-card p-12 text-center text-gray-500">Analyzing story trajectories...</div>;
+  if (stories.length === 0) return (
+    <div className="glass-card p-12 text-center space-y-3">
+      <TrendingUp className="w-10 h-10 text-gray-600 mx-auto" />
+      <p className="text-gray-400">No rising stories detected.</p>
+      <p className="text-gray-600 text-sm">Predictions are generated as stories develop.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {stories.map((story: any, i: number) => {
+        const prob = Math.round((story.viralProbability || 0) * 100);
+        return (
+          <div key={story.id} className="glass-card p-4 flex items-center gap-4 animate-in">
+            <div className="text-center w-10 flex-shrink-0">
+              <span className="text-2xl font-bold text-gray-600">#{i + 1}</span>
+            </div>
+            <div className="w-16 flex-shrink-0 text-center">
+              <div className={clsx("text-xl font-bold tabular-nums", prob >= 70 ? "text-red-400" : prob >= 50 ? "text-orange-400" : prob >= 30 ? "text-yellow-400" : "text-gray-400")}>{prob}%</div>
+              <div className="text-[10px] text-gray-600">viral</div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <StatusBadge status={story.status} />
+                {story.predictedStatus && story.predictedStatus !== story.status && (
+                  <span className="flex items-center gap-1 text-[10px] text-amber-400"><Zap className="w-3 h-3" />predicted: {story.predictedStatus.replace("_", " ")}</span>
+                )}
+              </div>
+              <Link href={`/stories/${story.id}`} className="text-white font-medium hover:text-accent transition-colors line-clamp-1">{story.title}</Link>
+              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                <span>{story.category || "Unknown"}</span>
+                <span>Score: {Math.round((story.compositeScore || 0) * 100)}%</span>
+                <span>{story.sourceCount} sources</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
 export default function PredictionsPage() {
+  const [tab, setTab] = useState<"dashboard" | "rising">("dashboard");
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -112,7 +169,14 @@ export default function PredictionsPage() {
           </p>
         </div>
 
-        {isLoading ? (
+        <div className="flex items-center gap-1">
+          <button onClick={() => setTab("dashboard")} className={clsx("filter-btn text-sm", tab === "dashboard" && "filter-btn-active")}>Dashboard</button>
+          <button onClick={() => setTab("rising")} className={clsx("filter-btn text-sm", tab === "rising" && "filter-btn-active")}>Rising Stories</button>
+        </div>
+
+        {tab === "rising" && <RisingTab />}
+
+        {tab === "dashboard" && (isLoading ? (
           <div className="glass-card p-12 text-center text-gray-500">
             Loading prediction models...
           </div>
@@ -430,7 +494,8 @@ export default function PredictionsPage() {
               )}
             </section>
           </>
-        )}
+        ))}
+
       </main>
     </div>
   );

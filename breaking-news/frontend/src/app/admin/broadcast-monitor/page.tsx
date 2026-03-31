@@ -17,6 +17,7 @@ import {
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
+import { PageTabBar, COMPETITION_TABS } from "@/components/PageTabBar";
 
 interface Competitor {
   id: string;
@@ -127,6 +128,10 @@ export default function BroadcastMonitorPage() {
               Track competitor coverage and measure your beat score.
             </p>
           </div>
+        </div>
+        <PageTabBar tabs={COMPETITION_TABS} />
+        <div className="flex items-center justify-between">
+          <div />
           <button
             onClick={() => setShowForm(!showForm)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"

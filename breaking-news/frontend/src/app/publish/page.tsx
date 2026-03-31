@@ -17,6 +17,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, PUBLISH_TABS } from "@/components/PageTabBar";
 
 interface BreakingPackage {
   id: string;
@@ -265,6 +266,8 @@ export default function PublishQueuePage() {
             Review, edit, and publish breaking news packages across channels
           </p>
         </div>
+
+        <PageTabBar tabs={PUBLISH_TABS} />
 
         {isLoading ? (
           <div className="glass-card p-12 text-center text-gray-500">

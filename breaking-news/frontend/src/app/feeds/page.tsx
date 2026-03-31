@@ -19,6 +19,7 @@ import {
   type Feed,
 } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
 
 const CATEGORIES = [
   "",
@@ -131,6 +132,9 @@ export default function FeedsPage() {
             <Rss className="w-6 h-6 text-orange-400" />
             RSS Feeds
           </h1>
+        </div>
+        <PageTabBar tabs={SOURCES_TABS} />
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowForm(!showForm)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"

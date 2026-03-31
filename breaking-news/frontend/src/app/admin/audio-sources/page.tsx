@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
 
 export default function AudioSourcesPage() {
   const queryClient = useQueryClient();
@@ -57,6 +58,7 @@ export default function AudioSourcesPage() {
             <Plus className="w-4 h-4" /> Add Source
           </button>
         </div>
+        <PageTabBar tabs={SOURCES_TABS} />
 
         {showForm && (
           <div className="glass-card-strong p-6 space-y-4 animate-in">

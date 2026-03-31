@@ -25,6 +25,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, PUBLISH_TABS } from "@/components/PageTabBar";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -191,8 +192,10 @@ export default function VideoPage() {
     <div className="min-h-screen">
       <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-          <Video className="w-6 h-6 text-purple-400" /> AI Video Generator
+          <Video className="w-6 h-6 text-purple-400" /> Publish & Distribute
         </h1>
+
+        <PageTabBar tabs={PUBLISH_TABS} />
 
         {/* ─── Story Selector & Generator ─────────────────────────────── */}
         <div className="glass-card p-6 space-y-4">

@@ -20,6 +20,7 @@ import {
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
+import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
 
 const URL_TYPES = [
   { value: "FB_PAGE", label: "Facebook Page", platform: "FACEBOOK", placeholder: "https://facebook.com/YourStation" },
@@ -200,6 +201,10 @@ export default function CommunityRadarPage() {
               Monitor Facebook pages, groups, and Twitter for community conversations about your market.
             </p>
           </div>
+        </div>
+        <PageTabBar tabs={SOURCES_TABS} />
+        <div className="flex items-center justify-between">
+          <div />
           <button
             onClick={() => setShowForm(!showForm)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"

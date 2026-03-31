@@ -20,6 +20,7 @@ import clsx from "clsx";
 import { apiFetch, fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
 
 interface Source {
   id: string;
@@ -226,10 +227,13 @@ export default function SourcesPage() {
               Data Feed Configuration
             </h1>
             <p className="text-sm text-gray-500">
-              Configure the data sources that feed news into the system. These
-              are system-wide &mdash; all users see stories from these feeds.
+              Configure the data sources that feed news into the system.
             </p>
           </div>
+        </div>
+        <PageTabBar tabs={SOURCES_TABS} />
+        <div className="flex items-center justify-between">
+          <div />
           <div className="flex items-center gap-4">
             <div className="text-right">
               <div className="text-2xl font-bold text-white tabular-nums">

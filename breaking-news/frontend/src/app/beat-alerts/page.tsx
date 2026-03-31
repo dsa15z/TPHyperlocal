@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime, formatScore } from "@/lib/utils";
+import { PageTabBar, COMPETITION_TABS } from "@/components/PageTabBar";
 
 interface ActiveGap {
   id: string;
@@ -89,6 +90,9 @@ export default function BeatAlertsPage() {
                   High-scoring stories your newsroom has not covered. Auto-refreshes every 15s.
                 </p>
               </div>
+            </div>
+            <PageTabBar tabs={COMPETITION_TABS} />
+            <div>
             </div>
             <div className="flex items-center gap-2 text-xs text-red-400/70">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />

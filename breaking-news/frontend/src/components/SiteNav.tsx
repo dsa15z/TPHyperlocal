@@ -90,14 +90,14 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     id: "alerts",
-    label: "Alerts & Gaps",
+    label: "Alerts & Intel",
     icon: AlertTriangle,
     accent: "text-red-400",
     section: "main",
     items: [
-      { href: "/beat-alerts", label: "Beat Alerts", icon: AlertTriangle },
+      { href: "/beat-alerts", label: "Coverage & Competition", icon: Target },
       { href: "/alerts", label: "Public Alerts", icon: Bell },
-      { href: "/predictions", label: "Predictions", icon: TrendingUp },
+      { href: "/predictions", label: "Predictions & Trends", icon: TrendingUp },
     ],
   },
 
@@ -126,8 +126,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: Mic2,
     section: "main",
     items: [
-      { href: "/lineup", label: "Show Lineup", icon: ListOrdered },
-      { href: "/show-prep", label: "Show Prep", icon: Mic2 },
+      { href: "/show-prep", label: "Show Production", icon: Mic2 },
       { href: "/radio", label: "RadioGPT", icon: Radio },
     ],
   },
@@ -139,11 +138,9 @@ const NAV_GROUPS: NavGroup[] = [
     id: "publish",
     label: "Publish",
     icon: Send,
+    directLink: "/publish",
+    items: [],
     section: "main",
-    items: [
-      { href: "/publish", label: "Publish Queue", icon: Send },
-      { href: "/video", label: "Video Studio", icon: Video },
-    ],
   },
 
   // ────────────────────────────────────────────────────────────────────────
@@ -193,24 +190,13 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/sources", label: "Data Feeds", icon: Database },
       { href: "/admin/markets", label: "Markets", icon: MapPin },
       { href: "/admin/hyperlocal-intel", label: "HyperLocal Intel", icon: Globe },
-      { href: "/admin/community-radar", label: "Social Monitor", icon: Share2 },
-      { href: "/feeds", label: "RSS Feeds", icon: Rss },
     ],
   },
 
   // ────────────────────────────────────────────────────────────────────────
   //  COVERAGE & COMPETITION — Tracking competitors and gaps
   // ────────────────────────────────────────────────────────────────────────
-  {
-    id: "coverage",
-    label: "Coverage & Competition",
-    icon: Target,
-    section: "admin",
-    items: [
-      { href: "/admin/coverage", label: "Coverage Gaps", icon: Target },
-      { href: "/admin/broadcast-monitor", label: "Broadcast Monitor", icon: Tv },
-    ],
-  },
+  // Coverage & Competition removed — accessible via /beat-alerts tab bar
 
   // ────────────────────────────────────────────────────────────────────────
   //  INTEGRATIONS — Connecting to external systems

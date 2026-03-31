@@ -7,6 +7,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
+import { PageTabBar, PRODUCTION_TABS } from "@/components/PageTabBar";
 
 const SCORE_FACTORS = [
   { key: "compositeScore", label: "Composite", color: "bg-blue-500", icon: Star },
@@ -102,6 +103,8 @@ export default function LineupPage() {
             AI-recommended story lineup for your next broadcast
           </p>
         </div>
+
+        <PageTabBar tabs={PRODUCTION_TABS} />
 
         {/* Show Selector */}
         <div className="glass-card p-5 animate-in">
