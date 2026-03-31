@@ -55,4 +55,4 @@ ENV PORT=3001
 EXPOSE 3001
 
 # Apply schema to DB then start server
-CMD ["sh", "-c", "npx prisma db push --skip-generate 2>&1 || echo 'Schema push warning (may be OK)' && node dist/index.js"]
+CMD ["sh", "-c", "echo 'Starting schema sync...' && ls -la prisma/ && npx prisma db push --skip-generate 2>&1; echo 'Schema sync exit: '$? && node dist/index.js"]
