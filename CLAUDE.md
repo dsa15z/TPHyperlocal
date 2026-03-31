@@ -85,6 +85,12 @@ When implementing any feature:
 
 ## Code Standards
 
+### Shared Components & Consistency
+- **When changing a shared component, update ALL pages that use it.** Do not branch code or make a one-off change for a single page. If a shared component (e.g. `TablePagination`, `MultiSelectDropdown`, `ColumnCustomizer`, `StatusBadge`, `FilterBar`) is modified, assume the change applies everywhere that component is used unless explicitly told otherwise.
+- All tables/lists must use the shared `TablePagination` footer, `ColumnCustomizer` for column visibility/reorder, and `useTableColumns` hook for localStorage persistence.
+- All filter dropdowns must use `MultiSelectDropdown` (with `searchable` for long lists) or `SingleSelectDropdown`. No raw `<select>` elements or button-group toggles for filters.
+- UI patterns established in one page must be replicated across all similar pages. Consistency is mandatory.
+
 ### State Management
 - Frontend: React Query with 30s auto-refresh. No client-side state for server data.
 - Backend: Stateless request handlers. All state in PostgreSQL or Redis.
