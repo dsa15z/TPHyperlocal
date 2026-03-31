@@ -38,12 +38,20 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'drug', 'drugs', 'gang', 'violent', 'victim', 'killed', 'investigation',
     'detective', 'felony', 'misdemeanor', 'warrant', 'fugitive', 'armed',
     'weapon', 'gun', 'firearm', 'hpd', 'sheriff', 'constable',
+    'custody', 'handcuffed', 'handcuff', 'escaped', 'escape', 'inmate', 'prison',
+    'jail', 'sentence', 'sentenced', 'indicted', 'indictment', 'charges', 'charged',
+    'convicted', 'conviction', 'prosecution', 'prosecutor', 'defendant',
+    'manslaughter', 'kidnapping', 'abduction', 'fraud', 'embezzlement',
+    'arson', 'vandalism', 'domestic violence', 'dui', 'dwi', 'mugshot',
+    'perpetrator', 'accomplice', 'getaway', 'fled', 'fleeing', 'pursuit',
+    'standoff', 'hostage', 'ransom', 'extortion', 'bribery',
   ],
   WEATHER: [
-    'hurricane', 'tropical', 'storm', 'flood', 'flooding', 'tornado', 'weather',
-    'rain', 'rainfall', 'thunder', 'lightning', 'hail', 'wind', 'drought',
-    'heat', 'freeze', 'ice', 'temperature', 'forecast', 'evacuation',
-    'national weather service', 'nws', 'advisory', 'warning', 'watch',
+    'hurricane', 'tropical storm', 'storm', 'flood', 'flooding', 'tornado', 'weather',
+    'rain', 'rainfall', 'thunder', 'thunderstorm', 'lightning', 'hail', 'drought',
+    'freeze', 'blizzard', 'temperature', 'forecast', 'weather advisory',
+    'national weather service', 'nws', 'tropical depression', 'wind advisory',
+    'flood warning', 'tornado warning', 'winter storm', 'heat wave', 'cold front',
   ],
   TRAFFIC: [
     'traffic', 'accident', 'crash', 'collision', 'highway', 'freeway', 'interstate',
@@ -85,10 +93,11 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'health', 'hospital', 'clinic', 'food', 'restaurant', 'local',
   ],
   EMERGENCY: [
-    'emergency', 'fire', 'explosion', 'hazmat', 'evacuation', 'rescue',
-    'ambulance', 'ems', 'paramedic', 'firefighter', 'hazardous', 'chemical',
-    'spill', 'leak', 'gas leak', 'power outage', 'outage', 'critical',
-    'alert', 'amber alert', 'silver alert', 'missing', 'search',
+    'emergency', 'fire department', 'explosion', 'hazmat', 'evacuation', 'rescue',
+    'ambulance', 'ems', 'paramedic', 'firefighter', 'hazardous', 'chemical spill',
+    'gas leak', 'power outage', 'outage', 'structure fire', 'house fire',
+    'amber alert', 'silver alert', 'missing person', 'search and rescue',
+    'wildfire', 'building collapse', 'mass casualty',
   ],
 };
 
@@ -102,8 +111,15 @@ function categorizeContent(text: string): string {
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     let score = 0;
     for (const keyword of keywords) {
-      if (normalized.includes(keyword)) {
-        score++;
+      // Use word boundary matching to avoid false positives
+      // e.g. "watch" shouldn't match "watched" for WEATHER
+      if (keyword.includes(' ')) {
+        // Multi-word keywords: exact phrase match
+        if (normalized.includes(keyword)) score++;
+      } else {
+        // Single-word: word boundary match
+        const regex = new RegExp(`\\b${keyword}\\b`);
+        if (regex.test(normalized)) score++;
       }
     }
     scores[category] = score;
@@ -185,7 +201,7 @@ async function llmEnrich(title: string, content: string): Promise<{
   try {
     const prompt = `Analyze this news article and extract:
 1. CATEGORY: Choose exactly one from: CRIME, WEATHER, TRAFFIC, POLITICS, BUSINESS, SPORTS, COMMUNITY, EMERGENCY, HEALTH, EDUCATION, TECHNOLOGY, ENTERTAINMENT, ENVIRONMENT, FINANCE
-2. LOCATION: The specific city, neighborhood, or area mentioned. If this is national/international news with no specific local area, respond "National". If a specific location is mentioned, use that.
+2. LOCATION: The MOST SPECIFIC location mentioned. Prefer neighborhood/district names over city names, and street intersections over neighborhoods. Examples: "Montrose" not "Houston", "Times Square" not "New York", "I-45 at Beltway 8" not "Houston". If national/international news with no specific area, respond "National".
 
 Article title: ${title}
 Article content: ${content.substring(0, 1000)}
@@ -225,7 +241,7 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
 
   const post = await prisma.sourcePost.findUnique({
     where: { id: sourcePostId },
-    include: { source: true },
+    include: { source: { include: { market: true } } },
   });
 
   if (!post) {
@@ -242,10 +258,17 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   const entities = extractEntities(fullText);
 
   // Step 3: Extract location using multi-strategy approach
-  const neighborhoods = detectNeighborhoods(fullText);
-  let locationName = extractLocation(fullText)
-    || (neighborhoods.length > 0 ? neighborhoods[0] : undefined)
-    || (entities.locations.length > 0 ? entities.locations[0] : undefined);
+  // Priority: most granular first (neighborhood > street > city > region)
+  // Load market-specific neighborhoods if the source belongs to a market
+  const marketNeighborhoods = (post.source?.market?.neighborhoods as string[]) || [];
+  const neighborhoods = detectNeighborhoods(fullText, marketNeighborhoods);
+  const extractedLocation = extractLocation(fullText);
+  const entityLocation = entities.locations.length > 0 ? entities.locations[0] : undefined;
+
+  // Prefer neighborhood over city-level location for maximum granularity
+  let locationName = neighborhoods.length > 0
+    ? neighborhoods[0]
+    : (entityLocation || extractedLocation || undefined);
 
   // Step 4: If keyword categorization returned OTHER or no location, use LLM
   if (category === 'OTHER' || !locationName) {

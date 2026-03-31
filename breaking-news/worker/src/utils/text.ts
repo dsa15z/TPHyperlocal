@@ -151,9 +151,15 @@ const AMBIGUOUS_NEIGHBORHOODS = new Set([
  *   - the word "area"/"community"/"neighborhood" nearby
  * This prevents "Arttu Porter" or "spring training" from matching.
  */
-export function detectNeighborhoods(text: string): string[] {
+export function detectNeighborhoods(text: string, additionalNeighborhoods?: string[]): string[] {
   const lowerText = text.toLowerCase();
-  return HOUSTON_NEIGHBORHOODS.filter((neighborhood) => {
+
+  // Combine Houston neighborhoods with any market-specific ones
+  const allNeighborhoods = additionalNeighborhoods
+    ? [...HOUSTON_NEIGHBORHOODS, ...additionalNeighborhoods.filter((n) => !HOUSTON_NEIGHBORHOODS.includes(n))]
+    : HOUSTON_NEIGHBORHOODS;
+
+  return allNeighborhoods.filter((neighborhood) => {
     const lower = neighborhood.toLowerCase();
     if (!lowerText.includes(lower)) return false;
 
