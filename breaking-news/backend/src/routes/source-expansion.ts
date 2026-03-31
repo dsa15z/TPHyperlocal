@@ -139,24 +139,26 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
 
   // POST /pipeline/import-scrape-sources — bulk import web scrape sources
   app.post('/pipeline/import-scrape-sources', async (request, reply) => {
-    const payload = getPayload(request);
-    if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
+    try {
+      const payload = getPayload(request);
+      if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized', detail: 'No accountId in token' });
 
-    const existingUrls = new Set(
-      (await prisma.source.findMany({
-        where: { accountId: payload.accountId },
-        select: { url: true },
-      })).map((s) => s.url).filter(Boolean)
-    );
+      const existingUrls = new Set(
+        (await prisma.source.findMany({
+          where: { accountId: payload.accountId },
+          select: { url: true },
+        })).map((s) => s.url).filter(Boolean)
+      );
 
-    const market = await prisma.market.findFirst({ where: { accountId: payload.accountId } });
+      const market = await prisma.market.findFirst({ where: { accountId: payload.accountId } });
 
-    const created = [];
-    for (const source of SCRAPE_SOURCES) {
-      if (existingUrls.has(source.url)) continue;
+      const created = [];
+      const errors = [];
+      for (const source of SCRAPE_SOURCES) {
+        if (existingUrls.has(source.url)) continue;
 
-      try {
-        const record = await prisma.source.create({
+        try {
+          const record = await prisma.source.create({
           data: {
             accountId: payload.accountId,
             name: source.name,
@@ -175,16 +177,25 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
         });
         created.push({ id: record.id, name: source.name, url: source.url });
       } catch (err) {
-        // Skip duplicates
+        errors.push({ name: source.name, error: (err as Error).message?.substring(0, 100) });
       }
     }
 
     return reply.status(201).send({
       imported: created.length,
       total: SCRAPE_SOURCES.length,
-      skipped: SCRAPE_SOURCES.length - created.length,
+      skipped: SCRAPE_SOURCES.length - created.length - errors.length,
+      errors: errors.length,
+      errorDetails: errors,
       sources: created,
     });
+    } catch (outerErr) {
+      return reply.status(500).send({
+        error: 'Import failed',
+        message: (outerErr as Error).message?.substring(0, 200),
+        scrapeSourceCount: SCRAPE_SOURCES.length,
+      });
+    }
   });
 
   // GET /pipeline/scrape-sources — list available scrape sources
