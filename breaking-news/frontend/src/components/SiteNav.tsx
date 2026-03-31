@@ -224,9 +224,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/cms-publish", label: "CMS Publishing", icon: Globe },
       { href: "/admin/mos-integration", label: "ENPS / iNews", icon: MonitorPlay },
       { href: "/admin/social-accounts", label: "Social Accounts", icon: Share2 },
-      { href: "/admin/slack", label: "Slack", icon: MessageSquare },
-      { href: "/admin/webhooks", label: "Webhooks", icon: Webhook },
-      { href: "/admin/digests", label: "Email Digests", icon: Mail },
+      { href: "/admin/slack", label: "Delivery Channels", icon: MessageSquare },
     ],
   },
 
@@ -239,8 +237,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: MessageSquare,
     section: "admin",
     items: [
-      { href: "/admin/voices", label: "AI Voices", icon: MessageSquare },
-      { href: "/admin/prompts", label: "Prompts", icon: FileText },
+      { href: "/admin/voices", label: "AI Config", icon: MessageSquare },
       { href: "/admin/editor", label: "Review Queue", icon: ClipboardCheck },
       { href: "/admin/widgets", label: "Widgets", icon: Code },
     ],
