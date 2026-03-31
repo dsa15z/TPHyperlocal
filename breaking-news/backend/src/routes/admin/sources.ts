@@ -33,7 +33,7 @@ const updateSourceSchema = z.object({
 });
 
 const listSourcesSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
   offset: z.coerce.number().int().min(0).default(0),
   platform: platformEnum.optional(),
   sourceType: sourceTypeEnum.optional(),
@@ -75,17 +75,9 @@ export async function sourceRoutes(
     });
     const marketIds = accountMarkets.map((m) => m.id);
 
-    // Sources available: global sources OR sources belonging to account's markets
-    const where: any = {
-      AND: [
-        {
-          OR: [
-            { isGlobal: true },
-            { marketId: { in: marketIds } },
-          ],
-        },
-      ],
-    };
+    // Show ALL sources: global, market-linked, account-linked, and unlinked
+    // (Admins need to see everything to manage the full source library)
+    const where: any = { AND: [] };
     if (platform) where.AND.push({ platform });
     if (sourceType) where.AND.push({ sourceType });
     if (marketId) {
@@ -241,9 +233,7 @@ export async function sourceRoutes(
     }
 
     // Do not allow editing global sources
-    if (existing.isGlobal) {
-      return reply.status(403).send({ error: 'Cannot edit global sources' });
-    }
+    // Allow admins to edit any source (including global ones)
 
     const source = await prisma.source.update({
       where: { id },
