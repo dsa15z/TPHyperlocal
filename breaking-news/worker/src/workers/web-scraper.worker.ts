@@ -134,25 +134,75 @@ async function processWebScraper(job: Job<WebScraperJob>): Promise<void> {
 
   logger.info({ sourceId, url, name }, 'Scraping website for articles');
 
-  // Fetch the page
+  // Fetch the page — try ScrapFly (JS rendering) first, then ScrapingFish, then basic fetch
   let html: string;
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; BreakingNewsBot/1.0; +https://breakingnews.local)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+  const scrapflyKey = process.env.SCRAPFLY_KEY;
+  const scrapingfishKey = process.env.SCRAPINGFISH_KEY;
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  if (scrapflyKey) {
+    // ScrapFly: renders JavaScript, bypasses anti-bot
+    try {
+      const sfParams = new URLSearchParams({
+        key: scrapflyKey,
+        url: url,
+        render_js: 'true',
+        asp: 'true', // anti-scraping protection bypass
+        country: 'us',
+      });
+      const response = await fetch(`https://api.scrapfly.io/scrape?${sfParams}`, {
+        signal: AbortSignal.timeout(30000),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        html = data.result?.content || '';
+        logger.info({ sourceId, url, via: 'scrapfly' }, 'Fetched via ScrapFly');
+      } else {
+        throw new Error(`ScrapFly ${response.status}`);
+      }
+    } catch (sfErr) {
+      logger.warn({ url, err: (sfErr as Error).message }, 'ScrapFly failed, trying fallback');
+      html = '';
     }
+  }
 
-    html = await response.text();
-  } catch (err) {
-    logger.error({ sourceId, url, err: (err as Error).message }, 'Failed to fetch page');
-    throw err;
+  // Fallback: ScrapingFish
+  if (!html && scrapingfishKey) {
+    try {
+      const response = await fetch('https://scraping.narf.ai/api/v1/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: scrapingfishKey, url, js_rendering: true }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (response.ok) {
+        html = await response.text();
+        logger.info({ sourceId, url, via: 'scrapingfish' }, 'Fetched via ScrapingFish');
+      } else {
+        throw new Error(`ScrapingFish ${response.status}`);
+      }
+    } catch (fishErr) {
+      logger.warn({ url, err: (fishErr as Error).message }, 'ScrapingFish failed, trying basic fetch');
+      html = '';
+    }
+  }
+
+  // Final fallback: basic fetch (no JS rendering)
+  if (!html) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; BreakingNewsBot/1.0)',
+          'Accept': 'text/html,application/xhtml+xml',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      html = await response.text();
+      logger.info({ sourceId, url, via: 'basic-fetch' }, 'Fetched via basic fetch');
+    } catch (err) {
+      logger.error({ sourceId, url, err: (err as Error).message }, 'All fetch methods failed');
+      throw err;
+    }
   }
 
   // Extract articles
