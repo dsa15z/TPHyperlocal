@@ -211,8 +211,14 @@ async function handleBatchMarkets(job: Job<HyperLocalIntelJob>): Promise<void> {
     country: 'US',
   }));
 
-  const batch = await submitBatch(locations);
-  logger.info({ batchId: batch.batch_id, locations: batch.location_count }, 'Batch submitted');
+  // Use webhook if we have a public backend URL, otherwise poll
+  const backendUrl = process.env['PUBLIC_BACKEND_URL'] || process.env['RAILWAY_PUBLIC_DOMAIN']
+    ? `https://${process.env['RAILWAY_PUBLIC_DOMAIN']}`
+    : undefined;
+  const webhookUrl = backendUrl ? `${backendUrl}/api/v1/hyperlocal-intel/webhook` : undefined;
+
+  const batch = await submitBatch(locations, webhookUrl);
+  logger.info({ batchId: batch.batch_id, locations: batch.location_count, webhookUrl }, 'Batch submitted');
 
   // Poll until done (max 2 minutes)
   const maxWait = 120000;
@@ -263,7 +269,7 @@ async function handleBatchMarkets(job: Job<HyperLocalIntelJob>): Promise<void> {
           trustScore: 0.80,
           isActive: true,
           marketId: market?.id,
-          accountId: accountId || undefined,
+          metadata: { type: 'hyperlocal-intel', accountId: accountId || undefined },
         },
       });
       logger.info({ sourceId: source.id, city: loc.city }, 'Auto-created HyperLocal Intel source');

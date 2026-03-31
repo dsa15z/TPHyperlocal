@@ -473,6 +473,37 @@ export async function marketRoutes(
           sourcesCreated++;
         } catch { /* dedup */ }
       }
+
+      // Create HyperLocal Intel source for this market
+      const hlName = `HyperLocal Intel - ${msa.name}`;
+      const existingHL = await prisma.source.findFirst({
+        where: { name: hlName, marketId },
+      });
+      if (!existingHL) {
+        try {
+          const hlSource = await prisma.source.create({
+            data: {
+              platform: 'NEWSAPI' as any,
+              sourceType: 'API_PROVIDER' as any,
+              name: hlName,
+              url: `https://futurilabs.com/hyperlocalhyperrecent/api/lookup?city=${encodeURIComponent(msa.name)}&state=${msa.state}`,
+              marketId,
+              trustScore: 0.80,
+              isGlobal: false,
+              metadata: {
+                type: 'hyperlocal-intel',
+                city: msa.name,
+                state: msa.state,
+                sources: ['Google News', 'Reddit', 'TikTok', 'X/Twitter', 'Facebook', 'YouTube', 'Threads', 'Patch.com', 'Nextdoor (public)', 'Local blogs', 'Government feeds', 'School districts'],
+              },
+            },
+          });
+          await prisma.accountSource.create({
+            data: { accountId: au.accountId, sourceId: hlSource.id, isEnabled: true },
+          });
+          sourcesCreated++;
+        } catch { /* dedup */ }
+      }
     }
 
     return reply.status(201).send({

@@ -53,7 +53,6 @@ export async function hyperLocalIntelRoutes(app: FastifyInstance, _opts: Fastify
     let source = await prisma.source.findFirst({
       where: {
         name: { contains: 'HyperLocal Intel' },
-        accountId: payload.accountId,
         isActive: true,
       },
     });
@@ -62,12 +61,12 @@ export async function hyperLocalIntelRoutes(app: FastifyInstance, _opts: Fastify
       source = await prisma.source.create({
         data: {
           name: `HyperLocal Intel - ${marketName}`,
-          platform: 'API',
-          sourceType: 'API_PROVIDER',
+          platform: 'NEWSAPI' as any,
+          sourceType: 'API_PROVIDER' as any,
           url: 'https://futurilabs.com/hyperlocalhyperrecent/api/lookup',
           trustScore: 0.80,
           isActive: true,
-          accountId: payload.accountId,
+          metadata: { type: 'hyperlocal-intel' },
         },
       });
     }
@@ -175,13 +174,12 @@ export async function hyperLocalIntelRoutes(app: FastifyInstance, _opts: Fastify
     const sources = await prisma.source.findMany({
       where: {
         name: { contains: 'HyperLocal Intel' },
-        accountId: payload.accountId,
       },
-      select: { id: true, name: true, lastPolledAt: true, isActive: true },
+      select: { id: true, name: true, lastPolledAt: true, isActive: true, marketId: true },
     });
 
     const markets = await prisma.market.findMany({
-      where: { accountId: payload.accountId, isActive: true },
+      where: { isActive: true },
       select: { id: true, name: true, latitude: true, longitude: true },
     });
 
