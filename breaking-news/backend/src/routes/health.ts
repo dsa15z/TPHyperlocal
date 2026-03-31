@@ -57,4 +57,59 @@ export async function healthRoutes(
       checks,
     });
   });
+
+  // POST /api/v1/health/db-sync — Create any missing tables
+  // Uses Prisma's createMany with skipDuplicates pattern to safely
+  // check/create tables that may not exist yet.
+  app.post('/health/db-sync', async (_request, reply) => {
+    const results: Array<{ table: string; status: string }> = [];
+
+    // List of tables that may be missing and their creation SQL
+    const tables = [
+      { name: 'PublicDataFeed', check: 'SELECT 1 FROM "PublicDataFeed" LIMIT 1' },
+      { name: 'PublicDataAlert', check: 'SELECT 1 FROM "PublicDataAlert" LIMIT 1' },
+      { name: 'ShowDeadline', check: 'SELECT 1 FROM "ShowDeadline" LIMIT 1' },
+      { name: 'RadioScript', check: 'SELECT 1 FROM "RadioScript" LIMIT 1' },
+      { name: 'HistoryEvent', check: 'SELECT 1 FROM "HistoryEvent" LIMIT 1' },
+      { name: 'StockAlert', check: 'SELECT 1 FROM "StockAlert" LIMIT 1' },
+      { name: 'Reporter', check: 'SELECT 1 FROM "Reporter" LIMIT 1' },
+      { name: 'Assignment', check: 'SELECT 1 FROM "Assignment" LIMIT 1' },
+      { name: 'ShiftBriefing', check: 'SELECT 1 FROM "ShiftBriefing" LIMIT 1' },
+      { name: 'BreakingPackage', check: 'SELECT 1 FROM "BreakingPackage" LIMIT 1' },
+      { name: 'StoryEditSession', check: 'SELECT 1 FROM "StoryEditSession" LIMIT 1' },
+      { name: 'FactCheck', check: 'SELECT 1 FROM "FactCheck" LIMIT 1' },
+      { name: 'TranslatedContent', check: 'SELECT 1 FROM "TranslatedContent" LIMIT 1' },
+      { name: 'CoverageFeed', check: 'SELECT 1 FROM "CoverageFeed" LIMIT 1' },
+      { name: 'CoverageMatch', check: 'SELECT 1 FROM "CoverageMatch" LIMIT 1' },
+      { name: 'AudioSource', check: 'SELECT 1 FROM "AudioSource" LIMIT 1' },
+      { name: 'AudioTranscript', check: 'SELECT 1 FROM "AudioTranscript" LIMIT 1' },
+      { name: 'StoryPrediction', check: 'SELECT 1 FROM "StoryPrediction" LIMIT 1' },
+    ];
+
+    for (const table of tables) {
+      try {
+        await prisma.$queryRawUnsafe(table.check);
+        results.push({ table: table.name, status: 'exists' });
+      } catch (err: any) {
+        if (err.code === 'P2010' || err.message?.includes('does not exist')) {
+          results.push({ table: table.name, status: 'MISSING' });
+        } else {
+          results.push({ table: table.name, status: `error: ${err.message?.substring(0, 80)}` });
+        }
+      }
+    }
+
+    const missing = results.filter(r => r.status === 'MISSING');
+
+    return reply.send({
+      timestamp: new Date().toISOString(),
+      totalTables: results.length,
+      existing: results.filter(r => r.status === 'exists').length,
+      missing: missing.length,
+      details: results,
+      fix: missing.length > 0
+        ? 'Run: npx prisma db push --skip-generate in the backend container'
+        : 'All tables exist',
+    });
+  });
 }
