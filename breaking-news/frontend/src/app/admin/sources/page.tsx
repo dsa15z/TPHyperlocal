@@ -16,8 +16,6 @@ import {
   Download,
   Loader2,
   Search,
-  ChevronLeft,
-  ChevronRight,
   AlertTriangle,
   Trash2,
   FlaskConical,
@@ -35,6 +33,9 @@ import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 // PageTabBar removed — filters handle the same functionality
 import { MultiSelectDropdown, getEffectiveSelection } from "@/components/MultiSelectDropdown";
+import { TablePagination } from "@/components/TablePagination";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+import { useTableColumns } from "@/hooks/useTableColumns";
 
 interface Source {
   id: string;
@@ -102,6 +103,17 @@ const ACTIVE_OPTIONS = [
   { value: "inactive", label: "Inactive" },
 ];
 
+const SOURCE_COLUMNS = [
+  { id: "name", label: "Name", width: 300, defaultWidth: 300, minWidth: 150 },
+  { id: "platform", label: "Platform", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "type", label: "Type", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "market", label: "Market", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "trust", label: "Trust", width: 100, defaultWidth: 100, minWidth: 60 },
+  { id: "active", label: "Active", width: 70, defaultWidth: 70, minWidth: 50 },
+  { id: "lastPolled", label: "Last Polled", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "actions", label: "Actions", width: 100, defaultWidth: 100, minWidth: 70 },
+];
+
 export default function SourcesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -122,6 +134,11 @@ export default function SourcesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 50;
+
+  const { columns: sourceColumns, updateColumns: setSourceColumns, visibleColumns } = useTableColumns("sources", SOURCE_COLUMNS);
+
+  const isColVisible = (id: string) => visibleColumns.some(c => c.id === id);
+  const colWidth = (id: string) => visibleColumns.find(c => c.id === id)?.width;
 
   const { data: sourcesData, isLoading } = useQuery({
     queryKey: ["admin-sources", searchQuery, page],
@@ -386,6 +403,11 @@ export default function SourcesPage() {
           </div>
         </div>
         <div className="flex items-center justify-end gap-3">
+          <ColumnCustomizer
+            columns={sourceColumns}
+            onChange={setSourceColumns}
+            allColumns={SOURCE_COLUMNS}
+          />
           <button
             onClick={() => {
               if (confirm("Import 200+ pre-configured local news sources? This may take a moment.")) {
@@ -865,30 +887,30 @@ export default function SourcesPage() {
                         }
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    {isColVisible("name") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("name") }}>
                       Name
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("platform") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("platform") }}>
                       Platform
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("type") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("type") }}>
                       Type
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("market") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("market") }}>
                       Market
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("trust") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("trust") }}>
                       Trust
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("active") }}>
                       Active
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("lastPolled") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("lastPolled") }}>
                       Last Polled
-                    </th>
-                    <th className="text-right px-4 py-3 text-gray-400 font-medium">
+                    </th>}
+                    {isColVisible("actions") && <th className="text-right px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("actions") }}>
                       Actions
-                    </th>
+                    </th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -912,7 +934,7 @@ export default function SourcesPage() {
                             }
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        {isColVisible("name") && <td className="px-4 py-3" style={{ width: colWidth("name") }}>
                           <div>
                             <span className="text-white font-medium">
                               {source.name}
@@ -953,8 +975,8 @@ export default function SourcesPage() {
                               </div>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
+                        </td>}
+                        {isColVisible("platform") && <td className="px-4 py-3" style={{ width: colWidth("platform") }}>
                           <span
                             className={clsx(
                               "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
@@ -964,18 +986,18 @@ export default function SourcesPage() {
                           >
                             {platformLabel(source.platform)}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">
+                        </td>}
+                        {isColVisible("type") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("type") }}>
                           {SOURCE_TYPES.find(
                             (t) => t.value === source.sourceType
                           )?.label || source.sourceType}
-                        </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">
+                        </td>}
+                        {isColVisible("market") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("market") }}>
                           {source.market?.name || (
                             <span className="text-gray-600">Global</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
+                        </td>}
+                        {isColVisible("trust") && <td className="px-4 py-3" style={{ width: colWidth("trust") }}>
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-1.5 bg-surface-300 rounded-full overflow-hidden">
                               <div
@@ -996,8 +1018,8 @@ export default function SourcesPage() {
                               {Math.round(source.trustScore * 100)}%
                             </span>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
+                        </td>}
+                        {isColVisible("active") && <td className="px-4 py-3" style={{ width: colWidth("active") }}>
                           <button
                             onClick={() =>
                               toggleMutation.mutate({
@@ -1019,13 +1041,13 @@ export default function SourcesPage() {
                               )}
                             />
                           </button>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">
+                        </td>}
+                        {isColVisible("lastPolled") && <td className="px-4 py-3 text-gray-500 text-xs" style={{ width: colWidth("lastPolled") }}>
                           {source.lastPolledAt
                             ? formatRelativeTime(source.lastPolledAt)
                             : "Never"}
-                        </td>
-                        <td className="px-4 py-3">
+                        </td>}
+                        {isColVisible("actions") && <td className="px-4 py-3" style={{ width: colWidth("actions") }}>
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => startEdit(source)}
@@ -1044,31 +1066,21 @@ export default function SourcesPage() {
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
-                        </td>
+                        </td>}
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between px-4 py-3 border-t border-surface-300/30">
-              <span className="text-sm text-gray-500">
-                {filtered.length} shown &middot; {totalSources} total &middot; {activeSources} active
-                {totalPages > 1 && <> &middot; Page {page} of {totalPages}</>}
-              </span>
-              {totalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
-                    className={clsx("filter-btn flex items-center gap-1", page <= 1 && "opacity-40 cursor-not-allowed")}>
-                    <ChevronLeft className="w-4 h-4" /> Prev
-                  </button>
-                  <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
-                    className={clsx("filter-btn flex items-center gap-1", page >= totalPages && "opacity-40 cursor-not-allowed")}>
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+            <TablePagination
+              shown={filtered.length}
+              total={totalSources}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              extra={`${activeSources} active`}
+            />
           </div>
         )}
       </main>

@@ -22,6 +22,19 @@ import {
   deleteMarket,
 } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
+import { TablePagination } from "@/components/TablePagination";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+import { useTableColumns } from "@/hooks/useTableColumns";
+
+const MARKET_COLUMNS = [
+  { id: "name", label: "Name", width: 150, defaultWidth: 150, minWidth: 100 },
+  { id: "state", label: "State", width: 80, defaultWidth: 80, minWidth: 50 },
+  { id: "coords", label: "Lat / Lon", width: 160, defaultWidth: 160, minWidth: 100 },
+  { id: "radius", label: "Radius", width: 80, defaultWidth: 80, minWidth: 50 },
+  { id: "active", label: "Active", width: 70, defaultWidth: 70, minWidth: 50 },
+  { id: "sources", label: "Sources", width: 80, defaultWidth: 80, minWidth: 50 },
+  { id: "actions", label: "Actions", width: 120, defaultWidth: 120, minWidth: 80 },
+];
 
 interface Market {
   id: string;
@@ -53,6 +66,9 @@ export default function MarketsPage() {
   const [formTimezone, setFormTimezone] = useState("America/Chicago");
   const [formKeywords, setFormKeywords] = useState("");
   const [formNeighborhoods, setFormNeighborhoods] = useState("");
+
+  const { columns: marketCols, updateColumns: setMarketCols, visibleColumns } = useTableColumns("markets", MARKET_COLUMNS);
+  const isCol = (id: string) => visibleColumns.some(c => c.id === id);
 
   const { data: marketsData, isLoading } = useQuery({
     queryKey: ["admin-markets"],
@@ -177,19 +193,22 @@ export default function MarketsPage() {
             <MapPin className="w-6 h-6 text-emerald-400" />
             Markets
           </h1>
-          <button
-            onClick={() => {
-              if (editingId) {
-                setEditingId(null);
-                resetForm();
-              }
-              setShowForm(!showForm);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Market
-          </button>
+          <div className="flex items-center gap-3">
+            <ColumnCustomizer columns={marketCols} onChange={setMarketCols} allColumns={MARKET_COLUMNS} />
+            <button
+              onClick={() => {
+                if (editingId) {
+                  setEditingId(null);
+                  resetForm();
+                }
+                setShowForm(!showForm);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Market
+            </button>
+          </div>
         </div>
         {/* Form */}
         {showForm && (
@@ -420,27 +439,13 @@ export default function MarketsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-300/50">
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Name
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      State
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Lat / Lon
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Radius
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Active
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Sources
-                    </th>
-                    <th className="text-right px-4 py-3 text-gray-400 font-medium">
-                      Actions
-                    </th>
+                    {isCol("name") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Name</th>}
+                    {isCol("state") && <th className="text-left px-4 py-3 text-gray-400 font-medium">State</th>}
+                    {isCol("coords") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Lat / Lon</th>}
+                    {isCol("radius") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Radius</th>}
+                    {isCol("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Active</th>}
+                    {isCol("sources") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Sources</th>}
+                    {isCol("actions") && <th className="text-right px-4 py-3 text-gray-400 font-medium">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -449,30 +454,13 @@ export default function MarketsPage() {
                       key={market.id}
                       className="border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors"
                     >
-                      <td className="px-4 py-3 text-white font-medium">
-                        {market.name}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">
-                        {market.state}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                        {market.latitude.toFixed(4)},{" "}
-                        {market.longitude.toFixed(4)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">
-                        {market.radiusKm} km
-                      </td>
-                      <td className="px-4 py-3">
-                        {market.isActive ? (
-                          <Check className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <X className="w-4 h-4 text-gray-600" />
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">
-                        {market.sourceCount ?? "-"}
-                      </td>
-                      <td className="px-4 py-3">
+                      {isCol("name") && <td className="px-4 py-3 text-white font-medium">{market.name}</td>}
+                      {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
+                      {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
+                      {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
+                      {isCol("active") && <td className="px-4 py-3">{market.isActive ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-gray-600" />}</td>}
+                      {isCol("sources") && <td className="px-4 py-3 text-gray-400">{market.sourceCount ?? "-"}</td>}
+                      {isCol("actions") && <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => startEdit(market)}
@@ -498,12 +486,20 @@ export default function MarketsPage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              shown={markets.length}
+              total={markets.length}
+              page={1}
+              totalPages={1}
+              onPageChange={() => {}}
+              extra={`${markets.filter((m: Market) => m.isActive).length} active`}
+            />
           </div>
         )}
       </main>

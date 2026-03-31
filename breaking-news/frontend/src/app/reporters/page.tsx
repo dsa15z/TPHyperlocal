@@ -15,6 +15,20 @@ import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
+import { TablePagination } from "@/components/TablePagination";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+import { useTableColumns } from "@/hooks/useTableColumns";
+
+const REPORTER_COLUMNS = [
+  { id: "name", label: "Name", width: 180, defaultWidth: 180, minWidth: 120 },
+  { id: "status", label: "Status", width: 80, defaultWidth: 80, minWidth: 60 },
+  { id: "last30Days", label: "30d Assignments", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "completionRate", label: "Completion", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "avgTurnaroundMin", label: "Avg Turnaround", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "exclusiveCount", label: "Exclusives", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "onTimeRate", label: "On-Time", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "expand", label: "", width: 40, defaultWidth: 40, minWidth: 30 },
+];
 
 interface ReporterStats {
   reporter: {
@@ -60,6 +74,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 };
 
 export default function ReportersPage() {
+  const { columns: reporterCols, updateColumns: setReporterCols, visibleColumns } = useTableColumns("reporters", REPORTER_COLUMNS);
+  const isCol = (id: string) => visibleColumns.some(c => c.id === id);
   const [sortField, setSortField] = useState<SortField>("last30Days");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -181,14 +197,17 @@ export default function ReportersPage() {
   return (
     <div className="min-h-screen">
       <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Users className="w-6 h-6 text-blue-400" />
-            Reporter Performance
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Track reporter assignments, turnaround times, and beat coverage
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+              <Users className="w-6 h-6 text-blue-400" />
+              Reporter Performance
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Track reporter assignments, turnaround times, and beat coverage
+            </p>
+          </div>
+          <ColumnCustomizer columns={reporterCols} onChange={setReporterCols} allColumns={REPORTER_COLUMNS} />
         </div>
 
         {isLoading ? (
@@ -496,6 +515,13 @@ export default function ReportersPage() {
                   No reporter data available
                 </div>
               )}
+              <TablePagination
+                shown={reporters.length}
+                total={reporters.length}
+                page={1}
+                totalPages={1}
+                onPageChange={() => {}}
+              />
             </div>
           </>
         )}

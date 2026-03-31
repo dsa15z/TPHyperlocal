@@ -16,9 +16,12 @@ import { ALL_COLUMNS } from "@/lib/views";
 interface ColumnCustomizerProps {
   columns: ColumnConfig[];
   onChange: (columns: ColumnConfig[]) => void;
+  /** All available columns for this table (used by Reset). Defaults to ALL_COLUMNS from views.ts */
+  allColumns?: Omit<ColumnConfig, "visible">[];
 }
 
-export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
+export function ColumnCustomizer({ columns, onChange, allColumns }: ColumnCustomizerProps) {
+  const defaults = allColumns || ALL_COLUMNS;
   const [isOpen, setIsOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -49,7 +52,7 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
 
   const resetAll = () => {
     onChange(
-      ALL_COLUMNS.map((c) => ({
+      defaults.map((c) => ({
         ...c,
         visible: true,
       }))

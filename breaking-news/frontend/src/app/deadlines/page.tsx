@@ -6,6 +6,18 @@ import { Clock, AlertTriangle, Timer, Plus, Trash2, Radio, Pencil, X, Loader2 } 
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
+import { TablePagination } from "@/components/TablePagination";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+import { useTableColumns } from "@/hooks/useTableColumns";
+
+const DEADLINE_COLUMNS = [
+  { id: "showName", label: "Show Name", width: 180, defaultWidth: 180, minWidth: 120 },
+  { id: "airTime", label: "Air Time", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "days", label: "Days", width: 160, defaultWidth: 160, minWidth: 100 },
+  { id: "scriptLead", label: "Script Lead Time", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "status", label: "Status", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "actions", label: "Actions", width: 80, defaultWidth: 80, minWidth: 60 },
+];
 
 const DAYS_OF_WEEK = [
   { key: "Mon", label: "M" },
@@ -38,6 +50,8 @@ function formatTimeDisplay(timeStr: string): string {
 
 export default function DeadlinesPage() {
   const queryClient = useQueryClient();
+  const { columns: deadlineCols, updateColumns: setDeadlineCols, visibleColumns } = useTableColumns("deadlines", DEADLINE_COLUMNS);
+  const isCol = (id: string) => visibleColumns.some(c => c.id === id);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -175,6 +189,8 @@ export default function DeadlinesPage() {
               airing today &middot; Control room view
             </p>
           </div>
+          <div className="flex items-center gap-3">
+          <ColumnCustomizer columns={deadlineCols} onChange={setDeadlineCols} allColumns={DEADLINE_COLUMNS} />
           <button
             onClick={() => {
               if (showAddForm) {
@@ -195,6 +211,7 @@ export default function DeadlinesPage() {
               </>
             )}
           </button>
+          </div>
         </div>
 
         {/* Countdown Cards */}
@@ -444,12 +461,12 @@ export default function DeadlinesPage() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    <th className="table-header">Show Name</th>
-                    <th className="table-header">Air Time</th>
-                    <th className="table-header">Days</th>
-                    <th className="table-header">Script Lead Time</th>
-                    <th className="table-header">Status</th>
-                    <th className="table-header text-right">Actions</th>
+                    {isCol("showName") && <th className="table-header">Show Name</th>}
+                    {isCol("airTime") && <th className="table-header">Air Time</th>}
+                    {isCol("days") && <th className="table-header">Days</th>}
+                    {isCol("scriptLead") && <th className="table-header">Script Lead Time</th>}
+                    {isCol("status") && <th className="table-header">Status</th>}
+                    {isCol("actions") && <th className="table-header text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -546,6 +563,14 @@ export default function DeadlinesPage() {
               </table>
             </div>
           )}
+          <TablePagination
+            shown={deadlines.length}
+            total={deadlines.length}
+            page={1}
+            totalPages={1}
+            onPageChange={() => {}}
+            extra={`${airingToday.length} airing today`}
+          />
         </div>
       </main>
     </div>

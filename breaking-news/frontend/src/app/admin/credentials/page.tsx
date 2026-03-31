@@ -20,6 +20,20 @@ import {
   deleteCredential,
 } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
+import { TablePagination } from "@/components/TablePagination";
+import { ColumnCustomizer } from "@/components/ColumnCustomizer";
+import { useTableColumns } from "@/hooks/useTableColumns";
+
+const CRED_COLUMNS = [
+  { id: "status", label: "Status", width: 60, defaultWidth: 60, minWidth: 40 },
+  { id: "platform", label: "Platform", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "name", label: "Name", width: 180, defaultWidth: 180, minWidth: 100 },
+  { id: "apiKey", label: "API Key", width: 160, defaultWidth: 160, minWidth: 100 },
+  { id: "active", label: "Active", width: 60, defaultWidth: 60, minWidth: 40 },
+  { id: "lastUsed", label: "Last Used", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "lastError", label: "Last Error", width: 200, defaultWidth: 200, minWidth: 100 },
+  { id: "actions", label: "Actions", width: 120, defaultWidth: 120, minWidth: 80 },
+];
 
 interface Credential {
   id: string;
@@ -45,6 +59,8 @@ const PLATFORMS = [
 
 export default function CredentialsPage() {
   const queryClient = useQueryClient();
+  const { columns: credCols, updateColumns: setCredCols, visibleColumns } = useTableColumns("credentials", CRED_COLUMNS);
+  const isCol = (id: string) => visibleColumns.some(c => c.id === id);
   const [showForm, setShowForm] = useState(false);
   const [testResults, setTestResults] = useState<
     Record<string, { success: boolean; message: string }>
@@ -164,13 +180,16 @@ export default function CredentialsPage() {
             <Key className="w-6 h-6 text-yellow-400" />
             API Credentials
           </h1>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Credential
-          </button>
+          <div className="flex items-center gap-3">
+            <ColumnCustomizer columns={credCols} onChange={setCredCols} allColumns={CRED_COLUMNS} />
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Credential
+            </button>
+          </div>
         </div>
         {/* Add form */}
         {showForm && (
@@ -311,30 +330,14 @@ export default function CredentialsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-300/50">
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Status
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Platform
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Name
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      API Key
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Active
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Last Used
-                    </th>
-                    <th className="text-left px-4 py-3 text-gray-400 font-medium">
-                      Last Error
-                    </th>
-                    <th className="text-right px-4 py-3 text-gray-400 font-medium">
-                      Actions
-                    </th>
+                    {isCol("status") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Status</th>}
+                    {isCol("platform") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Platform</th>}
+                    {isCol("name") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Name</th>}
+                    {isCol("apiKey") && <th className="text-left px-4 py-3 text-gray-400 font-medium">API Key</th>}
+                    {isCol("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Active</th>}
+                    {isCol("lastUsed") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Last Used</th>}
+                    {isCol("lastError") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Last Error</th>}
+                    {isCol("actions") && <th className="text-right px-4 py-3 text-gray-400 font-medium">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -343,36 +346,14 @@ export default function CredentialsPage() {
                       key={cred.id}
                       className="border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors"
                     >
-                      <td className="px-4 py-3">
-                        {getStatusIndicator(cred)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-surface-300/50">
-                          {cred.platform}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-white font-medium">
-                        {cred.name}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                        {maskKey(cred.apiKey)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {cred.isActive ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-gray-600" />
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {cred.lastUsedAt
-                          ? formatRelativeTime(cred.lastUsedAt)
-                          : "Never"}
-                      </td>
-                      <td className="px-4 py-3 text-red-400/80 text-xs max-w-[200px] truncate">
-                        {cred.lastError || "-"}
-                      </td>
-                      <td className="px-4 py-3">
+                      {isCol("status") && <td className="px-4 py-3">{getStatusIndicator(cred)}</td>}
+                      {isCol("platform") && <td className="px-4 py-3 text-gray-400"><span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-surface-300/50">{cred.platform}</span></td>}
+                      {isCol("name") && <td className="px-4 py-3 text-white font-medium">{cred.name}</td>}
+                      {isCol("apiKey") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{maskKey(cred.apiKey)}</td>}
+                      {isCol("active") && <td className="px-4 py-3">{cred.isActive ? <CheckCircle className="w-4 h-4 text-green-400" /> : <XCircle className="w-4 h-4 text-gray-600" />}</td>}
+                      {isCol("lastUsed") && <td className="px-4 py-3 text-gray-500 text-xs">{cred.lastUsedAt ? formatRelativeTime(cred.lastUsedAt) : "Never"}</td>}
+                      {isCol("lastError") && <td className="px-4 py-3 text-red-400/80 text-xs max-w-[200px] truncate">{cred.lastError || "-"}</td>}
+                      {isCol("actions") && <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => testMutation.mutate(cred.id)}
@@ -417,6 +398,14 @@ export default function CredentialsPage() {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              shown={credentials.length}
+              total={credentials.length}
+              page={1}
+              totalPages={1}
+              onPageChange={() => {}}
+              extra={`${credentials.filter((c: Credential) => c.isActive).length} active`}
+            />
           </div>
         )}
       </main>
