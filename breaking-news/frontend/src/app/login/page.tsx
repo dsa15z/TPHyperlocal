@@ -36,7 +36,8 @@ export default function LoginPage() {
     try {
       const result = await login(email.trim(), password);
       setToken(result.token);
-      router.push("/");
+      // Full page reload to re-initialize UserProvider with new auth state
+      window.location.href = "/";
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       if (msg.includes("Invalid email or password") || msg.includes("401")) {
@@ -55,7 +56,7 @@ export default function LoginPage() {
     try {
       const result = await login("derekanderson@futurimedia.com", "Futuri2026");
       setToken(result.token);
-      router.push("/");
+      window.location.href = "/";
     } catch (err) {
       // If login fails, try to reset password first then login
       try {
@@ -69,7 +70,7 @@ export default function LoginPage() {
         });
         const result = await login("derekanderson@futurimedia.com", "Futuri2026");
         setToken(result.token);
-        router.push("/");
+        window.location.href = "/";
       } catch {
         setError("Bypass failed. Try normal login.");
       }

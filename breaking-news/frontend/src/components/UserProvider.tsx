@@ -50,11 +50,17 @@ function buildDashboardTitle(markets: MarketInfo[]): string {
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  // Defer auth check to client-side to avoid hydration mismatch
-  // (localStorage is not available during SSR)
+  // Defer auth check to client-side to avoid hydration mismatch.
+  // Re-check on every render cycle so login/logout is picked up immediately.
   const [loggedIn, setLoggedIn] = useState(false);
   useEffect(() => {
     setLoggedIn(isAuthenticated());
+    // Re-check auth every 2 seconds (catches login/logout from other tabs or after redirect)
+    const interval = setInterval(() => {
+      const current = isAuthenticated();
+      setLoggedIn((prev) => (prev !== current ? current : prev));
+    }, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   const { data: profile, isLoading } = useQuery({
