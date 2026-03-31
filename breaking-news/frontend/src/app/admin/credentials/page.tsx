@@ -392,7 +392,7 @@ export default function CredentialsPage() {
                             {testResults[cred.id].message}
                           </p>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>
