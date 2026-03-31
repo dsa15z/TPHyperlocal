@@ -3,6 +3,8 @@
 import {
   createContext,
   useContext,
+  useState,
+  useEffect,
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -48,7 +50,12 @@ function buildDashboardTitle(markets: MarketInfo[]): string {
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const loggedIn = isAuthenticated();
+  // Defer auth check to client-side to avoid hydration mismatch
+  // (localStorage is not available during SSR)
+  const [loggedIn, setLoggedIn] = useState(false);
+  useEffect(() => {
+    setLoggedIn(isAuthenticated());
+  }, []);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["user-profile"],

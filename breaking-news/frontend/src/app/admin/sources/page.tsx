@@ -15,6 +15,9 @@ import {
   Pencil,
   Download,
   Loader2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
@@ -97,11 +100,19 @@ export default function SourcesPage() {
   const [formMarketId, setFormMarketId] = useState("");
   const [formTrustScore, setFormTrustScore] = useState(50);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
   const { data: sourcesData, isLoading } = useQuery({
-    queryKey: ["admin-sources"],
-    queryFn: fetchSources,
+    queryKey: ["admin-sources", searchQuery, page],
+    queryFn: () => fetchSources({ limit: pageSize, offset: (page - 1) * pageSize, search: searchQuery || undefined }),
   });
-  const sources: Source[] = (sourcesData as any)?.data || sourcesData || [];
+  const sourcesResponse = sourcesData as any;
+  const sources: Source[] = sourcesResponse?.data || [];
+  const totalSources = sourcesResponse?.total || sources.length;
+  const activeSources = sourcesResponse?.active || sources.filter((s: any) => s.isActive).length;
+  const totalPages = sourcesResponse?.totalPages || 1;
 
   const { data: marketsData } = useQuery({
     queryKey: ["admin-markets"],
@@ -212,7 +223,6 @@ export default function SourcesPage() {
     return true;
   });
 
-  const activeSources = sources.filter((s) => s.isActive).length;
   const platformLabel = (p: string) =>
     PLATFORMS.find((pl) => pl.value === p)?.label || p;
 
@@ -237,7 +247,7 @@ export default function SourcesPage() {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <div className="text-2xl font-bold text-white tabular-nums">
-                {sources.length}
+                {totalSources}
               </div>
               <div className="text-xs text-gray-500">
                 {activeSources} active
@@ -486,8 +496,18 @@ export default function SourcesPage() {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="flex items-center gap-3">
+        {/* Search + Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search sources by name or URL..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              className="filter-input w-full pl-9"
+            />
+          </div>
           <select
             value={platformFilter}
             onChange={(e) => setPlatformFilter(e.target.value)}
@@ -679,6 +699,23 @@ export default function SourcesPage() {
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <span className="text-sm text-gray-500">
+                  Page {page} of {totalPages} ({totalSources} total)
+                </span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
+                    className={clsx("filter-btn flex items-center gap-1", page <= 1 && "opacity-40 cursor-not-allowed")}>
+                    <ChevronLeft className="w-4 h-4" /> Prev
+                  </button>
+                  <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+                    className={clsx("filter-btn flex items-center gap-1", page >= totalPages && "opacity-40 cursor-not-allowed")}>
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

@@ -612,8 +612,13 @@ export async function register(
 
 // ─── Admin: Sources ──────────────────────────────────────────────────────────
 
-export async function fetchSources(): Promise<unknown[]> {
-  return apiFetch<unknown[]>("/api/v1/admin/sources", {
+export async function fetchSources(params?: { limit?: number; offset?: number; search?: string; isActive?: boolean }): Promise<unknown> {
+  const qs = new URLSearchParams();
+  qs.set('limit', String(params?.limit || 200));
+  if (params?.offset) qs.set('offset', String(params.offset));
+  if (params?.search) qs.set('search', params.search);
+  if (params?.isActive !== undefined) qs.set('isActive', String(params.isActive));
+  return apiFetch<unknown>(`/api/v1/admin/sources?${qs}`, {
     headers: getAuthHeaders(),
   });
 }
