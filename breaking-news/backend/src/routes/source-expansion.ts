@@ -141,14 +141,13 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
   app.post('/pipeline/import-scrape-sources', async (request, reply) => {
     try {
       const payload = getPayload(request);
-      if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized', detail: 'No accountId in token' });
+      if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
 
-      const existingUrls = new Set(
-        (await prisma.source.findMany({
-          where: { accountId: payload.accountId },
-          select: { url: true },
-        })).map((s) => s.url).filter(Boolean)
-      );
+      // Source model doesn't have accountId — sources are global, linked via AccountSource
+      const existingSources = await prisma.source.findMany({
+        select: { id: true, url: true },
+      });
+      const existingUrls = new Set(existingSources.map((s) => s.url).filter(Boolean));
 
       const market = await prisma.market.findFirst({ where: { accountId: payload.accountId } });
 
@@ -158,9 +157,9 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
         if (existingUrls.has(source.url)) continue;
 
         try {
+          // Create the global Source record
           const record = await prisma.source.create({
           data: {
-            accountId: payload.accountId,
             name: source.name,
             platform: 'RSS',
             sourceType: 'RSS_FEED',
@@ -175,6 +174,15 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
             },
           },
         });
+        // Link to the account via AccountSource
+        await prisma.accountSource.create({
+          data: {
+            accountId: payload.accountId,
+            sourceId: record.id,
+            isEnabled: true,
+          },
+        }).catch(() => {}); // ignore if already linked
+
         created.push({ id: record.id, name: source.name, url: source.url });
       } catch (err) {
         errors.push({ name: source.name, error: (err as Error).message?.substring(0, 100) });
