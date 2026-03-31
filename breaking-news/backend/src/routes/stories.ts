@@ -200,6 +200,15 @@ export async function storiesRoutes(
             orderBy: { snapshotAt: 'desc' as const },
             take: 12,
           },
+          parentStory: {
+            select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+          },
+          followUps: {
+            select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+            where: { mergedIntoId: null },
+            orderBy: { firstSeenAt: 'desc' },
+            take: 10,
+          },
           _count: {
             select: { storySources: true },
           },
@@ -430,6 +439,15 @@ export async function storiesRoutes(
         scoreSnapshots: {
           orderBy: { snapshotAt: 'desc' },
           take: 50,
+        },
+        parentStory: {
+          select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+        },
+        followUps: {
+          select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+          where: { mergedIntoId: null },
+          orderBy: { firstSeenAt: 'desc' },
+          take: 20,
         },
         mergedFrom: {
           select: { id: true, title: true, compositeScore: true },

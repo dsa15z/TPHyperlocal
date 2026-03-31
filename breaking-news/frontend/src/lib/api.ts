@@ -38,6 +38,8 @@ export interface Story {
   sparkline?: number[]; // recent composite scores for trend visualization
   trend?: "rising" | "declining" | "flat";
   merged_from?: Array<{ id: string; title: string; compositeScore: number }>;
+  parentStory?: { id: string; title: string; status: string; compositeScore: number; firstSeenAt: string } | null;
+  followUps?: Array<{ id: string; title: string; status: string; compositeScore: number; firstSeenAt: string }>;
 }
 
 export interface SourcePost {
@@ -249,6 +251,14 @@ function transformStory(raw: any): Story {
       id: m.id,
       title: m.title,
       compositeScore: m.compositeScore ?? 0,
+    })),
+    parentStory: raw.parentStory || null,
+    followUps: (raw.followUps || []).map((f: any) => ({
+      id: f.id,
+      title: f.title,
+      status: f.status,
+      compositeScore: f.compositeScore ?? 0,
+      firstSeenAt: f.firstSeenAt,
     })),
   };
 }

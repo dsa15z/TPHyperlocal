@@ -19,6 +19,8 @@ import {
   FileText,
   Loader2,
   GitMerge,
+  GitBranch,
+  ArrowUpRight,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, type SourcePost } from "@/lib/api";
@@ -557,6 +559,60 @@ export default function StoryDetailPage() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Follow-up chain — parent story and follow-ups */}
+            {(story.parentStory || (story.followUps && story.followUps.length > 0)) && (
+              <div className="glass-card p-4 space-y-3">
+                <div className="text-xs text-cyan-400 flex items-center gap-1.5 font-medium">
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Story Thread
+                </div>
+
+                {/* Link to parent story */}
+                {story.parentStory && (
+                  <div className="flex items-start gap-2 pl-2 border-l-2 border-cyan-500/30">
+                    <ArrowUpRight className="w-3 h-3 text-gray-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wide">Follow-up to</span>
+                      <Link
+                        href={`/stories/${story.parentStory.id}`}
+                        className="block text-sm text-gray-200 hover:text-accent transition-colors"
+                      >
+                        {story.parentStory.title}
+                      </Link>
+                      <span className="text-[10px] text-gray-600">
+                        {story.parentStory.status} &middot; Score {Math.round(story.parentStory.compositeScore * 100)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Follow-ups list */}
+                {story.followUps && story.followUps.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wide pl-2">
+                      {story.followUps.length} Follow-up{story.followUps.length > 1 ? 's' : ''}
+                    </span>
+                    {story.followUps.map((fu: any) => (
+                      <div key={fu.id} className="flex items-start gap-2 pl-2 border-l-2 border-surface-300/50">
+                        <GitBranch className="w-3 h-3 text-gray-600 mt-1 flex-shrink-0" />
+                        <div>
+                          <Link
+                            href={`/stories/${fu.id}`}
+                            className="text-sm text-gray-300 hover:text-accent transition-colors"
+                          >
+                            {fu.title}
+                          </Link>
+                          <span className="block text-[10px] text-gray-600">
+                            {fu.status} &middot; {formatRelativeTime(fu.firstSeenAt)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

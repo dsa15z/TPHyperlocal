@@ -443,13 +443,30 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     storyId = story.id;
 
     // If we found a related story (embedding similarity between 0.60-0.75),
-    // log it for future "related stories" feature
+    // link as follow-up if the related story is STALE/FOLLOW_UP/ARCHIVED/ONGOING
     if (relatedStoryId) {
-      logger.info({
-        newStoryId: storyId,
-        relatedStoryId,
-        sourcePostId,
-      }, 'New story has a related story (not merged due to below-threshold embedding similarity)');
+      const relatedStory = await prisma.story.findUnique({
+        where: { id: relatedStoryId },
+        select: { id: true, status: true, title: true },
+      });
+
+      if (relatedStory && ['STALE', 'FOLLOW_UP', 'ARCHIVED', 'ONGOING', 'TOP_STORY', 'DEVELOPING'].includes(relatedStory.status)) {
+        await prisma.story.update({
+          where: { id: storyId },
+          data: { parentStoryId: relatedStoryId },
+        });
+        logger.info({
+          newStoryId: storyId,
+          parentStoryId: relatedStoryId,
+          parentTitle: relatedStory.title,
+        }, 'Linked new story as follow-up to related story');
+      } else {
+        logger.info({
+          newStoryId: storyId,
+          relatedStoryId,
+          sourcePostId,
+        }, 'New story has a related story (not linked — parent status did not qualify)');
+      }
     }
   }
 

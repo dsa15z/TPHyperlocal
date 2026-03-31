@@ -11,7 +11,7 @@ import {
   type SortingState,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch } from "lucide-react";
 import clsx from "clsx";
 import type { Story, SourceSummary } from "@/lib/api";
 import type { ColumnConfig } from "@/lib/views";
@@ -108,15 +108,33 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
     }),
     title: columnHelper.accessor("title", {
       header: "Title",
-      cell: (info) => (
-        <Link
-          href={`/stories/${info.row.original.id}`}
-          className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
-        >
-          {info.getValue()}
-        </Link>
-      ),
-      size: 320,
+      cell: (info) => {
+        const story = info.row.original;
+        const hasParent = !!story.parentStory;
+        const hasFollowUps = (story.followUps?.length ?? 0) > 0;
+        return (
+          <div className="flex items-start gap-1.5">
+            <Link
+              href={`/stories/${story.id}`}
+              className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2 flex-1"
+            >
+              {info.getValue()}
+            </Link>
+            {(hasParent || hasFollowUps) && (
+              <span
+                className="flex-shrink-0 mt-0.5 text-cyan-400"
+                title={hasParent
+                  ? `Follow-up to: ${story.parentStory?.title}`
+                  : `${story.followUps?.length} follow-up${(story.followUps?.length ?? 0) > 1 ? 's' : ''}`
+                }
+              >
+                <GitBranch className="w-3 h-3" />
+              </span>
+            )}
+          </div>
+        );
+      },
+      size: 400,
     }),
     category: columnHelper.accessor("category", {
       header: "Category",
