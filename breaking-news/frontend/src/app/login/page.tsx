@@ -38,7 +38,15 @@ export default function LoginPage() {
       setToken(result.token);
       router.push("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "Login failed";
+      // Clean up API error messages for display
+      if (msg.includes("Invalid email or password")) {
+        setError("Invalid email or password. Please try again.");
+      } else if (msg.includes("401")) {
+        setError("Invalid email or password. Please try again.");
+      } else {
+        setError(msg.replace(/^API \d+:\s*/, "").replace(/^\{.*"message":"/, "").replace(/".*$/, ""));
+      }
     } finally {
       setLoading(false);
     }

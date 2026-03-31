@@ -46,6 +46,9 @@ import {
   MonitorPlay,
   Share2,
   Rss,
+  LogIn,
+  LogOut,
+  User,
 } from "lucide-react";
 import clsx from "clsx";
 import { useUser } from "./UserProvider";
@@ -398,6 +401,29 @@ export function SiteNav() {
         </div>
         <div className="flex items-center gap-2">
           {isLoggedIn && <NotificationBell />}
+          {isLoggedIn ? (
+            <button
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem("bn_jwt_token");
+                  window.location.href = "/login";
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-surface-300/30 rounded-lg transition-colors"
+              title="Sign Out"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-accent hover:bg-accent-dim text-white rounded-lg transition-colors font-medium"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
       </header>
 
