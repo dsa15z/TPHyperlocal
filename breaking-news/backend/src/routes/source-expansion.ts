@@ -46,6 +46,7 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
 
     const body = z.object({
       categories: z.array(z.string()).optional(),
+      includeUnverified: z.boolean().default(false),
       dryRun: z.boolean().default(false),
     }).parse(request.body);
 

@@ -11,6 +11,8 @@ export interface SourceSeed {
   url: string;
   trustScore: number;
   category?: string;
+  /** Set to true for URLs known to be valid and tested */
+  verified?: boolean;
 }
 
 export const EXPANDED_SOURCES: SourceSeed[] = [
