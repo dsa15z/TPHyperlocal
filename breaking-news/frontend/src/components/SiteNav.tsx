@@ -257,17 +257,8 @@ export function SiteNav() {
   const { dashboardTitle, isLoggedIn } = useUser();
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar();
 
-  // Track which groups are expanded (default: expand groups that contain the active page)
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
-    const initial = new Set<string>();
-    for (const group of NAV_GROUPS) {
-      if (group.directLink && pathname === group.directLink) continue;
-      if (group.items.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"))) {
-        initial.add(group.id);
-      }
-    }
-    return initial;
-  });
+  // Track which groups are expanded — start empty to avoid hydration mismatch
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => {
