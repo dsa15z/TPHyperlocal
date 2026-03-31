@@ -18,11 +18,10 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
     const payload = getPayload(request);
     if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
 
+    // Source model is global — check all URLs
     const existingUrls = new Set(
-      (await prisma.source.findMany({
-        where: { accountId: payload.accountId },
-        select: { url: true },
-      })).map((s) => s.url).filter(Boolean)
+      (await prisma.source.findMany({ select: { url: true } }))
+        .map((s) => s.url).filter(Boolean)
     );
 
     const sources = EXPANDED_SOURCES.map((s) => ({
@@ -56,11 +55,10 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
       sources = sources.filter((s) => body.categories!.includes(s.sourceType));
     }
 
+    // Source model is GLOBAL (no accountId) — check all existing URLs
     const existingUrls = new Set(
-      (await prisma.source.findMany({
-        where: { accountId: payload.accountId },
-        select: { url: true },
-      })).map((s) => s.url).filter(Boolean)
+      (await prisma.source.findMany({ select: { url: true } }))
+        .map((s) => s.url).filter(Boolean)
     );
 
     const toImport = sources.filter((s) => !existingUrls.has(s.url));
@@ -75,20 +73,28 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
       });
     }
 
-    // Get or create default market
     const market = await prisma.market.findFirst({ where: { accountId: payload.accountId } });
 
     const created = [];
     for (const source of toImport) {
       try {
+        // Create global Source record (no accountId on Source model)
         const record = await prisma.source.create({
           data: {
-            accountId: payload.accountId,
             name: source.name,
             platform: source.platform,
             sourceType: source.sourceType === 'LOCAL_NEWS' ? 'NEWS_ORG' :
                         source.sourceType === 'GOVERNMENT' ? 'GOV_AGENCY' :
                         source.sourceType === 'POLICE' ? 'GOV_AGENCY' :
+                        source.sourceType === 'FIRE' ? 'GOV_AGENCY' :
+                        source.sourceType === 'COURTS' ? 'GOV_AGENCY' :
+                        source.sourceType === 'UNIVERSITY' ? 'NEWS_ORG' :
+                        source.sourceType === 'SPORTS' ? 'NEWS_ORG' :
+                        source.sourceType === 'BUSINESS' ? 'NEWS_ORG' :
+                        source.sourceType === 'NATIONAL' ? 'NEWS_ORG' :
+                        source.sourceType === 'WEATHER' ? 'GOV_AGENCY' :
+                        source.sourceType === 'TRAFFIC' ? 'GOV_AGENCY' :
+                        source.sourceType === 'UTILITY' ? 'GOV_AGENCY' :
                         'RSS_FEED',
             url: source.url,
             trustScore: source.trustScore,
@@ -96,9 +102,19 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
             isActive: true,
           },
         });
+
+        // Link to account via AccountSource
+        await prisma.accountSource.create({
+          data: {
+            accountId: payload.accountId,
+            sourceId: record.id,
+            isEnabled: true,
+          },
+        }).catch(() => {}); // ignore if already linked
+
         created.push({ id: record.id, name: source.name });
       } catch (err) {
-        // Skip duplicates or errors
+        // Skip duplicates
       }
     }
 
