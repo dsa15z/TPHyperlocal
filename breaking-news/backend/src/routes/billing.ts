@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Stripe billing integration.
  * Uses Stripe REST API directly (no SDK dependency).
