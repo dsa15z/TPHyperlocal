@@ -5,16 +5,18 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-COPY package.json ./
+# Copy package files (including lock for deterministic installs)
+COPY package.json package-lock.json* ./
 RUN npm install
 
+# Copy all source files
 COPY . .
 
-# Generate Prisma client from local schema copy
+# Generate Prisma client from local schema
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
-# Build TypeScript
-RUN npm run build
+# Build TypeScript (skip the prisma generate in npm run build since we just did it)
+RUN npx tsc
 
 # Stage 2: Production
 FROM node:20-alpine AS runner
