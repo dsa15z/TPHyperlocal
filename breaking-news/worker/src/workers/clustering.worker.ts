@@ -55,6 +55,7 @@ function calculateEntitySimilarity(
   storyCategory: string | null,
   storyLocation: string | null,
   storyNeighborhood: string | null,
+  storyPeople?: string[],
 ): number {
   let score = 0;
   let factors = 0;
@@ -81,6 +82,17 @@ function calculateEntitySimilarity(
   if (storyNeighborhood && postNeighborhoods.length > 0) {
     if (postNeighborhoods.map((n) => n.toLowerCase()).includes(storyNeighborhood.toLowerCase())) {
       score += 1.0;
+    }
+  }
+  factors++;
+
+  // Person/entity overlap — critical for clustering stories about the same person
+  if (storyPeople && storyPeople.length > 0 && postEntities.people.length > 0) {
+    const postPeopleNorm = postEntities.people.map((p) => p.toLowerCase());
+    const storyPeopleNorm = storyPeople.map((p) => p.toLowerCase());
+    const personOverlap = postPeopleNorm.filter((p) => storyPeopleNorm.some((sp) => sp.includes(p) || p.includes(sp)));
+    if (personOverlap.length > 0) {
+      score += 1.0; // Strong signal — same person mentioned
     }
   }
   factors++;
@@ -148,6 +160,51 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
 
   logger.info({ sourcePostId, recentStories: recentStories.length }, 'Comparing against recent stories');
 
+  // --- Stage 0: Title exact-match fast path ---
+  // If an existing story has the same normalized title, merge immediately
+  const postNormalizedTitle = normalizeTitle(post.title || '').toLowerCase().trim();
+  if (postNormalizedTitle.length > 10) {
+    for (const story of recentStories) {
+      const storyNormalizedTitle = normalizeTitle(story.title || '').toLowerCase().trim();
+      if (storyNormalizedTitle === postNormalizedTitle) {
+        logger.info({
+          sourcePostId,
+          storyId: story.id,
+          title: postNormalizedTitle,
+        }, 'Exact title match — merging immediately');
+
+        // Check dedup: don't double-link same post
+        const existing = await prisma.storySource.findFirst({
+          where: { storyId: story.id, sourcePostId: post.id },
+        });
+        if (!existing) {
+          await prisma.storySource.create({
+            data: { storyId: story.id, sourcePostId: post.id, similarityScore: 1.0 },
+          });
+          await prisma.story.update({
+            where: { id: story.id },
+            data: {
+              sourceCount: { increment: 1 },
+              lastUpdatedAt: new Date(),
+            },
+          });
+        }
+
+        // Queue scoring
+        const scoringQueue = new Queue('scoring', { connection: getSharedConnection() });
+        await scoringQueue.add('score', { storyId: story.id }, {
+          jobId: `score-title-match-${story.id}-${Date.now()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        });
+        await scoringQueue.close();
+        return;
+      }
+    }
+  }
+
   // --- Stage 1: Jaccard pre-filter to find candidate stories ---
   const candidates: CandidateStory[] = [];
 
@@ -164,6 +221,22 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       }
     }
 
+    // Extract people from story's source posts for entity matching
+    const storyPeople: string[] = [];
+    for (const ss of story.storySources) {
+      const rawData = ss.sourcePost.rawData as Record<string, any> | null;
+      const spEntities = rawData?.entities as { people?: string[] } | undefined;
+      if (spEntities?.people) storyPeople.push(...spEntities.people);
+    }
+    // Also extract people from the story title as a heuristic
+    const titleWords = (story.title || '').split(/\s+/);
+    // Look for capitalized word pairs (likely person names)
+    for (let i = 0; i < titleWords.length - 1; i++) {
+      if (/^[A-Z]/.test(titleWords[i]) && /^[A-Z]/.test(titleWords[i + 1])) {
+        storyPeople.push(`${titleWords[i]} ${titleWords[i + 1]}`);
+      }
+    }
+
     const entitySim = calculateEntitySimilarity(
       entities,
       category,
@@ -171,6 +244,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       story.category,
       story.locationName,
       story.neighborhood,
+      [...new Set(storyPeople)],
     );
 
     const timeProximity = calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2);
