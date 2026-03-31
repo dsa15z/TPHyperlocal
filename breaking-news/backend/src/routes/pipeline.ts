@@ -347,6 +347,38 @@ export async function pipelineRoutes(
     });
   });
 
+  // POST /api/v1/pipeline/drain-old — Remove all waiting jobs older than N minutes
+  app.post('/pipeline/drain-old', async (request, reply) => {
+    const body = (request.body || {}) as { maxAgeMinutes?: number; queue?: string };
+    const maxAgeMs = ((body.maxAgeMinutes || 60) * 60 * 1000);
+    const queueName = body.queue || 'ingestion';
+    const cutoff = Date.now() - maxAgeMs;
+
+    const queue = getQueue(queueName as any);
+    const waiting = await queue.getWaiting(0, 5000);
+
+    let removed = 0;
+    for (const job of waiting) {
+      if (job.timestamp && job.timestamp < cutoff) {
+        try {
+          await job.remove();
+          removed++;
+        } catch {}
+      }
+    }
+
+    // Also clean completed/failed older than 1 hour
+    const cleanedCompleted = await queue.clean(3600 * 1000, 5000, 'completed');
+    const cleanedFailed = await queue.clean(3600 * 1000, 5000, 'failed');
+
+    return reply.send({
+      removed,
+      cleanedCompleted: cleanedCompleted.length,
+      cleanedFailed: cleanedFailed.length,
+      remainingWaiting: waiting.length - removed,
+    });
+  });
+
   // POST /api/v1/pipeline/cleanup-failed — Deactivate sources that keep failing and purge their jobs
   app.post('/pipeline/cleanup-failed', async (_request, reply) => {
     const queue = getQueue(QUEUE_NAMES.INGESTION);
