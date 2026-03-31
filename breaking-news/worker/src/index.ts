@@ -65,152 +65,64 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Initialize all workers
+  // Initialize all workers with error isolation —
+  // if one worker fails to start, the others still run
   logger.info('Initializing workers...');
 
-  const ingestionWorker = createIngestionWorker();
-  workers.push(ingestionWorker);
-  logger.info('Ingestion worker started');
+  const workerFactories: Array<[string, () => Worker]> = [
+    ['ingestion', createIngestionWorker],
+    ['enrichment', createEnrichmentWorker],
+    ['clustering', createClusteringWorker],
+    ['scoring', createScoringWorker],
+    ['llm-ingestion', createLLMIngestionWorker],
+    ['article-extraction', createArticleExtractionWorker],
+    ['geocoding', createGeocodingWorker],
+    ['embeddings', createEmbeddingsWorker],
+    ['notification', createNotificationWorker],
+    ['summarization', createSummarizationWorker],
+    ['sentiment', createSentimentWorker],
+    ['credibility', createCredibilityWorker],
+    ['rss-discovery', createRSSDiscoveryWorker],
+    ['digest', createDigestWorker],
+    ['coverage', createCoverageWorker],
+    ['first-draft', createFirstDraftWorker],
+    ['push-notification', createPushNotificationWorker],
+    ['domain-scoring', createDomainScoringWorker],
+    ['audio-transcription', createAudioTranscriptionWorker],
+    ['prediction', createPredictionWorker],
+    ['stock-monitor', createStockMonitorWorker],
+    ['public-data', createPublicDataWorker],
+    ['shift-briefing', createShiftBriefingWorker],
+    ['breaking-package', createBreakingPackageWorker],
+    ['deadline-alert', createDeadlineAlertWorker],
+    ['beat-alert', createBeatAlertWorker],
+    ['court-record', createCourtRecordWorker],
+    ['community-radar', createCommunityRadarWorker],
+    ['video-generation', createVideoGenerationWorker],
+    ['engagement-tracking', createEngagementTrackingWorker],
+    ['social-monitor', createSocialMonitorWorker],
+    ['story-research', createStoryResearchWorker],
+    ['story-splitter', createStorySplitterWorker],
+    ['newscatcher', createNewscatcherWorker],
+    ['similarweb-scoring', createSimilarWebScoringWorker],
+    ['hyperlocal-intel', createHyperLocalIntelWorker],
+  ];
 
-  const enrichmentWorker = createEnrichmentWorker();
-  workers.push(enrichmentWorker);
-  logger.info('Enrichment worker started');
+  let started = 0;
+  let failed = 0;
+  for (const [name, factory] of workerFactories) {
+    try {
+      const worker = factory();
+      workers.push(worker);
+      started++;
+      logger.info(`${name} worker started`);
+    } catch (err) {
+      failed++;
+      logger.error({ err: (err as Error).message, worker: name }, `Failed to start ${name} worker — skipping`);
+    }
+  }
 
-  const clusteringWorker = createClusteringWorker();
-  workers.push(clusteringWorker);
-  logger.info('Clustering worker started');
-
-  const scoringWorker = createScoringWorker();
-  workers.push(scoringWorker);
-  logger.info('Scoring worker started');
-
-  const llmIngestionWorker = createLLMIngestionWorker();
-  workers.push(llmIngestionWorker);
-  logger.info('LLM ingestion worker started');
-
-  const articleExtractionWorker = createArticleExtractionWorker();
-  workers.push(articleExtractionWorker);
-  logger.info('Article extraction worker started');
-
-  const geocodingWorker = createGeocodingWorker();
-  workers.push(geocodingWorker);
-  logger.info('Geocoding worker started');
-
-  const embeddingsWorker = createEmbeddingsWorker();
-  workers.push(embeddingsWorker);
-  logger.info('Embeddings worker started');
-
-  const notificationWorker = createNotificationWorker();
-  workers.push(notificationWorker);
-  logger.info('Notification worker started');
-
-  const summarizationWorker = createSummarizationWorker();
-  workers.push(summarizationWorker);
-  logger.info('Summarization worker started');
-
-  const sentimentWorker = createSentimentWorker();
-  workers.push(sentimentWorker);
-  logger.info('Sentiment worker started');
-
-  const credibilityWorker = createCredibilityWorker();
-  workers.push(credibilityWorker);
-  logger.info('Credibility worker started');
-
-  const rssDiscoveryWorker = createRSSDiscoveryWorker();
-  workers.push(rssDiscoveryWorker);
-  logger.info('RSS discovery worker started');
-
-  const digestWorker = createDigestWorker();
-  workers.push(digestWorker);
-  logger.info('Digest worker started');
-
-  const coverageWorker = createCoverageWorker();
-  workers.push(coverageWorker);
-  logger.info('Coverage worker started');
-
-  const firstDraftWorker = createFirstDraftWorker();
-  workers.push(firstDraftWorker);
-  logger.info('First draft worker started');
-
-  const pushNotificationWorker = createPushNotificationWorker();
-  workers.push(pushNotificationWorker);
-  logger.info('Push notification worker started');
-
-  const domainScoringWorker = createDomainScoringWorker();
-  workers.push(domainScoringWorker);
-  logger.info('Domain scoring worker started');
-
-  const audioTranscriptionWorker = createAudioTranscriptionWorker();
-  workers.push(audioTranscriptionWorker);
-  logger.info('Audio transcription worker started');
-
-  const predictionWorker = createPredictionWorker();
-  workers.push(predictionWorker);
-  logger.info('Prediction worker started');
-
-  const stockMonitorWorker = createStockMonitorWorker();
-  workers.push(stockMonitorWorker);
-  logger.info('Stock monitor worker started');
-
-  const publicDataWorker = createPublicDataWorker();
-  workers.push(publicDataWorker);
-  logger.info('Public data worker started');
-
-  const shiftBriefingWorker = createShiftBriefingWorker();
-  workers.push(shiftBriefingWorker);
-  logger.info('Shift briefing worker started');
-
-  const breakingPackageWorker = createBreakingPackageWorker();
-  workers.push(breakingPackageWorker);
-  logger.info('Breaking package worker started');
-
-  const deadlineAlertWorker = createDeadlineAlertWorker();
-  workers.push(deadlineAlertWorker);
-  logger.info('Deadline alert worker started');
-
-  const beatAlertWorker = createBeatAlertWorker();
-  workers.push(beatAlertWorker);
-  logger.info('Beat alert worker started');
-
-  const courtRecordWorker = createCourtRecordWorker();
-  workers.push(courtRecordWorker);
-  logger.info('Court record worker started');
-
-  const communityRadarWorker = createCommunityRadarWorker();
-  workers.push(communityRadarWorker);
-  logger.info('Community radar worker started');
-
-  const videoGenerationWorker = createVideoGenerationWorker();
-  workers.push(videoGenerationWorker);
-  logger.info('Video generation worker started');
-
-  const engagementTrackingWorker = createEngagementTrackingWorker();
-  workers.push(engagementTrackingWorker);
-  logger.info('Engagement tracking worker started');
-
-  const socialMonitorWorker = createSocialMonitorWorker();
-  workers.push(socialMonitorWorker);
-  logger.info('Social monitor worker started');
-
-  const storyResearchWorker = createStoryResearchWorker();
-  workers.push(storyResearchWorker);
-  logger.info('Story research worker started');
-
-  const storySplitterWorker = createStorySplitterWorker();
-  workers.push(storySplitterWorker);
-  logger.info('Story splitter worker started');
-
-  const newscatcherWorker = createNewscatcherWorker();
-  workers.push(newscatcherWorker);
-  logger.info('Newscatcher worker started');
-
-  const similarwebWorker = createSimilarWebScoringWorker();
-  workers.push(similarwebWorker);
-  logger.info('SimilarWeb scoring worker started');
-
-  const hyperLocalIntelWorker = createHyperLocalIntelWorker();
-  workers.push(hyperLocalIntelWorker);
-  logger.info('HyperLocal Intel worker started');
+  logger.info({ started, failed, total: workerFactories.length }, 'Worker initialization complete');
 
   // Start poll schedulers
   startSchedulers();
