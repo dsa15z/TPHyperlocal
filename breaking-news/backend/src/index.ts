@@ -3,6 +3,8 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import IORedis from 'ioredis';
+import { Queue } from 'bullmq';
 import dotenv from 'dotenv';
 
 import { storiesRoutes } from './routes/stories.js';
@@ -298,37 +300,34 @@ async function ensureTables() {
 }
 
 // ─── Backend-side auto-poll scheduler ───────────────────────────────────────
-// This ensures ingestion jobs are enqueued even if the worker service is slow
-// to start. The worker processes the jobs; we just ensure they exist in the queue.
+// Ensures ingestion jobs are always enqueued even if the worker is restarting.
+// The worker processes jobs; we just make sure the queues have work.
 
 async function startBackendScheduler() {
   const redisUrl = process.env['REDIS_URL'];
   if (!redisUrl) {
-    console.log('[scheduler] No REDIS_URL set, skipping backend auto-poll');
+    console.log('[scheduler] No REDIS_URL — skipping auto-poll');
     return;
   }
 
-  let Redis: any;
-  let Queue: any;
+  let connection: InstanceType<typeof IORedis>;
   try {
-    const ioredis = await import('ioredis');
-    Redis = ioredis.default;
-    const bullmq = await import('bullmq');
-    Queue = bullmq.Queue;
-  } catch {
-    console.log('[scheduler] BullMQ/ioredis not available, skipping backend auto-poll');
+    connection = new IORedis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
+    await connection.ping();
+    console.log('[scheduler] Redis connected for auto-poll');
+  } catch (err: any) {
+    console.error(`[scheduler] Redis connect failed: ${err.message}`);
     return;
   }
 
-  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
-
-  async function enqueueRSSPolls() {
+  // ── Enqueue RSS/API source polls ─────────────────────────────────────
+  async function enqueueSourcePolls() {
     try {
       const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
       const sources = await prisma.source.findMany({
         where: {
-          platform: 'RSS',
           isActive: true,
+          platform: { in: ['RSS', 'NEWSAPI', 'TWITTER', 'FACEBOOK'] as any[] },
           OR: [
             { lastPolledAt: null },
             { lastPolledAt: { lt: fiveMinAgo } },
@@ -336,6 +335,7 @@ async function startBackendScheduler() {
         },
         orderBy: { lastPolledAt: 'asc' },
         take: 50,
+        include: { market: true },
       });
 
       if (sources.length === 0) return;
@@ -343,14 +343,31 @@ async function startBackendScheduler() {
       const queue = new Queue('ingestion', { connection });
       let queued = 0;
       for (const source of sources) {
-        if (!source.url) continue;
+        const platform = source.platform as string;
+        let jobName = 'rss_poll';
+        let jobData: Record<string, any> = { type: 'rss_poll', sourceId: source.id, feedUrl: source.url };
+
+        if (platform === 'NEWSAPI') {
+          jobName = 'newsapi_poll';
+          const meta = source.metadata as Record<string, any> | null;
+          jobData = { type: 'newsapi_poll', sourceId: source.id, query: meta?.query || 'Houston Texas' };
+        } else if (platform === 'TWITTER') {
+          jobName = 'twitter_poll';
+          const meta = source.metadata as Record<string, any> | null;
+          jobData = { type: 'twitter_poll', sourceId: source.id, query: meta?.query || source.url || '' };
+        } else if (platform === 'FACEBOOK') {
+          jobName = 'facebook_page_poll';
+          const meta = source.metadata as Record<string, any> | null;
+          const token = (meta?.accessToken as string) || process.env['FACEBOOK_ACCESS_TOKEN'] || '';
+          if (!source.platformId || !token) continue;
+          jobData = { type: 'facebook_page_poll', sourceId: source.id, pageId: source.platformId, accessToken: token };
+        } else if (!source.url) {
+          continue;
+        }
+
         try {
-          await queue.add('rss_poll', {
-            type: 'rss_poll',
-            sourceId: source.id,
-            feedUrl: source.url,
-          }, {
-            jobId: `rss-poll-${source.id}`,
+          await queue.add(jobName, jobData, {
+            jobId: `auto-${platform.toLowerCase()}-${source.id}`,
             attempts: 2,
             backoff: { type: 'exponential', delay: 5000 },
             removeOnComplete: { age: 1800 },
@@ -358,22 +375,72 @@ async function startBackendScheduler() {
           });
           queued++;
         } catch {
-          // Job already exists — that's fine
+          // Job already exists
         }
       }
       await queue.close();
-      if (queued > 0) {
-        console.log(`[scheduler] Enqueued ${queued} RSS poll jobs (backend auto-poll)`);
-      }
+      if (queued > 0) console.log(`[scheduler] Enqueued ${queued} source poll jobs`);
     } catch (err: any) {
-      console.error(`[scheduler] RSS auto-poll error: ${err.message}`);
+      console.error(`[scheduler] Source poll error: ${err.message}`);
     }
   }
 
+  // ── Enqueue LLM polls ────────────────────────────────────────────────
+  async function enqueueLLMPolls() {
+    try {
+      const llmSources = await prisma.source.findMany({
+        where: {
+          platform: { in: ['LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI'] as any[] },
+          isActive: true,
+        },
+        include: { market: true },
+      });
+      if (llmSources.length === 0) return;
+
+      const envKeyMap: Record<string, string> = {
+        LLM_OPENAI: 'OPENAI_API_KEY',
+        LLM_CLAUDE: 'ANTHROPIC_API_KEY',
+        LLM_GROK: 'XAI_API_KEY',
+        LLM_GEMINI: 'GOOGLE_AI_KEY',
+      };
+
+      const queue = new Queue('llm-ingestion', { connection });
+      let queued = 0;
+      for (const source of llmSources) {
+        const apiKey = process.env[envKeyMap[source.platform as string] || ''];
+        if (!apiKey) continue;
+        const marketKeywords = source.market?.keywords as string[] | null;
+
+        try {
+          await queue.add('llm_poll', {
+            type: 'llm_poll',
+            sourceId: source.id,
+            platform: source.platform,
+            marketName: source.market?.name || null,
+            marketKeywords: marketKeywords || [],
+            apiKey,
+          }, {
+            jobId: `auto-llm-${source.id}`,
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 10000 },
+            removeOnComplete: { age: 1800 },
+            removeOnFail: { age: 3600 },
+          });
+          queued++;
+        } catch { /* dedup */ }
+      }
+      await queue.close();
+      if (queued > 0) console.log(`[scheduler] Enqueued ${queued} LLM poll jobs`);
+    } catch (err: any) {
+      console.error(`[scheduler] LLM poll error: ${err.message}`);
+    }
+  }
+
+  // ── Enqueue score decay ──────────────────────────────────────────────
   async function enqueueScoreDecay() {
     try {
       const stories = await prisma.story.findMany({
-        where: { status: { notIn: ['ARCHIVED', 'STALE'] } },
+        where: { status: { notIn: ['ARCHIVED', 'STALE'] as any[] } },
         select: { id: true },
       });
       if (stories.length === 0) return;
@@ -382,9 +449,8 @@ async function startBackendScheduler() {
       for (const story of stories) {
         try {
           await queue.add('score', { storyId: story.id }, {
-            jobId: `decay-score-${story.id}`,
+            jobId: `decay-${story.id}`,
             attempts: 2,
-            backoff: { type: 'exponential', delay: 2000 },
             removeOnComplete: { age: 1800 },
             removeOnFail: { age: 3600 },
           });
@@ -396,12 +462,17 @@ async function startBackendScheduler() {
     }
   }
 
-  // Run immediately on startup, then every 5 min
-  console.log('[scheduler] Starting backend auto-poll scheduler');
-  setTimeout(() => void enqueueRSSPolls(), 5_000); // 5s after boot
-  setTimeout(() => void enqueueScoreDecay(), 15_000); // 15s after boot
+  // ── Schedule ─────────────────────────────────────────────────────────
+  console.log('[scheduler] Starting backend auto-poll (RSS/API/LLM every 5m, scoring every 10m)');
 
-  setInterval(() => void enqueueRSSPolls(), 5 * 60 * 1000);
+  // Run all immediately on startup (staggered to avoid thundering herd)
+  setTimeout(() => void enqueueSourcePolls(), 3_000);
+  setTimeout(() => void enqueueLLMPolls(), 8_000);
+  setTimeout(() => void enqueueScoreDecay(), 15_000);
+
+  // Then repeat on intervals
+  setInterval(() => void enqueueSourcePolls(), 5 * 60 * 1000);
+  setInterval(() => void enqueueLLMPolls(), 10 * 60 * 1000);
   setInterval(() => void enqueueScoreDecay(), 10 * 60 * 1000);
 }
 
