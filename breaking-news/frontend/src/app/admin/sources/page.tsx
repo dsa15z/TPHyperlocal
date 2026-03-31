@@ -98,12 +98,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   MANUAL: "text-gray-400 bg-gray-500/10",
 };
 
-const ACTIVE_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-];
-
-const HEALTH_OPTIONS = [
+const STATUS_OPTIONS = [
   { value: "healthy", label: "Healthy" },
   { value: "warning", label: "Warning" },
   { value: "failing", label: "Failing" },
@@ -140,8 +135,7 @@ export default function SourcesPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
-  const [selectedActive, setSelectedActive] = useState<string[]>([]);
-  const [selectedHealth, setSelectedHealth] = useState<string[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -380,19 +374,12 @@ export default function SourcesPage() {
     }
     if (effectiveMarkets && effectiveMarkets.length === 0) return false;
 
-    const effectiveActive = getEffectiveSelection(selectedActive);
-    if (effectiveActive && effectiveActive.length > 0) {
-      const status = s.isActive ? "active" : "inactive";
-      if (!effectiveActive.includes(status)) return false;
-    }
-    if (effectiveActive && effectiveActive.length === 0) return false;
-
-    const effectiveHealth = getEffectiveSelection(selectedHealth);
-    if (effectiveHealth && effectiveHealth.length > 0) {
+    const effectiveStatus = getEffectiveSelection(selectedStatus);
+    if (effectiveStatus && effectiveStatus.length > 0) {
       const h = getSourceHealth(s).status;
-      if (!effectiveHealth.includes(h)) return false;
+      if (!effectiveStatus.includes(h)) return false;
     }
-    if (effectiveHealth && effectiveHealth.length === 0) return false;
+    if (effectiveStatus && effectiveStatus.length === 0) return false;
 
     return true;
   });
@@ -752,16 +739,10 @@ export default function SourcesPage() {
             placeholder="All Markets"
           />
           <MultiSelectDropdown
-            options={ACTIVE_OPTIONS}
-            selected={selectedActive}
-            onChange={setSelectedActive}
-            placeholder="Active & Inactive"
-          />
-          <MultiSelectDropdown
-            options={HEALTH_OPTIONS}
-            selected={selectedHealth}
-            onChange={setSelectedHealth}
-            placeholder="All Health"
+            options={STATUS_OPTIONS}
+            selected={selectedStatus}
+            onChange={setSelectedStatus}
+            placeholder="All Status"
           />
           {importMutation.isSuccess && (
             <span className="text-green-400 text-sm ml-auto">

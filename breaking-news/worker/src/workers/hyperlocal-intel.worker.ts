@@ -257,8 +257,8 @@ async function handleBatchMarkets(job: Job<HyperLocalIntelJob>): Promise<void> {
       source = await prisma.source.create({
         data: {
           name: `HyperLocal Intel - ${loc.resolved?.display_name || loc.city}`,
-          platform: 'API',
-          sourceType: 'API_PROVIDER',
+          platform: 'NEWSAPI' as any,
+          sourceType: 'API_PROVIDER' as any,
           url: `${process.env.HYPERLOCAL_INTEL_URL || 'https://futurilabs.com/hyperlocalhyperrecent'}/api/lookup`,
           trustScore: 0.80,
           isActive: true,
