@@ -297,6 +297,114 @@ async function ensureTables() {
   }
 }
 
+// ─── Backend-side auto-poll scheduler ───────────────────────────────────────
+// This ensures ingestion jobs are enqueued even if the worker service is slow
+// to start. The worker processes the jobs; we just ensure they exist in the queue.
+
+async function startBackendScheduler() {
+  const redisUrl = process.env['REDIS_URL'];
+  if (!redisUrl) {
+    console.log('[scheduler] No REDIS_URL set, skipping backend auto-poll');
+    return;
+  }
+
+  let Redis: any;
+  let Queue: any;
+  try {
+    const ioredis = await import('ioredis');
+    Redis = ioredis.default;
+    const bullmq = await import('bullmq');
+    Queue = bullmq.Queue;
+  } catch {
+    console.log('[scheduler] BullMQ/ioredis not available, skipping backend auto-poll');
+    return;
+  }
+
+  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
+
+  async function enqueueRSSPolls() {
+    try {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const sources = await prisma.source.findMany({
+        where: {
+          platform: 'RSS',
+          isActive: true,
+          OR: [
+            { lastPolledAt: null },
+            { lastPolledAt: { lt: fiveMinAgo } },
+          ],
+        },
+        orderBy: { lastPolledAt: 'asc' },
+        take: 50,
+      });
+
+      if (sources.length === 0) return;
+
+      const queue = new Queue('ingestion', { connection });
+      let queued = 0;
+      for (const source of sources) {
+        if (!source.url) continue;
+        try {
+          await queue.add('rss_poll', {
+            type: 'rss_poll',
+            sourceId: source.id,
+            feedUrl: source.url,
+          }, {
+            jobId: `rss-poll-${source.id}`,
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: { age: 1800 },
+            removeOnFail: { age: 3600 },
+          });
+          queued++;
+        } catch {
+          // Job already exists — that's fine
+        }
+      }
+      await queue.close();
+      if (queued > 0) {
+        console.log(`[scheduler] Enqueued ${queued} RSS poll jobs (backend auto-poll)`);
+      }
+    } catch (err: any) {
+      console.error(`[scheduler] RSS auto-poll error: ${err.message}`);
+    }
+  }
+
+  async function enqueueScoreDecay() {
+    try {
+      const stories = await prisma.story.findMany({
+        where: { status: { notIn: ['ARCHIVED', 'STALE'] } },
+        select: { id: true },
+      });
+      if (stories.length === 0) return;
+
+      const queue = new Queue('scoring', { connection });
+      for (const story of stories) {
+        try {
+          await queue.add('score', { storyId: story.id }, {
+            jobId: `decay-score-${story.id}`,
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 2000 },
+            removeOnComplete: { age: 1800 },
+            removeOnFail: { age: 3600 },
+          });
+        } catch { /* dedup */ }
+      }
+      await queue.close();
+    } catch (err: any) {
+      console.error(`[scheduler] Score decay error: ${err.message}`);
+    }
+  }
+
+  // Run immediately on startup, then every 5 min
+  console.log('[scheduler] Starting backend auto-poll scheduler');
+  setTimeout(() => void enqueueRSSPolls(), 5_000); // 5s after boot
+  setTimeout(() => void enqueueScoreDecay(), 15_000); // 15s after boot
+
+  setInterval(() => void enqueueRSSPolls(), 5 * 60 * 1000);
+  setInterval(() => void enqueueScoreDecay(), 10 * 60 * 1000);
+}
+
 async function main() {
   const app = await buildServer();
 
@@ -307,6 +415,9 @@ async function main() {
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Server listening on ${HOST}:${PORT}`);
     app.log.info(`Swagger docs available at http://${HOST}:${PORT}/docs`);
+
+    // Start backend-side auto-poll after server is ready
+    void startBackendScheduler();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
