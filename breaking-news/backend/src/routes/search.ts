@@ -135,11 +135,17 @@ export async function searchRoutes(
     const { q, category, status, fields, from, to, minScore, maxScore, sort, order, limit, offset, semantic } = parseResult.data;
     const useSemanticSearch = semantic === 'true';
 
+    // Strip HTML tags from search query to prevent XSS (SEC-001)
+    const htmlStripped = q.replace(/<[^>]*>/g, '').trim();
+    if (!htmlStripped) {
+      return reply.send({ data: { stories: [] }, pagination: { total: 0, limit, offset } });
+    }
+
     // Track this search for trending
-    trackSearch(q);
+    trackSearch(htmlStripped);
 
     // Sanitize search term for ILIKE
-    const sanitized = q.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+    const sanitized = htmlStripped.replace(/[%_\\]/g, (ch) => `\\${ch}`);
 
     // Build search fields
     const searchFields = fields

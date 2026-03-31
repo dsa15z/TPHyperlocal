@@ -123,6 +123,25 @@ async function buildServer() {
     },
   });
 
+  // Global error handler — sanitize 500 errors in production (SEC-002)
+  app.setErrorHandler((error, _request, reply) => {
+    const statusCode = error.statusCode || 500;
+    if (statusCode >= 500 && process.env.NODE_ENV === 'production') {
+      app.log.error({ err: error }, 'Internal server error');
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'An unexpected error occurred. Please try again later.',
+      });
+    }
+    // In dev or for 4xx errors, return the full error
+    return reply.status(statusCode).send({
+      statusCode,
+      error: error.name || 'Error',
+      message: error.message,
+    });
+  });
+
   // Auth middleware — supports both API key (x-api-key) and JWT (Bearer token)
   // API key auth for third-party API consumers
   app.addHook('onRequest', authMiddleware);
