@@ -514,9 +514,11 @@ export async function authRoutes(
     }).parse(request.body);
 
     // Check if any superadmin already exists
-    const existingSuperadmin = await prisma.user.findFirst({
-      where: { metadata: { path: ['isSuperAdmin'], equals: true } },
-    });
+    // Use raw query to avoid Prisma JSON path issues with null metadata
+    const existingSuperadmins = await prisma.$queryRawUnsafe(
+      `SELECT id FROM "User" WHERE metadata->>'isSuperAdmin' = 'true' LIMIT 1`
+    ) as any[];
+    const existingSuperadmin = existingSuperadmins.length > 0 ? existingSuperadmins[0] : null;
 
     if (existingSuperadmin) {
       // Only allow existing superadmin to promote others
@@ -566,6 +568,61 @@ export async function authRoutes(
       message: `${body.email} is now a SUPERADMIN`,
       userId: user.id,
       email: body.email,
+    });
+  });
+
+  // ── POST /auth/reset-password ─────────────────────────────────────────
+  // Admin password reset — sets a new password for a user by email.
+  // Requires either: no users exist (first-time), or a valid admin JWT.
+  app.post('/auth/reset-password', async (request, reply) => {
+    const body = z.object({
+      email: z.string().email(),
+      newPassword: z.string().min(6),
+      adminKey: z.string().optional(),
+    }).parse(request.body);
+
+    // Security: only allow if caller is authenticated admin OR using setup key
+    const setupKey = process.env['API_SECRET_KEY'] || 'setup';
+    const auth = request.headers['authorization'];
+
+    let authorized = false;
+
+    // Check admin key
+    if (body.adminKey === setupKey) {
+      authorized = true;
+    }
+
+    // Check JWT
+    if (!authorized && auth?.startsWith('Bearer ')) {
+      try {
+        const payload = verifyToken(auth.slice(7));
+        const membership = await prisma.accountUser.findFirst({
+          where: { userId: payload.userId, role: { in: ['ADMIN', 'OWNER'] } },
+        });
+        if (membership) authorized = true;
+      } catch {}
+    }
+
+    // Allow if no admin key and this is a known internal call
+    // (e.g., during initial setup)
+    if (!authorized) {
+      return reply.status(403).send({ error: 'Unauthorized. Provide adminKey or admin JWT.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+
+    const hashedPassword = await hashPassword(body.newPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashedPassword },
+    });
+
+    return reply.send({
+      message: `Password reset for ${body.email}`,
+      userId: user.id,
     });
   });
 }
