@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -75,6 +75,27 @@ export default function MarketsPage() {
     queryFn: fetchMarkets,
   });
   const markets: Market[] = (marketsData as any)?.data || marketsData || [];
+
+  // Auto-seed default markets if none exist
+  const seedMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<{ seeded: number }>("/api/v1/admin/markets/seed", {
+        method: "POST",
+        headers: getAuthHeaders(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
+    },
+  });
+
+  // Auto-seed when markets are empty
+  const [didAutoSeed, setDidAutoSeed] = useState(false);
+  useEffect(() => {
+    if (!isLoading && markets.length === 0 && !didAutoSeed && !seedMutation.isPending) {
+      setDidAutoSeed(true);
+      seedMutation.mutate();
+    }
+  }, [isLoading, markets.length, didAutoSeed, seedMutation]);
 
   const createMutation = useMutation({
     mutationFn: createMarket,

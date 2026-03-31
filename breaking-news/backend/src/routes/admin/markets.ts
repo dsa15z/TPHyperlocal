@@ -118,7 +118,7 @@ export async function marketRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
-  // GET /admin/markets — list markets for current account
+  // GET /admin/markets — list markets (OWNER sees all, others see own account)
   app.get('/markets', async (request, reply) => {
     const au = request.accountUser;
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });
@@ -130,17 +130,21 @@ export async function marketRoutes(
     }
     const { limit, offset } = query.data;
 
+    // Superadmin (OWNER) sees all markets across all accounts
+    const where = au.role === 'OWNER' ? {} : { accountId: au.accountId };
+
     const [markets, total] = await Promise.all([
       prisma.market.findMany({
-        where: { accountId: au.accountId },
+        where,
         include: {
           _count: { select: { sources: true, stories: true } },
+          account: { select: { name: true } },
         },
         orderBy: { createdAt: 'asc' },
         take: limit,
         skip: offset,
       }),
-      prisma.market.count({ where: { accountId: au.accountId } }),
+      prisma.market.count({ where }),
     ]);
 
     return reply.status(200).send({
@@ -324,6 +328,61 @@ export async function marketRoutes(
     });
 
     return reply.status(200).send({ message: 'Market deactivated', id: market.id });
+  });
+
+  // POST /admin/markets/seed — seed default markets if none exist
+  app.post('/markets/seed', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    // Check if any markets exist (OWNER sees all, regular sees own account)
+    const where = au.role === 'OWNER' ? {} : { accountId: au.accountId };
+    const existing = await prisma.market.count({ where });
+    if (existing > 0) {
+      return reply.status(200).send({ message: 'Markets already exist', count: existing, seeded: 0 });
+    }
+
+    // Seed default markets from KNOWN_CITIES
+    const defaults = [
+      'houston_tx', 'dallas_tx', 'san antonio_tx', 'austin_tx',
+      'new york_ny', 'los angeles_ca', 'chicago_il', 'miami_fl',
+      'phoenix_az', 'atlanta_ga',
+    ];
+
+    let seeded = 0;
+    for (const key of defaults) {
+      const city = KNOWN_CITIES[key];
+      if (!city) continue;
+
+      const [name, stateRaw] = key.split('_');
+      const marketName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const state = (stateRaw || '').toUpperCase();
+      const slug = key.replace(/_/g, '-').replace(/ /g, '-');
+
+      try {
+        await prisma.market.create({
+          data: {
+            accountId: au.accountId,
+            name: marketName,
+            slug,
+            state,
+            latitude: city.lat,
+            longitude: city.lon,
+            radiusKm: city.radius,
+            timezone: city.tz,
+            keywords: city.keywords,
+            neighborhoods: city.neighborhoods,
+            isActive: true,
+          },
+        });
+        seeded++;
+      } catch {
+        // Slug conflict or other issue — skip
+      }
+    }
+
+    return reply.status(201).send({ message: `Seeded ${seeded} markets`, seeded });
   });
 
   // POST /admin/markets/autofill — AI-powered market data autofill
