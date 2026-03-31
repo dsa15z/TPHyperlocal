@@ -191,9 +191,7 @@ const NAV_GROUPS: NavGroup[] = [
     section: "admin",
     items: [
       { href: "/admin/sources", label: "Data Feeds", icon: Database },
-      { href: "/admin/source-health", label: "Source Health", icon: Target },
       { href: "/admin/markets", label: "Markets", icon: MapPin },
-      { href: "/admin/hyperlocal-intel", label: "HyperLocal Intel", icon: Globe },
     ],
   },
 

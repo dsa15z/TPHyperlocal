@@ -103,16 +103,35 @@ const ACTIVE_OPTIONS = [
   { value: "inactive", label: "Inactive" },
 ];
 
+const HEALTH_OPTIONS = [
+  { value: "healthy", label: "Healthy" },
+  { value: "warning", label: "Warning" },
+  { value: "failing", label: "Failing" },
+  { value: "inactive", label: "Inactive" },
+];
+
 const SOURCE_COLUMNS = [
-  { id: "name", label: "Name", width: 300, defaultWidth: 300, minWidth: 150 },
+  { id: "name", label: "Name", width: 280, defaultWidth: 280, minWidth: 150 },
   { id: "platform", label: "Platform", width: 100, defaultWidth: 100, minWidth: 70 },
-  { id: "type", label: "Type", width: 120, defaultWidth: 120, minWidth: 80 },
+  { id: "type", label: "Type", width: 110, defaultWidth: 110, minWidth: 80 },
   { id: "market", label: "Market", width: 100, defaultWidth: 100, minWidth: 70 },
-  { id: "trust", label: "Trust", width: 100, defaultWidth: 100, minWidth: 60 },
+  { id: "health", label: "Health", width: 80, defaultWidth: 80, minWidth: 60 },
+  { id: "trust", label: "Trust", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "active", label: "Active", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "lastPolled", label: "Last Polled", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "actions", label: "Actions", width: 100, defaultWidth: 100, minWidth: 70 },
 ];
+
+function getSourceHealth(source: Source): { status: "healthy" | "warning" | "failing" | "inactive"; color: string; label: string } {
+  if (!source.isActive) return { status: "inactive", color: "text-gray-500 bg-gray-500/10", label: "Inactive" };
+  if (!source.lastPolledAt) return { status: "warning", color: "text-yellow-400 bg-yellow-500/10", label: "Never Polled" };
+  const hoursSincePolled = (Date.now() - new Date(source.lastPolledAt).getTime()) / (1000 * 60 * 60);
+  const meta = source.metadata as Record<string, unknown> | null;
+  const failures = (meta?.consecutiveFailures as number) || 0;
+  if (failures >= 3 || hoursSincePolled > 24) return { status: "failing", color: "text-red-400 bg-red-500/10", label: "Failing" };
+  if (failures >= 1 || hoursSincePolled > 6) return { status: "warning", color: "text-yellow-400 bg-yellow-500/10", label: "Warning" };
+  return { status: "healthy", color: "text-green-400 bg-green-500/10", label: "Healthy" };
+}
 
 export default function SourcesPage() {
   const queryClient = useQueryClient();
@@ -122,6 +141,7 @@ export default function SourcesPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedActive, setSelectedActive] = useState<string[]>([]);
+  const [selectedHealth, setSelectedHealth] = useState<string[]>([]);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -366,6 +386,13 @@ export default function SourcesPage() {
       if (!effectiveActive.includes(status)) return false;
     }
     if (effectiveActive && effectiveActive.length === 0) return false;
+
+    const effectiveHealth = getEffectiveSelection(selectedHealth);
+    if (effectiveHealth && effectiveHealth.length > 0) {
+      const h = getSourceHealth(s).status;
+      if (!effectiveHealth.includes(h)) return false;
+    }
+    if (effectiveHealth && effectiveHealth.length === 0) return false;
 
     return true;
   });
@@ -730,6 +757,12 @@ export default function SourcesPage() {
             onChange={setSelectedActive}
             placeholder="Active & Inactive"
           />
+          <MultiSelectDropdown
+            options={HEALTH_OPTIONS}
+            selected={selectedHealth}
+            onChange={setSelectedHealth}
+            placeholder="All Health"
+          />
           {importMutation.isSuccess && (
             <span className="text-green-400 text-sm ml-auto">
               Sources imported successfully!
@@ -899,6 +932,7 @@ export default function SourcesPage() {
                     {isColVisible("market") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("market") }}>
                       Market
                     </th>}
+                    {isColVisible("health") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("health") }}>Health</th>}
                     {isColVisible("trust") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("trust") }}>
                       Trust
                     </th>}
@@ -997,6 +1031,12 @@ export default function SourcesPage() {
                             <span className="text-gray-600">Global</span>
                           )}
                         </td>}
+                        {isColVisible("health") && (() => {
+                          const h = getSourceHealth(source);
+                          return <td className="px-4 py-3" style={{ width: colWidth("health") }}>
+                            <span className={clsx("px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase", h.color)}>{h.label}</span>
+                          </td>;
+                        })()}
                         {isColVisible("trust") && <td className="px-4 py-3" style={{ width: colWidth("trust") }}>
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-1.5 bg-surface-300 rounded-full overflow-hidden">
