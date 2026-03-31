@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer base {
+  /* Dark theme (default) */
   :root {
     --surface: 11 14 20;
     --surface-50: 15 19 25;
@@ -11,8 +12,72 @@
     --surface-300: 35 41 54;
   }
 
-  body {
+  /* Light theme */
+  :root:not(.dark) {
+    --surface: 248 250 252;
+    --surface-50: 241 245 249;
+    --surface-100: 226 232 240;
+    --surface-200: 203 213 225;
+    --surface-300: 148 163 184;
+  }
+
+  .dark body {
     @apply bg-surface text-gray-100;
+  }
+
+  :root:not(.dark) body {
+    background: rgb(var(--surface));
+    color: #1e293b;
+  }
+
+  /* Invert glass cards in light mode */
+  :root:not(.dark) .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  :root:not(.dark) .glass-card-strong {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  :root:not(.dark) .filter-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #475569;
+  }
+
+  :root:not(.dark) .filter-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1e293b;
+  }
+
+  :root:not(.dark) .filter-btn-active {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #2563eb;
+  }
+
+  :root:not(.dark) .filter-input,
+  :root:not(.dark) .filter-select {
+    background: white;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #1e293b;
+  }
+
+  :root:not(.dark) .table-header {
+    color: #64748b;
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  :root:not(.dark) .table-row:hover {
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  /* Logo: don't invert in light mode */
+  :root:not(.dark) img[alt="TopicPulse"] {
+    filter: none;
   }
 
   /* Custom scrollbar */

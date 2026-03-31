@@ -273,6 +273,28 @@ async function ensureTables() {
     }
     console.log(`[db-sync] Created ${created}/${createStatements.length} tables`);
   }
+
+  // Try to enable pgvector extension (non-fatal if not available)
+  try {
+    await prisma.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS vector');
+    console.log('[db-sync] pgvector extension enabled');
+
+    // Add vector columns if they don't exist
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'SourcePost' AND column_name = 'embedding') THEN
+          ALTER TABLE "SourcePost" ADD COLUMN "embedding" vector(1536);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Story' AND column_name = 'embedding') THEN
+          ALTER TABLE "Story" ADD COLUMN "embedding" vector(1536);
+        END IF;
+      END $$;
+    `);
+    console.log('[db-sync] Vector columns ensured');
+  } catch (err: any) {
+    console.log(`[db-sync] pgvector not available (OK): ${err.message?.substring(0, 80)}`);
+  }
 }
 
 async function main() {

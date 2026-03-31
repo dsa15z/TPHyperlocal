@@ -53,6 +53,7 @@ import clsx from "clsx";
 import { useUser } from "./UserProvider";
 import { useSidebar } from "./SidebarProvider";
 import { NotificationBell } from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -390,6 +391,7 @@ export function SiteNav() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {isLoggedIn && <NotificationBell />}
           {isLoggedIn ? (
             <button
