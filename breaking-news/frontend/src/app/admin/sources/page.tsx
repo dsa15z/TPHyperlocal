@@ -33,7 +33,7 @@ import clsx from "clsx";
 import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
-import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
+// PageTabBar removed — filters handle the same functionality
 import { MultiSelectDropdown, getEffectiveSelection } from "@/components/MultiSelectDropdown";
 
 interface Source {
@@ -385,18 +385,7 @@ export default function SourcesPage() {
             </p>
           </div>
         </div>
-        <PageTabBar tabs={SOURCES_TABS} />
-        <div className="flex items-center justify-between">
-          <div />
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-2xl font-bold text-white tabular-nums">
-                {totalSources}
-              </div>
-              <div className="text-xs text-gray-500">
-                {activeSources} active
-              </div>
-            </div>
+        <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => {
                 if (
@@ -726,9 +715,6 @@ export default function SourcesPage() {
             onChange={setSelectedActive}
             placeholder="Active & Inactive"
           />
-          <span className="text-sm text-gray-500 ml-2">
-            {filtered.length} source{filtered.length !== 1 ? "s" : ""}
-          </span>
           {importMutation.isSuccess && (
             <span className="text-green-400 text-sm ml-auto">
               Sources imported successfully!
@@ -1072,11 +1058,12 @@ export default function SourcesPage() {
                 </tbody>
               </table>
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-4">
-                <span className="text-sm text-gray-500">
-                  Page {page} of {totalPages} ({totalSources} total)
-                </span>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-surface-300/30">
+              <span className="text-sm text-gray-500">
+                {filtered.length} shown &middot; {totalSources} total &middot; {activeSources} active
+                {totalPages > 1 && <> &middot; Page {page} of {totalPages}</>}
+              </span>
+              {totalPages > 1 && (
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
                     className={clsx("filter-btn flex items-center gap-1", page <= 1 && "opacity-40 cursor-not-allowed")}>
@@ -1087,7 +1074,7 @@ export default function SourcesPage() {
                     Next <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
+              )}
             )}
           </div>
         )}
