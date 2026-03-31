@@ -96,21 +96,28 @@ async function scheduleRSSPolls(): Promise<void> {
         continue;
       }
 
-      await ingestionQueue.add(
-        'rss_poll',
-        {
-          type: 'rss_poll',
-          sourceId: source.id,
-          feedUrl: source.url,
-        },
-        {
-          jobId: `rss-poll-${source.id}-${Date.now()}`,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 5000 },
-          removeOnComplete: { age: 3600 }, // Keep completed jobs for 1 hour
-          removeOnFail: { age: 86400 },    // Keep failed jobs for 24 hours
-        }
-      );
+      // Use deterministic jobId so BullMQ deduplicates — won't add if one
+      // is already waiting/active for this source
+      const jobId = `rss-poll-${source.id}`;
+      try {
+        await ingestionQueue.add(
+          'rss_poll',
+          {
+            type: 'rss_poll',
+            sourceId: source.id,
+            feedUrl: source.url,
+          },
+          {
+            jobId,
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: { age: 1800 },
+            removeOnFail: { age: 3600 },
+          }
+        );
+      } catch {
+        // Job with this ID already exists — skip (no backlog buildup)
+      }
     }
   } catch (err) {
     logger.error({ err }, 'Failed to schedule RSS polls');
@@ -953,8 +960,8 @@ const intervals: NodeJS.Timeout[] = [];
 export function startSchedulers(): void {
   logger.info('Starting poll schedulers');
 
-  // RSS feeds: every 2 minutes
-  const rssInterval = setInterval(scheduleRSSPolls, 2 * 60 * 1000);
+  // RSS feeds: every 5 minutes (was 2 — increased to prevent queue backlog)
+  const rssInterval = setInterval(scheduleRSSPolls, 5 * 60 * 1000);
   intervals.push(rssInterval);
 
   // NewsAPI: every 3 minutes

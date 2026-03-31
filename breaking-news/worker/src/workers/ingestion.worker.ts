@@ -9,6 +9,89 @@ import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
 
 const logger = createChildLogger('ingestion');
 
+const MAX_CONSECUTIVE_FAILURES = 5; // Auto-deactivate after this many failures
+
+/**
+ * Track a source failure. If it hits MAX_CONSECUTIVE_FAILURES, auto-deactivate
+ * the source and purge any pending queue jobs for it.
+ */
+async function trackSourceFailure(sourceId: string, reason: string): Promise<void> {
+  try {
+    const source = await prisma.source.findUnique({ where: { id: sourceId } });
+    if (!source) return;
+
+    const meta = (source.metadata || {}) as Record<string, unknown>;
+    const failures = ((meta.consecutiveFailures as number) || 0) + 1;
+
+    if (failures >= MAX_CONSECUTIVE_FAILURES) {
+      // Auto-deactivate
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: {
+          isActive: false,
+          metadata: { ...meta, consecutiveFailures: failures, deactivatedAt: new Date().toISOString(), deactivateReason: reason },
+        },
+      });
+      logger.warn({ sourceId, name: source.name, failures, reason }, `Source auto-deactivated after ${failures} consecutive failures`);
+
+      // Purge pending queue jobs for this source
+      await purgeSourceJobs(sourceId);
+    } else {
+      // Increment failure count
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: { metadata: { ...meta, consecutiveFailures: failures, lastFailure: reason, lastFailureAt: new Date().toISOString() } },
+      });
+    }
+  } catch (err) {
+    logger.error({ sourceId, err: (err as Error).message }, 'Failed to track source failure');
+  }
+}
+
+/**
+ * Reset consecutive failure count on successful poll.
+ */
+async function resetSourceFailures(sourceId: string): Promise<void> {
+  try {
+    const source = await prisma.source.findUnique({ where: { id: sourceId } });
+    if (!source) return;
+    const meta = (source.metadata || {}) as Record<string, unknown>;
+    if (meta.consecutiveFailures) {
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: { metadata: { ...meta, consecutiveFailures: 0 } },
+      });
+    }
+  } catch {
+    // Non-critical
+  }
+}
+
+/**
+ * Remove all pending ingestion queue jobs for a deactivated source.
+ */
+async function purgeSourceJobs(sourceId: string): Promise<void> {
+  try {
+    const queue = new Queue('ingestion', { connection: getSharedConnection() });
+    const waiting = await queue.getWaiting(0, 500);
+    let removed = 0;
+
+    for (const job of waiting) {
+      if (job.data?.sourceId === sourceId) {
+        await job.remove();
+        removed++;
+      }
+    }
+
+    await queue.close();
+    if (removed > 0) {
+      logger.info({ sourceId, removed }, 'Purged pending jobs for deactivated source');
+    }
+  } catch (err) {
+    logger.error({ sourceId, err: (err as Error).message }, 'Failed to purge source jobs');
+  }
+}
+
 // Types for job data
 interface RSSPollJob {
   type: 'rss_poll';
@@ -119,13 +202,18 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
+    await trackSourceFailure(sourceId, (err as Error).message);
     logger.error({ sourceId, feedUrl, err }, 'Failed to fetch RSS feed');
     throw err;
   }
 
   if (!response.ok) {
+    await trackSourceFailure(sourceId, `HTTP ${response.status}`);
     throw new Error(`RSS fetch failed: ${response.status} ${response.statusText}`);
   }
+
+  // Reset failure count on success
+  await resetSourceFailures(sourceId);
 
   const xml = await response.text();
   const parsed = xmlParser.parse(xml);
@@ -533,10 +621,10 @@ export function createIngestionWorker(): Worker {
     },
     {
       connection,
-      concurrency: 5,
+      concurrency: 10,  // Increased to handle 200+ sources
       limiter: {
-        max: 10,
-        duration: 60000, // Max 10 jobs per minute
+        max: 30,
+        duration: 60000, // Max 30 jobs per minute (up from 10)
       },
     }
   );

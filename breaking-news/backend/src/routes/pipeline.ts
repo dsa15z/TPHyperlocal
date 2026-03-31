@@ -346,4 +346,71 @@ export async function pipelineRoutes(
       lookbackHours,
     });
   });
+
+  // POST /api/v1/pipeline/cleanup-failed — Deactivate sources that keep failing and purge their jobs
+  app.post('/pipeline/cleanup-failed', async (_request, reply) => {
+    const queue = getQueue(QUEUE_NAMES.INGESTION);
+
+    // Get all failed jobs to find which sources are failing
+    const failed = await queue.getFailed(0, 200);
+    const failCounts: Record<string, { count: number; sourceId: string; url: string; reason: string }> = {};
+
+    for (const job of failed) {
+      const sourceId = job.data?.sourceId || '';
+      const url = job.data?.feedUrl || job.data?.query || '';
+      const reason = job.failedReason || '';
+      const key = sourceId || url;
+      if (!failCounts[key]) failCounts[key] = { count: 0, sourceId, url, reason };
+      failCounts[key].count++;
+    }
+
+    // Deactivate sources with 3+ failures
+    const deactivated = [];
+    for (const [_, info] of Object.entries(failCounts)) {
+      if (info.count >= 3 && info.sourceId) {
+        try {
+          await prisma.source.update({
+            where: { id: info.sourceId },
+            data: {
+              isActive: false,
+              metadata: {
+                deactivatedAt: new Date().toISOString(),
+                deactivateReason: info.reason?.substring(0, 200),
+                consecutiveFailures: info.count,
+              },
+            },
+          });
+          deactivated.push({ sourceId: info.sourceId, url: info.url, failures: info.count });
+        } catch {
+          // Source might not exist or already deactivated
+        }
+      }
+    }
+
+    // Purge waiting jobs for deactivated sources
+    const deactivatedIds = new Set(deactivated.map(d => d.sourceId));
+    let purged = 0;
+
+    if (deactivatedIds.size > 0) {
+      const waiting = await queue.getWaiting(0, 1000);
+      for (const job of waiting) {
+        if (deactivatedIds.has(job.data?.sourceId)) {
+          try {
+            await job.remove();
+            purged++;
+          } catch {}
+        }
+      }
+    }
+
+    // Also clean all failed jobs
+    const cleaned = await queue.clean(0, 1000, 'failed');
+
+    return reply.send({
+      deactivated: deactivated.length,
+      sources: deactivated,
+      purgedWaitingJobs: purged,
+      cleanedFailedJobs: cleaned.length,
+    });
+  });
 }
