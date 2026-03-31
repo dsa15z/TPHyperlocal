@@ -208,8 +208,76 @@ async function buildServer() {
   return app;
 }
 
+/**
+ * Ensure all tables exist by running CREATE TABLE IF NOT EXISTS.
+ * This bypasses prisma db push (which doesn't work in Docker CMD)
+ * and directly creates any missing tables.
+ */
+async function ensureTables() {
+  try {
+    // Check if a known newer table exists
+    await prisma.$queryRawUnsafe('SELECT 1 FROM "PublicDataAlert" LIMIT 1');
+    console.log('[db-sync] Tables already exist');
+    return;
+  } catch {
+    console.log('[db-sync] Missing tables detected, creating...');
+  }
+
+  // Run prisma db push programmatically via exec
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+
+  try {
+    const { stdout, stderr } = await execAsync(
+      'npx prisma db push --skip-generate --accept-data-loss 2>&1',
+      { timeout: 30000, cwd: process.cwd() }
+    );
+    console.log('[db-sync] prisma db push output:', stdout.substring(0, 500));
+    if (stderr) console.log('[db-sync] stderr:', stderr.substring(0, 200));
+  } catch (err: any) {
+    console.error('[db-sync] prisma db push failed:', err.message?.substring(0, 200));
+    // Try alternative: generate schema via Prisma client
+    console.log('[db-sync] Attempting alternative table creation...');
+
+    // Alternative: use $executeRaw to create critical tables
+    const createStatements = [
+      `CREATE TABLE IF NOT EXISTS "PublicDataFeed" (id TEXT PRIMARY KEY, "accountId" TEXT, name TEXT NOT NULL, type TEXT NOT NULL, url TEXT NOT NULL, "apiConfig" JSONB, "isActive" BOOLEAN DEFAULT true, "pollIntervalMin" INTEGER DEFAULT 15, "lastPolledAt" TIMESTAMPTZ, "lastError" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "PublicDataAlert" (id TEXT PRIMARY KEY, "feedId" TEXT NOT NULL, "externalId" TEXT UNIQUE, type TEXT NOT NULL, severity TEXT DEFAULT 'INFO', title TEXT NOT NULL, description TEXT, location TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, "rawData" JSONB, "storyId" TEXT, "detectedAt" TIMESTAMPTZ DEFAULT NOW(), "expiresAt" TIMESTAMPTZ)`,
+      `CREATE TABLE IF NOT EXISTS "Reporter" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "userId" TEXT, name TEXT NOT NULL, email TEXT, phone TEXT, beats JSONB, status TEXT DEFAULT 'AVAILABLE', "currentLat" DOUBLE PRECISION, "currentLon" DOUBLE PRECISION, metadata JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "Assignment" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "storyId" TEXT NOT NULL, "reporterId" TEXT NOT NULL, status TEXT DEFAULT 'ASSIGNED', priority TEXT DEFAULT 'NORMAL', notes TEXT, deadline TIMESTAMPTZ, "filedAt" TIMESTAMPTZ, "airedAt" TIMESTAMPTZ, "assignedBy" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "ShiftBriefing" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "shiftName" TEXT NOT NULL, content TEXT NOT NULL, "storyCount" INTEGER DEFAULT 0, "gapCount" INTEGER DEFAULT 0, model TEXT NOT NULL, "generatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "BreakingPackage" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, "accountId" TEXT NOT NULL, "broadcastScript" TEXT, "socialPost" TEXT, "pushTitle" TEXT, "pushBody" TEXT, "webSummary" TEXT, "bulletPoints" TEXT, "graphicPrompt" TEXT, status TEXT DEFAULT 'GENERATED', "publishedTo" JSONB, "generatedBy" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "ShowDeadline" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "showName" TEXT NOT NULL, "airTime" TEXT NOT NULL, timezone TEXT DEFAULT 'America/Chicago', "daysOfWeek" JSONB NOT NULL, "scriptDeadlineMin" INTEGER DEFAULT 30, "isActive" BOOLEAN DEFAULT true, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "StoryPrediction" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, "viralProbability" DOUBLE PRECISION NOT NULL, "peakScorePrediction" DOUBLE PRECISION, "predictedStatus" TEXT, factors JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "FactCheck" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, claim TEXT NOT NULL, verdict TEXT NOT NULL, confidence DOUBLE PRECISION, evidence TEXT, sources JSONB, model TEXT DEFAULT 'heuristic', "checkedBy" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "TranslatedContent" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, "sourceLanguage" TEXT DEFAULT 'en', "targetLanguage" TEXT NOT NULL, "translatedTitle" TEXT NOT NULL, "translatedSummary" TEXT, model TEXT NOT NULL, confidence DOUBLE PRECISION, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "AudioSource" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, name TEXT NOT NULL, url TEXT NOT NULL, type TEXT DEFAULT 'SCANNER', "isActive" BOOLEAN DEFAULT true, "lastTranscribedAt" TIMESTAMPTZ, metadata JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "AudioTranscript" (id TEXT PRIMARY KEY, "audioSourceId" TEXT NOT NULL, transcript TEXT NOT NULL, "durationSec" INTEGER, model TEXT, "storyId" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "RadioScript" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "voiceId" TEXT, "showName" TEXT NOT NULL, format TEXT DEFAULT 'NEWS', "storyIds" JSONB NOT NULL, script TEXT NOT NULL, duration INTEGER, model TEXT NOT NULL, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "HistoryEvent" (id TEXT PRIMARY KEY, month INTEGER NOT NULL, day INTEGER NOT NULL, year INTEGER, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT, significance INTEGER DEFAULT 5, source TEXT, "isLocal" BOOLEAN DEFAULT false, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "StockAlert" (id TEXT PRIMARY KEY, ticker TEXT NOT NULL, "companyName" TEXT NOT NULL, "changePercent" DOUBLE PRECISION NOT NULL, price DOUBLE PRECISION NOT NULL, "previousClose" DOUBLE PRECISION NOT NULL, direction TEXT NOT NULL, magnitude TEXT NOT NULL, headline TEXT, "storyId" TEXT, "detectedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "StoryEditSession" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, "userId" TEXT NOT NULL, "isActive" BOOLEAN DEFAULT true, "lastHeartbeat" TIMESTAMPTZ DEFAULT NOW(), cursor JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+    ];
+
+    let created = 0;
+    for (const sql of createStatements) {
+      try {
+        await prisma.$executeRawUnsafe(sql);
+        created++;
+      } catch (e: any) {
+        console.error(`[db-sync] Failed: ${sql.substring(0, 60)}... — ${e.message?.substring(0, 80)}`);
+      }
+    }
+    console.log(`[db-sync] Created ${created}/${createStatements.length} tables`);
+  }
+}
+
 async function main() {
   const app = await buildServer();
+
+  // Ensure all database tables exist before starting
+  await ensureTables();
 
   try {
     await app.listen({ port: PORT, host: HOST });
