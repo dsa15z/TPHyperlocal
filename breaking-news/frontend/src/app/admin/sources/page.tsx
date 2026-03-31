@@ -18,12 +18,14 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
+import { MultiSelectDropdown, getEffectiveSelection } from "@/components/MultiSelectDropdown";
 
 interface Source {
   id: string;
@@ -37,6 +39,7 @@ interface Source {
   lastPolledAt: string | null;
   marketId: string | null;
   market?: { name: string } | null;
+  metadata?: Record<string, unknown> | null;
   _count?: { posts: number };
 }
 
@@ -85,12 +88,19 @@ const PLATFORM_COLORS: Record<string, string> = {
   MANUAL: "text-gray-400 bg-gray-500/10",
 };
 
+const ACTIVE_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
 export default function SourcesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [platformFilter, setPlatformFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [selectedActive, setSelectedActive] = useState<string[]>([]);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -217,14 +227,60 @@ export default function SourcesPage() {
   const isFormError = createMutation.isError || updateMutation.isError;
   const formError = (createMutation.error as Error)?.message || (updateMutation.error as Error)?.message;
 
+  // Build filter options
+  const platformOptions = PLATFORMS.map((p) => ({ value: p.value, label: p.label }));
+  const typeOptions = SOURCE_TYPES.map((t) => ({ value: t.value, label: t.label }));
+  const marketOptions = [
+    { value: "__global__", label: "Global (no market)" },
+    ...markets.filter((m) => m.isActive).map((m) => ({
+      value: m.id,
+      label: m.name + (m.state ? `, ${m.state}` : ""),
+    })),
+  ];
+
+  // Apply filters client-side
   const filtered = sources.filter((s: Source) => {
-    if (platformFilter && s.platform !== platformFilter) return false;
-    if (typeFilter && s.sourceType !== typeFilter) return false;
+    const effectivePlatforms = getEffectiveSelection(selectedPlatforms);
+    if (effectivePlatforms && effectivePlatforms.length > 0 && !effectivePlatforms.includes(s.platform)) return false;
+    if (effectivePlatforms && effectivePlatforms.length === 0) return false;
+
+    const effectiveTypes = getEffectiveSelection(selectedTypes);
+    if (effectiveTypes && effectiveTypes.length > 0 && !effectiveTypes.includes(s.sourceType)) return false;
+    if (effectiveTypes && effectiveTypes.length === 0) return false;
+
+    const effectiveMarkets = getEffectiveSelection(selectedMarkets);
+    if (effectiveMarkets && effectiveMarkets.length > 0) {
+      const sourceMarket = s.marketId || "__global__";
+      if (!effectiveMarkets.includes(sourceMarket)) return false;
+    }
+    if (effectiveMarkets && effectiveMarkets.length === 0) return false;
+
+    const effectiveActive = getEffectiveSelection(selectedActive);
+    if (effectiveActive && effectiveActive.length > 0) {
+      const status = s.isActive ? "active" : "inactive";
+      if (!effectiveActive.includes(status)) return false;
+    }
+    if (effectiveActive && effectiveActive.length === 0) return false;
+
     return true;
   });
 
   const platformLabel = (p: string) =>
     PLATFORMS.find((pl) => pl.value === p)?.label || p;
+
+  const getDeactivationInfo = (source: Source) => {
+    if (source.isActive) return null;
+    const meta = source.metadata as Record<string, unknown> | null;
+    if (!meta) return null;
+    const reason = meta.deactivateReason as string | undefined;
+    const failures = meta.consecutiveFailures as number | undefined;
+    const lastFailure = meta.lastFailure as string | undefined;
+    const deactivatedAt = meta.deactivatedAt as string | undefined;
+    const healAttempts = meta.healAttempts as number | undefined;
+    const healResult = meta.healResult as string | undefined;
+    if (!reason && !lastFailure) return null;
+    return { reason, failures, lastFailure, deactivatedAt, healAttempts, healResult };
+  };
 
   return (
     <div className="min-h-screen">
@@ -508,30 +564,30 @@ export default function SourcesPage() {
               className="filter-input w-full pl-9"
             />
           </div>
-          <select
-            value={platformFilter}
-            onChange={(e) => setPlatformFilter(e.target.value)}
-            className="filter-select"
-          >
-            <option value="">All Platforms</option>
-            {PLATFORMS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="filter-select"
-          >
-            <option value="">All Types</option>
-            {SOURCE_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            options={platformOptions}
+            selected={selectedPlatforms}
+            onChange={setSelectedPlatforms}
+            placeholder="All Platforms"
+          />
+          <MultiSelectDropdown
+            options={typeOptions}
+            selected={selectedTypes}
+            onChange={setSelectedTypes}
+            placeholder="All Types"
+          />
+          <MultiSelectDropdown
+            options={marketOptions}
+            selected={selectedMarkets}
+            onChange={setSelectedMarkets}
+            placeholder="All Markets"
+          />
+          <MultiSelectDropdown
+            options={ACTIVE_OPTIONS}
+            selected={selectedActive}
+            onChange={setSelectedActive}
+            placeholder="Active & Inactive"
+          />
           <span className="text-sm text-gray-500 ml-2">
             {filtered.length} source{filtered.length !== 1 ? "s" : ""}
           </span>
@@ -556,9 +612,9 @@ export default function SourcesPage() {
         ) : filtered.length === 0 ? (
           <div className="glass-card p-12 text-center space-y-3">
             <Database className="w-10 h-10 text-gray-600 mx-auto" />
-            <p className="text-gray-400">No data feeds configured yet.</p>
+            <p className="text-gray-400">No data feeds match your filters.</p>
             <p className="text-gray-500 text-sm">
-              Click &quot;Add Source&quot; above to start pulling in news data.
+              Try adjusting your filters or click &quot;Add Source&quot; to add a new feed.
             </p>
           </div>
         ) : (
@@ -594,113 +650,149 @@ export default function SourcesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((source: Source) => (
-                    <tr
-                      key={source.id}
-                      className="border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="text-white font-medium">
-                            {source.name}
-                          </span>
-                          {source.url && (
-                            <span className="block text-xs text-gray-600 truncate max-w-[300px]">
-                              {source.url}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={clsx(
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
-                            PLATFORM_COLORS[source.platform] ||
-                              "text-gray-400 bg-gray-500/10"
-                          )}
-                        >
-                          {platformLabel(source.platform)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {SOURCE_TYPES.find(
-                          (t) => t.value === source.sourceType
-                        )?.label || source.sourceType}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {source.market?.name || (
-                          <span className="text-gray-600">Global</span>
+                  {filtered.map((source: Source) => {
+                    const deactivation = getDeactivationInfo(source);
+                    return (
+                      <tr
+                        key={source.id}
+                        className={clsx(
+                          "border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors",
+                          !source.isActive && "opacity-70"
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-surface-300 rounded-full overflow-hidden">
-                            <div
-                              className={clsx(
-                                "h-full rounded-full",
-                                source.trustScore >= 0.7
-                                  ? "bg-green-500"
-                                  : source.trustScore >= 0.4
-                                  ? "bg-yellow-500"
-                                  : "bg-red-500"
-                              )}
-                              style={{
-                                width: `${Math.min(source.trustScore * 100, 100)}%`,
-                              }}
-                            />
+                      >
+                        <td className="px-4 py-3">
+                          <div>
+                            <span className="text-white font-medium">
+                              {source.name}
+                            </span>
+                            {source.url && (
+                              <span className="block text-xs text-gray-600 truncate max-w-[300px]">
+                                {source.url}
+                              </span>
+                            )}
+                            {/* Deactivation reason */}
+                            {deactivation && (
+                              <div className="mt-1 flex items-start gap-1.5">
+                                <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                                <div className="text-xs">
+                                  <span className="text-amber-400">
+                                    Auto-deactivated
+                                    {deactivation.deactivatedAt
+                                      ? ` ${formatRelativeTime(deactivation.deactivatedAt)}`
+                                      : ""}
+                                  </span>
+                                  {deactivation.reason && (
+                                    <span className="block text-gray-500 truncate max-w-[280px]" title={deactivation.reason}>
+                                      {deactivation.reason}
+                                    </span>
+                                  )}
+                                  {deactivation.failures && (
+                                    <span className="text-gray-600">
+                                      {deactivation.failures} consecutive failures
+                                    </span>
+                                  )}
+                                  {deactivation.healAttempts && (
+                                    <span className="block text-gray-600">
+                                      Heal attempts: {deactivation.healAttempts}
+                                      {deactivation.healResult ? ` (${deactivation.healResult})` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <span className="text-xs text-gray-500 tabular-nums">
-                            {Math.round(source.trustScore * 100)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() =>
-                            toggleMutation.mutate({
-                              id: source.id,
-                              enabled: !source.isActive,
-                            })
-                          }
-                          className={clsx(
-                            "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                            source.isActive ? "bg-green-500" : "bg-gray-600"
-                          )}
-                        >
+                        </td>
+                        <td className="px-4 py-3">
                           <span
                             className={clsx(
-                              "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform",
-                              source.isActive
-                                ? "translate-x-4"
-                                : "translate-x-0.5"
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
+                              PLATFORM_COLORS[source.platform] ||
+                                "text-gray-400 bg-gray-500/10"
                             )}
-                          />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {source.lastPolledAt
-                          ? formatRelativeTime(source.lastPolledAt)
-                          : "Never"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end">
-                          <button
-                            onClick={() => startEdit(source)}
-                            className="filter-btn flex items-center gap-1 text-xs"
-                            title="Edit source"
                           >
-                            <Pencil className="w-3 h-3" />
-                            Edit
+                            {platformLabel(source.platform)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">
+                          {SOURCE_TYPES.find(
+                            (t) => t.value === source.sourceType
+                          )?.label || source.sourceType}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">
+                          {source.market?.name || (
+                            <span className="text-gray-600">Global</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-surface-300 rounded-full overflow-hidden">
+                              <div
+                                className={clsx(
+                                  "h-full rounded-full",
+                                  source.trustScore >= 0.7
+                                    ? "bg-green-500"
+                                    : source.trustScore >= 0.4
+                                    ? "bg-yellow-500"
+                                    : "bg-red-500"
+                                )}
+                                style={{
+                                  width: `${Math.min(source.trustScore * 100, 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500 tabular-nums">
+                              {Math.round(source.trustScore * 100)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() =>
+                              toggleMutation.mutate({
+                                id: source.id,
+                                enabled: !source.isActive,
+                              })
+                            }
+                            className={clsx(
+                              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                              source.isActive ? "bg-green-500" : "bg-gray-600"
+                            )}
+                          >
+                            <span
+                              className={clsx(
+                                "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform",
+                                source.isActive
+                                  ? "translate-x-4"
+                                  : "translate-x-0.5"
+                              )}
+                            />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {source.lastPolledAt
+                            ? formatRelativeTime(source.lastPolledAt)
+                            : "Never"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end">
+                            <button
+                              onClick={() => startEdit(source)}
+                              className="filter-btn flex items-center gap-1 text-xs"
+                              title="Edit source"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4">
+              <div className="flex items-center justify-between px-4 py-4">
                 <span className="text-sm text-gray-500">
                   Page {page} of {totalPages} ({totalSources} total)
                 </span>

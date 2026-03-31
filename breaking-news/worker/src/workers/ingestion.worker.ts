@@ -10,10 +10,146 @@ import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
 const logger = createChildLogger('ingestion');
 
 const MAX_CONSECUTIVE_FAILURES = 5; // Auto-deactivate after this many failures
+const HEAL_AT_FAILURE = 3; // Attempt self-healing at this failure count
+
+// Common RSS URL variants to try when the original URL fails
+const RSS_URL_VARIANTS = [
+  (base: string) => base.replace(/\/?$/, '/feed'),
+  (base: string) => base.replace(/\/?$/, '/feed/'),
+  (base: string) => base.replace(/\/?$/, '/rss'),
+  (base: string) => base.replace(/\/?$/, '/rss.xml'),
+  (base: string) => base.replace(/\/?$/, '/atom.xml'),
+  (base: string) => base.replace(/\/?$/, '/index.xml'),
+  (base: string) => base.replace(/\/?$/, '/feeds/posts/default'),
+  (base: string) => {
+    try {
+      const u = new URL(base);
+      return `${u.origin}/feed`;
+    } catch { return ''; }
+  },
+  (base: string) => {
+    try {
+      const u = new URL(base);
+      return `${u.origin}/rss`;
+    } catch { return ''; }
+  },
+];
 
 /**
- * Track a source failure. If it hits MAX_CONSECUTIVE_FAILURES, auto-deactivate
- * the source and purge any pending queue jobs for it.
+ * Attempt to self-heal a failing RSS source by:
+ * 1. Trying alternate RSS URL patterns
+ * 2. If all RSS variants fail, switch platform to web scraping
+ * Returns true if healed, false if not.
+ */
+async function attemptSelfHeal(source: { id: string; name: string; url: string | null; platform: string; metadata: unknown }): Promise<boolean> {
+  const meta = (source.metadata || {}) as Record<string, unknown>;
+  const healAttempts = ((meta.healAttempts as number) || 0) + 1;
+
+  // Only try self-healing once
+  if (healAttempts > 1) {
+    await prisma.source.update({
+      where: { id: source.id },
+      data: { metadata: { ...meta, healAttempts, healResult: 'skipped-already-attempted' } },
+    });
+    return false;
+  }
+
+  const originalUrl = source.url || '';
+  logger.info({ sourceId: source.id, name: source.name, originalUrl }, 'Attempting self-heal for failing source');
+
+  // Strategy 1: Try alternate RSS URLs (for RSS sources)
+  if (source.platform === 'RSS' && originalUrl) {
+    for (const variant of RSS_URL_VARIANTS) {
+      const altUrl = variant(originalUrl);
+      if (!altUrl || altUrl === originalUrl) continue;
+
+      try {
+        const resp = await fetch(altUrl, {
+          headers: { 'User-Agent': 'BreakingNewsBot/1.0' },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!resp.ok) continue;
+
+        const text = await resp.text();
+        // Check if it looks like valid RSS/Atom
+        if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+          // Found a working RSS feed at an alternate URL!
+          await prisma.source.update({
+            where: { id: source.id },
+            data: {
+              url: altUrl,
+              metadata: {
+                ...meta,
+                consecutiveFailures: 0,
+                healAttempts,
+                healResult: `rss-url-fixed`,
+                previousUrl: originalUrl,
+                healedAt: new Date().toISOString(),
+              },
+            },
+          });
+          logger.info({ sourceId: source.id, name: source.name, oldUrl: originalUrl, newUrl: altUrl }, 'Self-healed: found working RSS URL');
+          return true;
+        }
+      } catch {
+        // Try next variant
+      }
+    }
+
+    // Strategy 2: All RSS variants failed — switch to web scraping
+    try {
+      // Check if the base site is reachable at all
+      const baseUrl = new URL(originalUrl).origin;
+      const siteResp = await fetch(baseUrl, {
+        headers: { 'User-Agent': 'BreakingNewsBot/1.0' },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (siteResp.ok) {
+        // Site is up but RSS is broken — switch to web scraping
+        await prisma.source.update({
+          where: { id: source.id },
+          data: {
+            platform: 'WEB_SCRAPE' as any,
+            url: baseUrl,
+            metadata: {
+              ...meta,
+              consecutiveFailures: 0,
+              healAttempts,
+              healResult: 'switched-to-scrape',
+              previousPlatform: 'RSS',
+              previousUrl: originalUrl,
+              healedAt: new Date().toISOString(),
+            },
+          },
+        });
+        logger.info({ sourceId: source.id, name: source.name, baseUrl }, 'Self-healed: switched from RSS to web scraping');
+        return true;
+      }
+    } catch {
+      // Site unreachable — cannot heal
+    }
+  }
+
+  // Record failed heal attempt
+  await prisma.source.update({
+    where: { id: source.id },
+    data: {
+      metadata: {
+        ...meta,
+        healAttempts,
+        healResult: 'failed',
+        healFailedAt: new Date().toISOString(),
+      },
+    },
+  });
+  logger.warn({ sourceId: source.id, name: source.name }, 'Self-heal failed — no working alternative found');
+  return false;
+}
+
+/**
+ * Track a source failure. At HEAL_AT_FAILURE, attempts self-healing.
+ * At MAX_CONSECUTIVE_FAILURES, auto-deactivates the source.
  */
 async function trackSourceFailure(sourceId: string, reason: string): Promise<void> {
   try {
@@ -23,13 +159,26 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
     const meta = (source.metadata || {}) as Record<string, unknown>;
     const failures = ((meta.consecutiveFailures as number) || 0) + 1;
 
+    // At failure threshold, try to self-heal before giving up
+    if (failures === HEAL_AT_FAILURE) {
+      const healed = await attemptSelfHeal(source);
+      if (healed) return; // Source was healed, don't increment failure count
+    }
+
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
       // Auto-deactivate
       await prisma.source.update({
         where: { id: sourceId },
         data: {
           isActive: false,
-          metadata: { ...meta, consecutiveFailures: failures, deactivatedAt: new Date().toISOString(), deactivateReason: reason },
+          metadata: {
+            ...meta,
+            consecutiveFailures: failures,
+            deactivatedAt: new Date().toISOString(),
+            deactivateReason: reason,
+            lastFailure: reason,
+            lastFailureAt: new Date().toISOString(),
+          },
         },
       });
       logger.warn({ sourceId, name: source.name, failures, reason }, `Source auto-deactivated after ${failures} consecutive failures`);
