@@ -659,6 +659,32 @@ export async function toggleSource(
   });
 }
 
+export async function deleteSource(id: string): Promise<unknown> {
+  return apiFetch<unknown>(`/api/v1/admin/sources/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}
+
+export interface TestSourceResult {
+  success: boolean;
+  feedTitle?: string;
+  itemCount?: number;
+  contentType?: string;
+  url: string;
+  message?: string;
+  error?: string;
+  statusCode?: number;
+}
+
+export async function testSource(url: string, platform: string): Promise<TestSourceResult> {
+  return apiFetch<TestSourceResult>("/api/v1/admin/sources/test", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ url, platform }),
+  });
+}
+
 // ─── Admin: Credentials ─────────────────────────────────────────────────────
 
 export async function fetchCredentials(): Promise<unknown[]> {

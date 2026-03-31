@@ -344,6 +344,140 @@ export async function sourceRoutes(
     return reply.status(200).send({ message: 'Source disabled' });
   });
 
+  // DELETE /admin/sources/:id — delete a source and its related data
+  app.delete('/sources/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
+
+    const source = await prisma.source.findUnique({ where: { id } });
+    if (!source) {
+      return reply.status(404).send({ error: 'Source not found' });
+    }
+
+    // Don't allow deleting global sources unless the user is OWNER
+    if (source.isGlobal && au.role !== 'OWNER') {
+      return reply.status(403).send({ error: 'Only account owners can delete global sources' });
+    }
+
+    // Delete in order: accountSources -> storySources -> sourcePosts -> source
+    await prisma.$transaction(async (tx) => {
+      // Remove account-source links
+      await tx.accountSource.deleteMany({ where: { sourceId: id } });
+      // Remove story-source links
+      await tx.storySource.deleteMany({ where: { sourceId: id } });
+      // Remove source posts
+      await tx.sourcePost.deleteMany({ where: { sourceId: id } });
+      // Remove the source itself
+      await tx.source.delete({ where: { id } });
+    });
+
+    return reply.status(200).send({ message: 'Source deleted', id });
+  });
+
+  // POST /admin/sources/test — test a feed URL before saving
+  app.post('/sources/test', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const body = z.object({
+      url: z.string().min(1),
+      platform: platformEnum,
+    }).safeParse(request.body);
+
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Validation error', details: body.error.flatten() });
+    }
+
+    const { url, platform } = body.data;
+
+    if (platform === 'RSS') {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(url, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'TopicPulse/1.0 RSS Validator' },
+        });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          return reply.status(200).send({
+            success: false,
+            error: `HTTP ${res.status}: ${res.statusText}`,
+            url,
+          });
+        }
+
+        const contentType = res.headers.get('content-type') || '';
+        const text = await res.text();
+        const isXml = contentType.includes('xml') || contentType.includes('rss') || contentType.includes('atom') ||
+          text.trimStart().startsWith('<?xml') || text.trimStart().startsWith('<rss') || text.trimStart().startsWith('<feed');
+
+        if (!isXml) {
+          return reply.status(200).send({
+            success: false,
+            error: 'Response is not valid RSS/Atom XML',
+            contentType,
+            url,
+          });
+        }
+
+        // Count items
+        const itemCount = (text.match(/<item[\s>]/g) || []).length + (text.match(/<entry[\s>]/g) || []).length;
+
+        // Extract title
+        const titleMatch = text.match(/<title[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/);
+        const feedTitle = titleMatch ? titleMatch[1].trim() : null;
+
+        return reply.status(200).send({
+          success: true,
+          feedTitle,
+          itemCount,
+          contentType,
+          url,
+          message: `Valid RSS feed with ${itemCount} items`,
+        });
+      } catch (err: any) {
+        const message = err.name === 'AbortError' ? 'Request timed out (10s)' : (err.message || 'Unknown error');
+        return reply.status(200).send({
+          success: false,
+          error: message,
+          url,
+        });
+      }
+    }
+
+    // For non-RSS platforms, just check if URL is reachable
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, {
+        method: 'HEAD',
+        signal: controller.signal,
+        headers: { 'User-Agent': 'TopicPulse/1.0' },
+      });
+      clearTimeout(timeout);
+
+      return reply.status(200).send({
+        success: res.ok,
+        statusCode: res.status,
+        url,
+        message: res.ok ? 'URL is reachable' : `HTTP ${res.status}: ${res.statusText}`,
+      });
+    } catch (err: any) {
+      const message = err.name === 'AbortError' ? 'Request timed out (10s)' : (err.message || 'Unknown error');
+      return reply.status(200).send({
+        success: false,
+        error: message,
+        url,
+      });
+    }
+  });
+
   // GET /admin/sources/by-type — group sources by sourceType with counts
   app.get('/sources/by-type', async (request, reply) => {
     const au = request.accountUser;

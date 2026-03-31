@@ -19,9 +19,13 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  Trash2,
+  FlaskConical,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch, fetchSources, createSource, toggleSource, fetchMarkets } from "@/lib/api";
+import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
@@ -174,6 +178,39 @@ export default function SourcesPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteSource(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+    },
+  });
+
+  const [testResult, setTestResult] = useState<TestSourceResult | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleTestFeed = async () => {
+    if (!formUrl.trim() || !formPlatform) return;
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await testSource(formUrl.trim(), formPlatform);
+      setTestResult(result);
+      // Auto-fill name from feed title if name is empty
+      if (result.success && result.feedTitle && !formName.trim()) {
+        setFormName(result.feedTitle);
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, error: err.message || "Test failed", url: formUrl });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleDelete = (source: Source) => {
+    if (!confirm(`Delete "${source.name}"? This will also remove all associated posts and story links. This cannot be undone.`)) return;
+    deleteMutation.mutate(source.id);
+  };
+
   const resetForm = () => {
     setFormName("");
     setFormPlatform("");
@@ -182,6 +219,7 @@ export default function SourcesPage() {
     setFormMarketId("");
     setFormTrustScore(50);
     setEditingId(null);
+    setTestResult(null);
   };
 
   const startEdit = (source: Source) => {
@@ -505,7 +543,24 @@ export default function SourcesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
+                <div className="flex items-center gap-3 pt-2 flex-wrap">
+                  {/* Test Feed button */}
+                  <button
+                    onClick={handleTestFeed}
+                    disabled={!formUrl.trim() || !formPlatform || isTesting}
+                    className={clsx(
+                      "px-4 py-2 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 text-sm font-medium rounded-lg transition-colors flex items-center gap-2",
+                      (!formUrl.trim() || !formPlatform || isTesting) && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    {isTesting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FlaskConical className="w-4 h-4" />
+                    )}
+                    {isTesting ? "Testing..." : "Test Feed"}
+                  </button>
+
                   <button
                     onClick={handleSubmit}
                     disabled={
@@ -547,6 +602,39 @@ export default function SourcesPage() {
                     </span>
                   )}
                 </div>
+
+                {/* Test result */}
+                {testResult && (
+                  <div className={clsx(
+                    "mt-3 p-3 rounded-lg border text-sm flex items-start gap-2",
+                    testResult.success
+                      ? "bg-green-500/10 border-green-500/30 text-green-300"
+                      : "bg-red-500/10 border-red-500/30 text-red-300"
+                  )}>
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {testResult.success ? "Feed is valid!" : "Feed test failed"}
+                      </p>
+                      {testResult.feedTitle && (
+                        <p className="text-xs mt-1 text-gray-400">Title: {testResult.feedTitle}</p>
+                      )}
+                      {testResult.itemCount !== undefined && (
+                        <p className="text-xs text-gray-400">Items found: {testResult.itemCount}</p>
+                      )}
+                      {testResult.error && (
+                        <p className="text-xs mt-1">{testResult.error}</p>
+                      )}
+                      {testResult.message && !testResult.error && (
+                        <p className="text-xs mt-1 text-gray-400">{testResult.message}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -774,7 +862,7 @@ export default function SourcesPage() {
                             : "Never"}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => startEdit(source)}
                               className="filter-btn flex items-center gap-1 text-xs"
@@ -782,6 +870,14 @@ export default function SourcesPage() {
                             >
                               <Pencil className="w-3 h-3" />
                               Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(source)}
+                              disabled={deleteMutation.isPending}
+                              className="filter-btn flex items-center gap-1 text-xs text-red-400 hover:text-red-300 hover:border-red-500/50"
+                              title="Delete source"
+                            >
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </td>
