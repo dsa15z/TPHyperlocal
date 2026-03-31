@@ -277,16 +277,12 @@ export async function searchRoutes(
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
       }),
-      // Source platform counts from matching stories' source posts
-      prisma.sourcePost.groupBy({
+      // Source platform counts — get from Source table via story sources
+      // (SourcePost doesn't have platform directly; Source does)
+      prisma.source.groupBy({
         by: ['platform'],
-        where: {
-          OR: [
-            { content: { contains: sanitized, mode: 'insensitive' } },
-            { title: { contains: sanitized, mode: 'insensitive' } },
-          ],
-        },
         _count: { id: true },
+        where: { isActive: true },
         orderBy: { _count: { id: 'desc' } },
         take: 10,
       }),
