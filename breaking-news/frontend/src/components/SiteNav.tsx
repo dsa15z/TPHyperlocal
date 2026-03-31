@@ -47,7 +47,6 @@ import {
   Share2,
   Rss,
   LogIn,
-  LogOut,
   User,
 } from "lucide-react";
 import clsx from "clsx";
