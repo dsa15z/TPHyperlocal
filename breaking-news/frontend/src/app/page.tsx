@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
-import { Radio, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
 import clsx from "clsx";
 import { fetchStories, type StoryFilters } from "@/lib/api";
 import {
@@ -19,6 +19,8 @@ import {
   generateViewId,
 } from "@/lib/views";
 import { StoryTable } from "@/components/StoryTable";
+import { StoryCardGrid } from "@/components/StoryCard";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { FilterBar } from "@/components/FilterBar";
 import { NewsProgressPanel } from "@/components/NewsProgressPanel";
 import { ViewSelector } from "@/components/ViewSelector";
@@ -92,6 +94,9 @@ function DashboardContent() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "breaking_score", desc: true },
   ]);
+
+  // ── View mode (table vs cards) ─────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   // ── Data fetching ───────────────────────────────────────────────────────
   const { data, isLoading, isError, error } = useQuery({
@@ -243,28 +248,55 @@ function DashboardContent() {
             hasChanges={hasViewChanges}
             onSaveCurrentView={handleSaveCurrentView}
           />
-          <ColumnCustomizer
-            columns={columnConfig}
-            onChange={handleColumnsChange}
-          />
+          <div className="flex items-center gap-2">
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-lg border border-surface-300 overflow-hidden">
+              <button
+                onClick={() => setViewMode("table")}
+                className={clsx(
+                  "p-2 transition-colors",
+                  viewMode === "table"
+                    ? "bg-accent/20 text-accent"
+                    : "text-gray-400 hover:text-white hover:bg-surface-300"
+                )}
+                title="Table view"
+              >
+                <Table2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={clsx(
+                  "p-2 transition-colors",
+                  viewMode === "cards"
+                    ? "bg-accent/20 text-accent"
+                    : "text-gray-400 hover:text-white hover:bg-surface-300"
+                )}
+                title="Card view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+            <ColumnCustomizer
+              columns={columnConfig}
+              onChange={handleColumnsChange}
+            />
+          </div>
         </div>
 
         {/* Filter bar */}
         <FilterBar onFiltersChange={handleFiltersChange} facets={facets} />
 
         {/* Results count */}
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          <span>
-            {isLoading
-              ? "Loading stories..."
-              : `${total} stories found`}
-          </span>
-          {total > 0 && (
-            <span>
-              Page {currentPage} of {totalPages}
-            </span>
-          )}
-        </div>
+        {!isLoading && (
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            <span>{total} stories found</span>
+            {total > 0 && (
+              <span>
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Error state */}
         {isError && (
@@ -276,27 +308,37 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="glass-card p-12 text-center">
-            <div className="inline-flex items-center gap-3 text-gray-400">
-              <Radio className="w-5 h-5 animate-pulse" />
-              <span>Scanning for breaking news...</span>
+        {/* Loading state — skeleton */}
+        {isLoading && <DashboardSkeleton />}
+
+        {/* Empty state */}
+        {!isLoading && !isError && stories.length === 0 && (
+          <div className="glass-card p-16 text-center animate-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-300/30 mb-4">
+              <Search className="w-7 h-7 text-gray-600" />
             </div>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories found</h3>
+            <p className="text-gray-500 text-sm max-w-md mx-auto">
+              No stories found matching your filters. Try adjusting the time range or clearing filters.
+            </p>
           </div>
         )}
 
-        {/* Stories table */}
-        {!isLoading && !isError && (
-          <div className="glass-card overflow-hidden">
-            <StoryTable
-              stories={stories}
-              sorting={sorting}
-              onSortingChange={setSorting}
-              columnConfig={columnConfig}
-              onColumnResize={handleColumnResize}
-            />
-          </div>
+        {/* Stories — table or card view */}
+        {!isLoading && !isError && stories.length > 0 && (
+          viewMode === "cards" ? (
+            <StoryCardGrid stories={stories} />
+          ) : (
+            <div className="glass-card overflow-hidden">
+              <StoryTable
+                stories={stories}
+                sorting={sorting}
+                onSortingChange={setSorting}
+                columnConfig={columnConfig}
+                onColumnResize={handleColumnResize}
+              />
+            </div>
+          )
         )}
 
         {/* Pagination */}

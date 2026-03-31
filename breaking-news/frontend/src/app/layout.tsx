@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import { SiteNav, MainContent } from "@/components/SiteNav";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { OnboardingTour } from "@/components/OnboardingTour";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,6 +40,7 @@ export default function RootLayout({
           <MainContent>{children}</MainContent>
           <KeyboardShortcuts />
           <OnboardingTour />
+          <OnboardingWizard />
         </Providers>
         <script
           dangerouslySetInnerHTML={{

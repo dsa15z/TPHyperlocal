@@ -37,6 +37,7 @@ export interface Story {
   coverage?: CoverageInfo[];
   sparkline?: number[]; // recent composite scores for trend visualization
   trend?: "rising" | "declining" | "flat";
+  merged_from?: Array<{ id: string; title: string; compositeScore: number }>;
 }
 
 export interface SourcePost {
@@ -243,6 +244,11 @@ function transformStory(raw: any): Story {
       const prev = snaps[Math.min(snaps.length - 1, 3)]?.compositeScore || 0;
       return latest > prev ? "rising" as const : latest < prev ? "declining" as const : "flat" as const;
     })(),
+    merged_from: (raw.mergedFrom || []).map((m: any) => ({
+      id: m.id,
+      title: m.title,
+      compositeScore: m.compositeScore ?? 0,
+    })),
   };
 }
 

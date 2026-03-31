@@ -8,6 +8,24 @@ import { generate } from '../lib/llm-factory.js';
 
 const logger = createChildLogger('enrichment');
 
+/**
+ * Normalize RSS titles by stripping source attribution suffixes.
+ * E.g. "Fire breaks out in Montrose - FOX 26 Houston" → "Fire breaks out in Montrose"
+ */
+function normalizeTitle(title: string): string {
+  return title
+    // Remove source attribution suffixes: " - FOX 26 Houston", " | CNN", " – ABC13"
+    .replace(/\s*[-–—|]\s*(FOX|CNN|ABC|NBC|CBS|KHOU|KPRC|KTRK|KRIV|KIAH|AP|Reuters|BBC|NPR|Axios|Houston Chronicle|chron\.com|Click2Houston|The Hill|Washington Post|New York Times|USA Today)[^|–—-]*$/i, '')
+    // Remove " - Source Name" generic pattern (anything after last dash if > 3 words before)
+    .replace(/\s+[-–—]\s+[A-Z][A-Za-z\s.]+$/, (match) => {
+      // Only remove if the part after the dash looks like a source name (< 4 words)
+      const afterDash = match.replace(/^\s*[-–—]\s*/, '');
+      return afterDash.split(' ').length <= 4 ? '' : match;
+    })
+    // Remove leading/trailing whitespace
+    .trim();
+}
+
 interface EnrichmentJob {
   sourcePostId: string;
 }
@@ -242,10 +260,14 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     }
   }
 
+  // Normalize the title (strip source attribution suffixes from RSS titles)
+  const normalizedTitle = post.title ? normalizeTitle(post.title) : undefined;
+
   // Update the SourcePost with enrichment data
   await prisma.sourcePost.update({
     where: { id: sourcePostId },
     data: {
+      ...(normalizedTitle && normalizedTitle !== post.title ? { title: normalizedTitle } : {}),
       category,
       locationName: locationName || undefined,
       rawData: {
@@ -254,6 +276,7 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
           entities,
           neighborhoods,
           category,
+          originalTitle: post.title,
           enrichedAt: new Date().toISOString(),
         },
       },

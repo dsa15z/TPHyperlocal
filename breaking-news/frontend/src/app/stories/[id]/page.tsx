@@ -18,6 +18,7 @@ import {
   ChevronUp,
   FileText,
   Loader2,
+  GitMerge,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, type SourcePost } from "@/lib/api";
@@ -429,159 +430,197 @@ export default function StoryDetailPage() {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
-        {/* Story header */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatusBadge status={story.status} />
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              <Tag className="w-3 h-3" />
-              {story.category}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              <MapPin className="w-3 h-3" />
-              {story.location}
-            </span>
-          </div>
-
-          <h1 className="text-3xl font-bold text-white leading-tight">
-            {story.title}
-          </h1>
-
-          <p className="text-gray-400 text-lg leading-relaxed">
-            {stripHtml(story.summary)}
-          </p>
-
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span>
-              First seen: {formatRelativeTime(story.first_seen)}
-            </span>
-            <span>
-              Last updated: {formatRelativeTime(story.last_updated)}
-            </span>
-            <span>{story.source_count} sources</span>
-          </div>
-
-          {/* Bookmark button */}
-          {isAuthenticated() && <BookmarkButton storyId={id} />}
-        </div>
-
-        {/* AI consolidated summary of all sources */}
-        <AISummaryPanel
-          storyId={id}
-          aiSummary={story.ai_summary}
-          aiSummaryModel={story.ai_summary_model}
-          aiSummaryAt={story.ai_summary_at}
-        />
-
-        {/* One-click breaking package */}
-        <BreakingPackagePanel storyId={id} />
-
-        {/* Viral prediction */}
-        <PredictionBadge storyId={id} />
-
-        {/* AI First Drafts */}
-        <FirstDraftPanel storyId={id} />
-
-        {/* AI Story Research — deep dive with perspectives + talk tracks */}
-        <StoryResearchPanel storyId={id} />
-
-        {/* Score cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {scores.map((score) => {
-            const colors = getScoreTypeColor(score.type);
-            return (
-              <div
-                key={score.type}
-                className={clsx("glass-card p-4 space-y-3", colors.bg)}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-400">
-                    {score.label}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col lg:flex-row lg:gap-6">
+          {/* ─── Left Sidebar (fixed width on desktop) ─── */}
+          <aside className="w-full lg:w-[320px] lg:flex-shrink-0 space-y-4 mb-8 lg:mb-0">
+            <div className="lg:sticky lg:top-8 space-y-4">
+              {/* Status + Category + Location */}
+              <div className="glass-card p-4 space-y-3">
+                <StatusBadge status={story.status} />
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="flex items-center gap-1 text-xs text-gray-400 bg-surface-300/40 px-2 py-1 rounded">
+                    <Tag className="w-3 h-3" />
+                    {story.category}
                   </span>
-                  <span
-                    className={clsx(
-                      "text-2xl font-bold tabular-nums",
-                      colors.text
-                    )}
-                  >
-                    {formatScore(score.value)}
+                  <span className="flex items-center gap-1 text-xs text-gray-400 bg-surface-300/40 px-2 py-1 rounded">
+                    <MapPin className="w-3 h-3" />
+                    {story.location}
+                  </span>
+                </div>
+              </div>
+
+              {/* Score cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {scores.map((score) => {
+                  const colors = getScoreTypeColor(score.type);
+                  return (
+                    <div
+                      key={score.type}
+                      className={clsx("glass-card p-3 space-y-2", colors.bg)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-gray-400">
+                          {score.label}
+                        </span>
+                        <span
+                          className={clsx(
+                            "text-lg font-bold tabular-nums",
+                            colors.text
+                          )}
+                        >
+                          {formatScore(score.value)}
+                        </span>
+                      </div>
+                      <div className="score-bar h-2">
+                        <div
+                          className={clsx("score-bar-fill", colors.bar)}
+                          style={{
+                            width: `${Math.min(score.value * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Composite score */}
+              <div className="glass-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-300">
+                    Composite Score
+                  </span>
+                  <span className="text-2xl font-bold text-white tabular-nums">
+                    {formatScore(story.composite_score)}
                   </span>
                 </div>
                 <div className="score-bar h-3">
                   <div
-                    className={clsx("score-bar-fill", colors.bar)}
+                    className="score-bar-fill bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"
                     style={{
-                      width: `${Math.min(score.value * 100, 100)}%`,
+                      width: `${Math.min(story.composite_score * 100, 100)}%`,
                     }}
                   />
                 </div>
               </div>
-            );
-          })}
-        </div>
 
-        {/* Composite score */}
-        <div className="glass-card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">
-              Composite Score
-            </span>
-            <span className="text-3xl font-bold text-white tabular-nums">
-              {formatScore(story.composite_score)}
-            </span>
-          </div>
-          <div className="score-bar h-4">
-            <div
-              className="score-bar-fill bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"
-              style={{
-                width: `${Math.min(story.composite_score * 100, 100)}%`,
-              }}
+              {/* Source count + timestamps */}
+              <div className="glass-card p-4 space-y-2 text-xs text-gray-500">
+                <div className="flex items-center justify-between">
+                  <span>Sources</span>
+                  <span className="text-gray-300 font-medium">{story.source_count}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>First seen</span>
+                  <span className="text-gray-400">{formatRelativeTime(story.first_seen)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Last updated</span>
+                  <span className="text-gray-400">{formatRelativeTime(story.last_updated)}</span>
+                </div>
+              </div>
+
+              {/* Bookmark button */}
+              {isAuthenticated() && (
+                <div className="w-full">
+                  <BookmarkButton storyId={id} />
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* ─── Main Content (scrollable) ─── */}
+          <div className="flex-1 min-w-0 space-y-8">
+            {/* Story header */}
+            <div className="space-y-4">
+              <h1 className="text-3xl font-bold text-white leading-tight">
+                {story.title}
+              </h1>
+
+              <p className="text-gray-400 text-lg leading-relaxed">
+                {stripHtml(story.summary)}
+              </p>
+            </div>
+
+            {/* Merge trail — shows which stories were merged into this one */}
+            {story.merged_from && story.merged_from.length > 0 && (
+              <div className="glass-card p-3 space-y-2">
+                <div className="text-xs text-gray-500 flex items-center gap-1.5">
+                  <GitMerge className="w-3.5 h-3.5" />
+                  Merged from {story.merged_from.length} stories
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {story.merged_from.map((m: any) => (
+                    <span key={m.id} className="text-xs bg-surface-300/30 px-2 py-1 rounded text-gray-400">
+                      {m.title?.substring(0, 50)}...
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI consolidated summary of all sources */}
+            <AISummaryPanel
+              storyId={id}
+              aiSummary={story.ai_summary}
+              aiSummaryModel={story.ai_summary_model}
+              aiSummaryAt={story.ai_summary_at}
             />
-          </div>
-        </div>
 
-        {/* Collaborative editor */}
-        <CollaborativeEditor
-          storyId={id}
-          initialTitle={story.title}
-          initialSummary={story.summary}
-        />
+            {/* One-click breaking package */}
+            <BreakingPackagePanel storyId={id} />
 
-        {/* Fact checking */}
-        <FactCheckPanel storyId={id} />
+            {/* Viral prediction */}
+            <PredictionBadge storyId={id} />
 
-        {/* Translations */}
-        <TranslationPanel storyId={id} />
+            {/* AI First Drafts */}
+            <FirstDraftPanel storyId={id} />
 
-        {/* Story development timeline */}
-        <StoryTimeline storyId={id} />
+            {/* AI Story Research — deep dive with perspectives + talk tracks */}
+            <StoryResearchPanel storyId={id} />
 
-        {/* Editorial annotations */}
-        <AnnotationPanel storyId={id} />
+            {/* Collaborative editor */}
+            <CollaborativeEditor
+              storyId={id}
+              initialTitle={story.title}
+              initialSummary={story.summary}
+            />
 
-        {/* Source posts — full text, links, expandable */}
-        {story.sources && story.sources.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-gray-400" />
-              <h2 className="text-lg font-semibold text-white">
-                Source Articles ({story.sources.length})
-              </h2>
-            </div>
+            {/* Fact checking */}
+            <FactCheckPanel storyId={id} />
 
-            <div className="space-y-3">
-              {story.sources.map((source) => (
-                <SourceCard key={source.id} source={source} />
-              ))}
-            </div>
-          </section>
-        )}
+            {/* Translations */}
+            <TranslationPanel storyId={id} />
 
-        {/* Timeline */}
-        {story.sources && story.sources.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-white">Timeline</h2>
+            {/* Story development timeline */}
+            <StoryTimeline storyId={id} />
+
+            {/* Editorial annotations */}
+            <AnnotationPanel storyId={id} />
+
+            {/* Source posts — full text, links, expandable */}
+            {story.sources && story.sources.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-lg font-semibold text-white">
+                    Source Articles ({story.sources.length})
+                  </h2>
+                </div>
+
+                <div className="space-y-3">
+                  {story.sources.map((source) => (
+                    <SourceCard key={source.id} source={source} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Timeline */}
+            {story.sources && story.sources.length > 0 && (
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold text-white">Timeline</h2>
             <div className="relative pl-6 space-y-4">
               <div className="absolute left-[9px] top-2 bottom-2 w-px bg-surface-300" />
               {[...story.sources]
@@ -628,7 +667,9 @@ export default function StoryDetailPage() {
                 ))}
             </div>
           </section>
-        )}
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );

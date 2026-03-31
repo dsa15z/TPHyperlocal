@@ -40,6 +40,7 @@ import { createStorySplitterWorker } from './workers/story-splitter.worker.js';
 import { createNewscatcherWorker } from './workers/newscatcher.worker.js';
 import { createSimilarWebScoringWorker } from './workers/similarweb-scoring.worker.js';
 import { createHyperLocalIntelWorker } from './workers/hyperlocal-intel.worker.js';
+import { createVelocityScorerWorker } from './workers/velocity-scorer.worker.js';
 import { createWebScraperWorker } from './workers/web-scraper.worker.js';
 import { createEventRegistryWorker } from './workers/event-registry.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
     ['hyperlocal-intel', createHyperLocalIntelWorker],
     ['web-scraper', createWebScraperWorker],
     ['event-registry', createEventRegistryWorker],
+    ['velocity-scorer', createVelocityScorerWorker],
   ];
 
   let started = 0;

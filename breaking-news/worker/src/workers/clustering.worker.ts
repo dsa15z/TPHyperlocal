@@ -13,6 +13,20 @@ import { getEmbedding, cosineSimilarity } from '../lib/embeddings-client.js';
 
 const logger = createChildLogger('clustering');
 
+/**
+ * Normalize RSS titles by stripping source attribution suffixes.
+ * E.g. "Fire breaks out in Montrose - FOX 26 Houston" → "Fire breaks out in Montrose"
+ */
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/\s*[-–—|]\s*(FOX|CNN|ABC|NBC|CBS|KHOU|KPRC|KTRK|KRIV|KIAH|AP|Reuters|BBC|NPR|Axios|Houston Chronicle|chron\.com|Click2Houston|The Hill|Washington Post|New York Times|USA Today)[^|–—-]*$/i, '')
+    .replace(/\s+[-–—]\s+[A-Z][A-Za-z\s.]+$/, (match) => {
+      const afterDash = match.replace(/^\s*[-–—]\s*/, '');
+      return afterDash.split(' ').length <= 4 ? '' : match;
+    })
+    .trim();
+}
+
 interface ClusteringJob {
   sourcePostId: string;
   category: string;
@@ -409,7 +423,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
 
     const story = await prisma.story.create({
       data: {
-        title: post.title || post.content.substring(0, 100),
+        title: normalizeTitle(post.title || post.content.substring(0, 100)),
         category: category !== 'OTHER' ? category : undefined,
         locationName: resolvedLocation,
         neighborhood: neighborhoods?.length > 0 ? neighborhoods[0] : undefined,
