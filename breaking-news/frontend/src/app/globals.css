@@ -125,7 +125,7 @@
 
   /* Status badges */
   .status-badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider;
+    @apply inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap;
   }
 
   .status-breaking {

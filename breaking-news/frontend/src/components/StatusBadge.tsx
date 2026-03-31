@@ -21,49 +21,49 @@ const STATUS_CONFIG: Record<
   { icon: React.ReactNode; bg: string; text: string; border: string }
 > = {
   ALERT: {
-    icon: <AlertTriangle className="w-3 h-3" />,
+    icon: <AlertTriangle className="w-2.5 h-2.5" />,
     bg: "bg-red-600/20",
     text: "text-red-300",
     border: "border-red-500/40",
   },
   BREAKING: {
-    icon: <Zap className="w-3 h-3" />,
+    icon: <Zap className="w-2.5 h-2.5" />,
     bg: "bg-red-500/15",
     text: "text-red-400",
     border: "border-red-500/30",
   },
   DEVELOPING: {
-    icon: <ArrowUpRight className="w-3 h-3" />,
+    icon: <ArrowUpRight className="w-2.5 h-2.5" />,
     bg: "bg-amber-500/15",
     text: "text-amber-400",
     border: "border-amber-500/30",
   },
   TOP_STORY: {
-    icon: <TrendingUp className="w-3 h-3" />,
+    icon: <TrendingUp className="w-2.5 h-2.5" />,
     bg: "bg-orange-500/15",
     text: "text-orange-400",
     border: "border-orange-500/30",
   },
   ONGOING: {
-    icon: <Radio className="w-3 h-3" />,
+    icon: <Radio className="w-2.5 h-2.5" />,
     bg: "bg-blue-500/15",
     text: "text-blue-400",
     border: "border-blue-500/30",
   },
   FOLLOW_UP: {
-    icon: <RotateCw className="w-3 h-3" />,
+    icon: <RotateCw className="w-2.5 h-2.5" />,
     bg: "bg-cyan-500/15",
     text: "text-cyan-400",
     border: "border-cyan-500/30",
   },
   STALE: {
-    icon: <Clock className="w-3 h-3" />,
+    icon: <Clock className="w-2.5 h-2.5" />,
     bg: "bg-gray-500/15",
     text: "text-gray-400",
     border: "border-gray-500/30",
   },
   ARCHIVED: {
-    icon: <Archive className="w-3 h-3" />,
+    icon: <Archive className="w-2.5 h-2.5" />,
     bg: "bg-gray-600/15",
     text: "text-gray-500",
     border: "border-gray-600/30",

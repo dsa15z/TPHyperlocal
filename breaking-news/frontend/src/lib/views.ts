@@ -24,8 +24,8 @@ export interface ColumnConfig {
 /** All available columns with their defaults */
 export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
   { id: "rank", label: "#", width: 40, defaultWidth: 40, minWidth: 32 },
-  { id: "status", label: "Status", width: 120, defaultWidth: 120, minWidth: 80 },
-  { id: "title", label: "Title", width: 320, defaultWidth: 320, minWidth: 150 },
+  { id: "status", label: "Status", width: 90, defaultWidth: 90, minWidth: 70 },
+  { id: "title", label: "Title", width: 400, defaultWidth: 400, minWidth: 200 },
   { id: "category", label: "Category", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "location", label: "Location", width: 120, defaultWidth: 120, minWidth: 70 },
   { id: "breaking_score", label: "Breaking", width: 90, defaultWidth: 90, minWidth: 60 },
