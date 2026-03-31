@@ -478,6 +478,95 @@ export async function sourceRoutes(
     }
   });
 
+  // POST /admin/sources/bulk — bulk actions on multiple sources
+  app.post('/sources/bulk', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const schema = z.object({
+      ids: z.array(z.string()).min(1).max(500),
+      action: z.enum(['activate', 'deactivate', 'delete', 'assign_markets']),
+      marketIds: z.array(z.string()).optional(), // for assign_markets
+    });
+
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
+    }
+
+    const { ids, action, marketIds } = parsed.data;
+
+    try {
+      switch (action) {
+        case 'activate': {
+          const result = await prisma.source.updateMany({
+            where: { id: { in: ids } },
+            data: { isActive: true },
+          });
+          return reply.send({ message: `Activated ${result.count} sources`, count: result.count });
+        }
+
+        case 'deactivate': {
+          const result = await prisma.source.updateMany({
+            where: { id: { in: ids } },
+            data: { isActive: false },
+          });
+          return reply.send({ message: `Deactivated ${result.count} sources`, count: result.count });
+        }
+
+        case 'delete': {
+          // Cascading delete in a transaction
+          await prisma.$transaction(async (tx) => {
+            await tx.accountSource.deleteMany({ where: { sourceId: { in: ids } } });
+            await tx.storySource.deleteMany({ where: { sourceId: { in: ids } } });
+            await tx.sourcePost.deleteMany({ where: { sourceId: { in: ids } } });
+            await tx.source.deleteMany({ where: { id: { in: ids } } });
+          });
+          return reply.send({ message: `Deleted ${ids.length} sources`, count: ids.length });
+        }
+
+        case 'assign_markets': {
+          if (!marketIds || marketIds.length === 0) {
+            // Clear market assignment (set to global)
+            const result = await prisma.source.updateMany({
+              where: { id: { in: ids } },
+              data: { marketId: null },
+            });
+            return reply.send({ message: `Cleared market from ${result.count} sources`, count: result.count });
+          }
+
+          // For now, assign to the first market (single marketId field).
+          // Also store all marketIds in metadata for multi-market support.
+          const updates = [];
+          for (const sourceId of ids) {
+            updates.push(
+              prisma.source.update({
+                where: { id: sourceId },
+                data: {
+                  marketId: marketIds[0], // Primary market
+                  metadata: {
+                    // Preserve existing metadata and add marketIds
+                    ...(await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } })
+                      .then(s => (s?.metadata as Record<string, unknown>) || {})),
+                    marketIds, // All assigned markets
+                  },
+                },
+              })
+            );
+          }
+          await Promise.all(updates);
+          return reply.send({
+            message: `Assigned ${ids.length} sources to ${marketIds.length} market(s)`,
+            count: ids.length,
+          });
+        }
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Bulk action failed' });
+    }
+  });
+
   // GET /admin/sources/by-type — group sources by sourceType with counts
   app.get('/sources/by-type', async (request, reply) => {
     const au = request.accountUser;

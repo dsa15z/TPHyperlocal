@@ -23,9 +23,14 @@ import {
   FlaskConical,
   CheckCircle2,
   XCircle,
+  CheckSquare,
+  Square,
+  Power,
+  PowerOff,
+  MapPin,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, fetchMarkets, type TestSourceResult } from "@/lib/api";
+import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 import { PageTabBar, SOURCES_TABS } from "@/components/PageTabBar";
@@ -184,6 +189,51 @@ export default function SourcesPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
   });
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkMarketPicker, setShowBulkMarketPicker] = useState(false);
+  const [bulkMarketIds, setBulkMarketIds] = useState<string[]>([]);
+
+  const bulkMutation = useMutation({
+    mutationFn: ({ action, marketIds }: { action: "activate" | "deactivate" | "delete" | "assign_markets"; marketIds?: string[] }) =>
+      bulkSourceAction(Array.from(selectedIds), action, marketIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+      setSelectedIds(new Set());
+      setShowBulkMarketPicker(false);
+    },
+  });
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((s: Source) => s.id)));
+    }
+  };
+
+  const handleBulkActivate = () => bulkMutation.mutate({ action: "activate" });
+  const handleBulkDeactivate = () => bulkMutation.mutate({ action: "deactivate" });
+  const handleBulkDelete = () => {
+    if (!confirm(`Delete ${selectedIds.size} sources? This removes all their posts and story links. Cannot be undone.`)) return;
+    bulkMutation.mutate({ action: "delete" });
+  };
+  const handleBulkAssignMarkets = () => {
+    if (bulkMarketIds.length === 0) {
+      if (!confirm("Clear market assignment from selected sources (make them global)?")) return;
+    }
+    bulkMutation.mutate({ action: "assign_markets", marketIds: bulkMarketIds });
+  };
 
   const [testResult, setTestResult] = useState<TestSourceResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -692,6 +742,123 @@ export default function SourcesPage() {
           )}
         </div>
 
+        {/* Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div className="glass-card-strong p-3 flex items-center gap-3 flex-wrap animate-in">
+            <span className="text-sm text-white font-medium">
+              {selectedIds.size} selected
+            </span>
+            <div className="h-4 w-px bg-surface-300/50" />
+
+            <button
+              onClick={handleBulkActivate}
+              disabled={bulkMutation.isPending}
+              className="filter-btn flex items-center gap-1.5 text-xs text-green-400 hover:border-green-500/50"
+            >
+              <Power className="w-3 h-3" /> Activate
+            </button>
+            <button
+              onClick={handleBulkDeactivate}
+              disabled={bulkMutation.isPending}
+              className="filter-btn flex items-center gap-1.5 text-xs text-yellow-400 hover:border-yellow-500/50"
+            >
+              <PowerOff className="w-3 h-3" /> Deactivate
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkMutation.isPending}
+              className="filter-btn flex items-center gap-1.5 text-xs text-red-400 hover:border-red-500/50"
+            >
+              <Trash2 className="w-3 h-3" /> Delete
+            </button>
+
+            <div className="h-4 w-px bg-surface-300/50" />
+
+            {/* Assign to Market */}
+            <div className="relative">
+              <button
+                onClick={() => setShowBulkMarketPicker(!showBulkMarketPicker)}
+                disabled={bulkMutation.isPending}
+                className="filter-btn flex items-center gap-1.5 text-xs text-cyan-400 hover:border-cyan-500/50"
+              >
+                <MapPin className="w-3 h-3" /> Assign Market
+              </button>
+              {showBulkMarketPicker && (
+                <div className="absolute top-full left-0 mt-1 z-50 bg-surface-100 border border-surface-300 rounded-lg shadow-xl min-w-[260px] max-h-[320px] flex flex-col animate-in">
+                  <div className="px-3 py-2 border-b border-surface-300/50 text-xs text-gray-400">
+                    Select markets (multi-select)
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {markets.filter((m: Market) => m.isActive).map((m: Market) => {
+                      const checked = bulkMarketIds.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => {
+                            setBulkMarketIds((prev) =>
+                              checked ? prev.filter((id) => id !== m.id) : [...prev, m.id]
+                            );
+                          }}
+                          className={clsx(
+                            "w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-200/50 transition-colors text-sm",
+                            checked && "bg-accent/5"
+                          )}
+                        >
+                          <div className={clsx(
+                            "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                            checked ? "bg-accent border-accent" : "border-surface-300"
+                          )}>
+                            {checked && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                          <span className={clsx("truncate", checked ? "text-white" : "text-gray-300")}>
+                            {m.name}{m.state ? `, ${m.state}` : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="px-3 py-2 border-t border-surface-300/50 flex items-center gap-2">
+                    <button
+                      onClick={handleBulkAssignMarkets}
+                      disabled={bulkMutation.isPending}
+                      className="px-3 py-1 bg-accent hover:bg-accent-dim text-white text-xs font-medium rounded transition-colors"
+                    >
+                      {bulkMarketIds.length === 0
+                        ? "Clear Markets (Global)"
+                        : `Assign to ${bulkMarketIds.length} Market${bulkMarketIds.length > 1 ? "s" : ""}`}
+                    </button>
+                    <button
+                      onClick={() => setShowBulkMarketPicker(false)}
+                      className="text-xs text-gray-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="ml-auto">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Clear selection
+              </button>
+            </div>
+
+            {bulkMutation.isError && (
+              <span className="text-red-400 text-xs flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {(bulkMutation.error as Error)?.message || "Bulk action failed"}
+              </span>
+            )}
+            {bulkMutation.isSuccess && (
+              <span className="text-green-400 text-xs">Done!</span>
+            )}
+          </div>
+        )}
+
         {/* Table */}
         {isLoading ? (
           <div className="glass-card p-12 text-center text-gray-500">
@@ -711,6 +878,14 @@ export default function SourcesPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-300/50">
+                    <th className="px-3 py-3 w-10">
+                      <button onClick={toggleSelectAll} className="text-gray-400 hover:text-white transition-colors">
+                        {selectedIds.size === filtered.length && filtered.length > 0
+                          ? <CheckSquare className="w-4 h-4 text-accent" />
+                          : <Square className="w-4 h-4" />
+                        }
+                      </button>
+                    </th>
                     <th className="text-left px-4 py-3 text-gray-400 font-medium">
                       Name
                     </th>
@@ -740,14 +915,24 @@ export default function SourcesPage() {
                 <tbody>
                   {filtered.map((source: Source) => {
                     const deactivation = getDeactivationInfo(source);
+                    const isSelected = selectedIds.has(source.id);
                     return (
                       <tr
                         key={source.id}
                         className={clsx(
                           "border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors",
-                          !source.isActive && "opacity-70"
+                          !source.isActive && "opacity-70",
+                          isSelected && "bg-accent/5"
                         )}
                       >
+                        <td className="px-3 py-3 w-10">
+                          <button onClick={() => toggleSelect(source.id)} className="text-gray-400 hover:text-white transition-colors">
+                            {isSelected
+                              ? <CheckSquare className="w-4 h-4 text-accent" />
+                              : <Square className="w-4 h-4" />
+                            }
+                          </button>
+                        </td>
                         <td className="px-4 py-3">
                           <div>
                             <span className="text-white font-medium">

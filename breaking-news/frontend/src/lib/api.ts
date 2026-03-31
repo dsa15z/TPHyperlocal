@@ -695,6 +695,18 @@ export async function testSource(url: string, platform: string): Promise<TestSou
   });
 }
 
+/export async function bulkSourceAction(
+  ids: string[],
+  action: "activate" | "deactivate" | "delete" | "assign_markets",
+  marketIds?: string[]
+): Promise<{ message: string; count: number }> {
+  return apiFetch<{ message: string; count: number }>("/api/v1/admin/sources/bulk", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ids, action, marketIds }),
+  });
+}
+
 // ─── Admin: Credentials ─────────────────────────────────────────────────────
 
 export async function fetchCredentials(): Promise<unknown[]> {
