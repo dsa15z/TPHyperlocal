@@ -82,6 +82,7 @@ export default function MarketsPage() {
       apiFetch<{ seeded: number }>("/api/v1/admin/markets/seed", {
         method: "POST",
         headers: getAuthHeaders(),
+        body: JSON.stringify({}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
