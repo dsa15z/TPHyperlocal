@@ -1,7 +1,8 @@
 import 'dotenv/config';
+import http from 'node:http';
 import { Worker } from 'bullmq';
 import logger from './lib/logger.js';
-import { closeRedisConnection } from './lib/redis.js';
+import { closeRedisConnection, getSharedConnection } from './lib/redis.js';
 import prisma from './lib/prisma.js';
 import { createIngestionWorker } from './workers/ingestion.worker.js';
 import { createEnrichmentWorker } from './workers/enrichment.worker.js';
@@ -128,6 +129,33 @@ async function main(): Promise<void> {
   startSchedulers();
 
   logger.info('All workers and schedulers are running');
+
+  // Health check HTTP server (for Railway health monitoring + debugging)
+  const PORT = parseInt(process.env['PORT'] || '3002', 10);
+  const healthServer = http.createServer((_req, res) => {
+    const redisStatus = (() => {
+      try {
+        const conn = getSharedConnection();
+        return conn.status || 'unknown';
+      } catch { return 'error'; }
+    })();
+
+    const body = JSON.stringify({
+      status: 'running',
+      workers: workers.length,
+      redis: redisStatus,
+      uptime: process.uptime(),
+      memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+      workerNames: workers.map(w => w.name),
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(body);
+  });
+
+  healthServer.listen(PORT, () => {
+    logger.info({ port: PORT }, 'Worker health server listening');
+  });
 }
 
 async function shutdown(signal: string): Promise<void> {
