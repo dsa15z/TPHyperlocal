@@ -891,6 +891,59 @@ async function scheduleHyperLocalIntelPolls(): Promise<void> {
   }
 }
 
+/**
+ * Schedule web scraper jobs for sources with sourceType containing 'SCRAPE'.
+ * Scrapes websites that don't have RSS feeds for article links.
+ * Runs every 30 minutes (be polite to scraped sites).
+ */
+async function scheduleWebScrapePolls(): Promise<void> {
+  try {
+    const connection = getSharedConnection();
+    const scraperQueue = new Queue('web-scraper', { connection });
+
+    // Find sources marked as SCRAPE type or with scrape metadata
+    const scrapeSources = await prisma.source.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { sourceType: 'SCRAPE' },
+          { sourceType: 'WEB_SCRAPE' },
+        ],
+      },
+    });
+
+    if (scrapeSources.length === 0) {
+      await scraperQueue.close();
+      return;
+    }
+
+    for (const source of scrapeSources) {
+      if (!source.url) continue;
+
+      const metadata = (source.metadata || {}) as Record<string, unknown>;
+
+      await scraperQueue.add('scrape', {
+        sourceId: source.id,
+        url: source.url,
+        name: source.name,
+        selector: metadata.cssSelector as string | undefined,
+        baseUrl: metadata.baseUrl as string | undefined,
+      }, {
+        jobId: `scrape-${source.id}-${Date.now()}`,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 10000 },
+        removeOnComplete: { age: 3600 },
+        removeOnFail: { age: 86400 },
+      });
+    }
+
+    await scraperQueue.close();
+    logger.info({ count: scrapeSources.length }, 'Scheduled web scrape jobs');
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule web scrape polls');
+  }
+}
+
 // Interval handles for cleanup on shutdown
 const intervals: NodeJS.Timeout[] = [];
 
@@ -972,6 +1025,10 @@ export function startSchedulers(): void {
   const hyperLocalInterval = setInterval(scheduleHyperLocalIntelPolls, 15 * 60 * 1000);
   intervals.push(hyperLocalInterval);
 
+  // Web scraper: every 30 minutes (for sites without RSS)
+  const scraperInterval = setInterval(scheduleWebScrapePolls, 30 * 60 * 1000);
+  intervals.push(scraperInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -983,6 +1040,7 @@ export function startSchedulers(): void {
   void scheduleGeocodingJobs();
   void scheduleNewscatcherPolls();
   void scheduleHyperLocalIntelPolls();
+  void scheduleWebScrapePolls();
 
   logger.info('All schedulers started');
 }

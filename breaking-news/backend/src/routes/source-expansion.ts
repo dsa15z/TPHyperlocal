@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
 import { EXPANDED_SOURCES } from '../data/expanded-sources.js';
+import { SCRAPE_SOURCES } from '../data/scrape-sources.js';
 
 function getPayload(req: any) {
   const auth = req.headers['authorization'];
@@ -133,6 +134,63 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
         if (r.status === 'fulfilled') return r.value;
         return { url: body.urls[i], valid: false, error: (r.reason as Error).message };
       }),
+    });
+  });
+
+  // POST /pipeline/import-scrape-sources — bulk import web scrape sources
+  app.post('/pipeline/import-scrape-sources', async (request, reply) => {
+    const payload = getPayload(request);
+    if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const existingUrls = new Set(
+      (await prisma.source.findMany({
+        where: { accountId: payload.accountId },
+        select: { url: true },
+      })).map((s) => s.url).filter(Boolean)
+    );
+
+    const market = await prisma.market.findFirst({ where: { accountId: payload.accountId } });
+
+    const created = [];
+    for (const source of SCRAPE_SOURCES) {
+      if (existingUrls.has(source.url)) continue;
+
+      try {
+        const record = await prisma.source.create({
+          data: {
+            accountId: payload.accountId,
+            name: source.name,
+            platform: 'RSS', // Will be treated as scrape by sourceType
+            sourceType: 'SCRAPE',
+            url: source.url,
+            trustScore: source.trustScore,
+            marketId: market?.id || undefined,
+            isActive: true,
+            metadata: {
+              scrapeSource: true,
+              category: source.category,
+            },
+          },
+        });
+        created.push({ id: record.id, name: source.name, url: source.url });
+      } catch (err) {
+        // Skip duplicates
+      }
+    }
+
+    return reply.status(201).send({
+      imported: created.length,
+      total: SCRAPE_SOURCES.length,
+      skipped: SCRAPE_SOURCES.length - created.length,
+      sources: created,
+    });
+  });
+
+  // GET /pipeline/scrape-sources — list available scrape sources
+  app.get('/pipeline/scrape-sources', async (request, reply) => {
+    return reply.send({
+      data: SCRAPE_SOURCES,
+      total: SCRAPE_SOURCES.length,
     });
   });
 }
