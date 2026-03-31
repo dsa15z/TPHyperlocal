@@ -243,7 +243,7 @@ export async function pipelineRoutes(
   });
 
   // POST /api/v1/pipeline/trigger - trigger ingestion for all active sources
-  app.post('/pipeline/trigger', async (request, reply) => {
+  app.post('/pipeline/trigger', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parseResult = TriggerSchema.safeParse(request.body || {});
     if (!parseResult.success) {
       return reply.status(400).send({

@@ -2,29 +2,46 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken } from '../lib/auth.js';
+import { getPayload } from '../lib/route-helpers.js';
+import { getRedis } from '../lib/redis.js';
 
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
-
-// In-memory alert configuration per account (persists until server restart)
-const alertConfigs = new Map<string, {
+// Fallback in-memory alert configuration if Redis is unavailable
+const alertConfigsFallback = new Map<string, {
   minScore: number;
   maxGapMinutes: number;
   slackEnabled: boolean;
   sseEnabled: boolean;
 }>();
 
-function getAlertConfig(accountId: string) {
-  return alertConfigs.get(accountId) || {
-    minScore: 0.5,
-    maxGapMinutes: 360, // 6 hours
-    slackEnabled: true,
-    sseEnabled: true,
-  };
+const DEFAULT_ALERT_CONFIG = {
+  minScore: 0.5,
+  maxGapMinutes: 360, // 6 hours
+  slackEnabled: true,
+  sseEnabled: true,
+};
+
+function alertConfigKey(accountId: string): string {
+  return `bn:alert:config:${accountId}`;
+}
+
+async function getAlertConfig(accountId: string) {
+  try {
+    const redis = getRedis();
+    const raw = await redis.get(alertConfigKey(accountId));
+    if (raw) return JSON.parse(raw);
+    return { ...DEFAULT_ALERT_CONFIG };
+  } catch {
+    return alertConfigsFallback.get(accountId) || { ...DEFAULT_ALERT_CONFIG };
+  }
+}
+
+async function setAlertConfig(accountId: string, config: any): Promise<void> {
+  try {
+    const redis = getRedis();
+    await redis.set(alertConfigKey(accountId), JSON.stringify(config));
+  } catch {
+    alertConfigsFallback.set(accountId, config);
+  }
 }
 
 export async function beatAlertRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
@@ -105,7 +122,7 @@ export async function beatAlertRoutes(app: FastifyInstance, _opts: FastifyPlugin
       sseEnabled: z.boolean().optional(),
     }).parse(request.body);
 
-    const current = getAlertConfig(payload.accountId);
+    const current = await getAlertConfig(payload.accountId);
     const updated = {
       minScore: body.minScore ?? current.minScore,
       maxGapMinutes: body.maxGapMinutes ?? current.maxGapMinutes,
@@ -113,7 +130,7 @@ export async function beatAlertRoutes(app: FastifyInstance, _opts: FastifyPlugin
       sseEnabled: body.sseEnabled ?? current.sseEnabled,
     };
 
-    alertConfigs.set(payload.accountId, updated);
+    await setAlertConfig(payload.accountId, updated);
 
     return reply.send({ data: updated });
   });
@@ -123,7 +140,7 @@ export async function beatAlertRoutes(app: FastifyInstance, _opts: FastifyPlugin
     const payload = getPayload(request);
     if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
 
-    const config = getAlertConfig(payload.accountId);
+    const config = await getAlertConfig(payload.accountId);
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000); // 6 hours ago
 
     // Find stories that are uncovered, high-scoring, recent, and not stale/archived

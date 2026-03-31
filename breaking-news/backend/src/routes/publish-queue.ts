@@ -2,13 +2,7 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken } from '../lib/auth.js';
-
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
+import { getPayload } from '../lib/route-helpers.js';
 
 const VALID_CHANNELS = ['broadcast', 'social', 'push', 'web'] as const;
 

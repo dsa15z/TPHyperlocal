@@ -3,6 +3,7 @@ import { Worker, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
+import { sendEmail } from '../lib/email.js';
 
 const logger = createChildLogger('digest');
 
@@ -74,22 +75,17 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
-  const smtpHost = process.env['SMTP_HOST'];
-  const smtpPort = process.env['SMTP_PORT'] || '587';
-  const smtpUser = process.env['SMTP_USER'];
-  const smtpPass = process.env['SMTP_PASS'];
-  const smtpFrom = process.env['SMTP_FROM'] || 'digest@breakingnews.local';
+async function sendDigestEmail(to: string, subject: string, html: string): Promise<void> {
+  const sent = await sendEmail({
+    to,
+    subject,
+    html,
+    from: process.env['DIGEST_FROM_EMAIL'] || undefined,
+  });
 
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    logger.warn({ to, subject }, 'SMTP not configured, skipping email send');
-    return;
+  if (!sent) {
+    logger.warn({ to, subject }, 'Digest email not sent (check SendGrid config)');
   }
-
-  // Use nodemailer-compatible approach via fetch to an SMTP relay
-  // For production, use Resend, SendGrid, or SES API instead
-  logger.info({ to, subject }, 'Email would be sent (SMTP integration pending)');
-  // TODO: Integrate with nodemailer or Resend API
 }
 
 async function processDigest(job: Job<DigestJob>): Promise<void> {
@@ -142,7 +138,7 @@ async function processDigest(job: Job<DigestJob>): Promise<void> {
   const subject = `Breaking News Digest — ${stories.length} stories (${subscription.frequency.toLowerCase()})`;
   const html = buildDigestHtml(stories, subscription);
 
-  await sendEmail(subscription.email, subject, html);
+  await sendDigestEmail(subscription.email, subject, html);
 
   // Update last sent
   await prisma.digestSubscription.update({

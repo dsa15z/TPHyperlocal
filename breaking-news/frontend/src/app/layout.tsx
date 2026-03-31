@@ -12,17 +12,16 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Breaking News Intelligence",
+  title: "TopicPulse — Breaking News Intelligence",
   description:
-    "Real-time breaking news monitoring and intelligence dashboard for your local markets.",
+    "Real-time breaking news monitoring and intelligence for broadcast newsrooms.",
   manifest: "/manifest.json",
   themeColor: "#3B82F6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "NewsDesk",
+    title: "TopicPulse",
   },
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
 };
 
 export default function RootLayout({
@@ -41,6 +40,17 @@ export default function RootLayout({
           <KeyboardShortcuts />
           <OnboardingTour />
         </Providers>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );

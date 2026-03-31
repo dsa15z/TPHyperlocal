@@ -98,7 +98,7 @@ export async function authRoutes(
   _opts: FastifyPluginOptions,
 ) {
   // ── POST /auth/register ─────────────────────────────────────────────────
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parseResult = RegisterSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -173,7 +173,7 @@ export async function authRoutes(
   });
 
   // ── POST /auth/login ───────────────────────────────────────────────────
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parseResult = LoginSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({

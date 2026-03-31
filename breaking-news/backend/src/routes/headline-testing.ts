@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
+import { getRedis } from '../lib/redis.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -25,9 +26,61 @@ interface VariantStats {
   significance: { vsControl: number; isSignificant95: boolean; isSignificant99: boolean } | null;
 }
 
-// ─── In-memory store (headline tests are short-lived, 1-24h) ───────────────
+// ─── Redis-backed store with in-memory fallback ────────────────────────────
 
-const headlineTests = new Map<string, HeadlineTest>();
+const headlineTestsFallback = new Map<string, HeadlineTest>();
+const HEADLINE_TEST_TTL = 86400; // 24 hours
+
+function redisKey(storyId: string): string {
+  return `bn:headline:test:${storyId}`;
+}
+
+async function getHeadlineTest(storyId: string): Promise<HeadlineTest | null> {
+  try {
+    const redis = getRedis();
+    const raw = await redis.get(redisKey(storyId));
+    if (raw) return JSON.parse(raw);
+    return null;
+  } catch {
+    return headlineTestsFallback.get(storyId) || null;
+  }
+}
+
+async function setHeadlineTest(storyId: string, test: HeadlineTest): Promise<void> {
+  try {
+    const redis = getRedis();
+    await redis.set(redisKey(storyId), JSON.stringify(test), 'EX', HEADLINE_TEST_TTL);
+  } catch {
+    headlineTestsFallback.set(storyId, test);
+  }
+}
+
+async function getAllActiveTests(): Promise<Array<[string, HeadlineTest]>> {
+  try {
+    const redis = getRedis();
+    const keys = await redis.keys('bn:headline:test:*');
+    if (keys.length === 0) return [];
+    const pipeline = redis.pipeline();
+    for (const key of keys) {
+      pipeline.get(key);
+    }
+    const results = await pipeline.exec();
+    const entries: Array<[string, HeadlineTest]> = [];
+    for (let i = 0; i < keys.length; i++) {
+      const raw = results?.[i]?.[1] as string | null;
+      if (raw) {
+        const test: HeadlineTest = JSON.parse(raw);
+        if (test.winnerId === null) {
+          entries.push([test.storyId, test]);
+        }
+      }
+    }
+    return entries;
+  } catch {
+    return Array.from(headlineTestsFallback.entries())
+      .filter(([_, test]) => test.winnerId === null);
+  }
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -131,7 +184,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
     if (!story) return reply.status(404).send({ error: 'Story not found' });
 
     // Check for existing active test
-    const existing = headlineTests.get(id);
+    const existing = await getHeadlineTest(id);
     if (existing && existing.winnerId === null) {
       return reply.status(409).send({
         error: 'Active test already exists for this story. Pick a winner or wait for it to complete.',
@@ -150,7 +203,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
       winnerId: null,
     };
 
-    headlineTests.set(id, test);
+    await setHeadlineTest(id, test);
 
     return reply.status(201).send({
       data: {
@@ -166,7 +219,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
   app.get('/stories/:id/headlines/test', async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const test = headlineTests.get(id);
+    const test = await getHeadlineTest(id);
     if (!test) {
       return reply.status(404).send({ error: 'No headline test found for this story' });
     }
@@ -205,7 +258,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
       return reply.status(400).send({ error: 'Invalid body', details: parsed.error.issues });
     }
 
-    const test = headlineTests.get(id);
+    const test = await getHeadlineTest(id);
     if (!test || test.winnerId !== null) {
       return reply.status(404).send({ error: 'No active headline test for this story' });
     }
@@ -216,6 +269,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
     }
 
     test.impressions[variant]++;
+    await setHeadlineTest(id, test);
 
     return reply.send({ ok: true, variant, impressions: test.impressions[variant] });
   });
@@ -229,7 +283,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
       return reply.status(400).send({ error: 'Invalid body', details: parsed.error.issues });
     }
 
-    const test = headlineTests.get(id);
+    const test = await getHeadlineTest(id);
     if (!test || test.winnerId !== null) {
       return reply.status(404).send({ error: 'No active headline test for this story' });
     }
@@ -240,6 +294,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
     }
 
     test.clicks[variant]++;
+    await setHeadlineTest(id, test);
 
     return reply.send({ ok: true, variant, clicks: test.clicks[variant] });
   });
@@ -256,7 +311,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
       return reply.status(400).send({ error: 'Invalid body', details: parsed.error.issues });
     }
 
-    const test = headlineTests.get(id);
+    const test = await getHeadlineTest(id);
     if (!test) {
       return reply.status(404).send({ error: 'No headline test found for this story' });
     }
@@ -319,6 +374,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
 
     // Update test state
     test.winnerId = winnerIndex;
+    await setHeadlineTest(id, test);
 
     // Update story title to winning headline
     await prisma.story.update({
@@ -349,8 +405,7 @@ export async function headlineTestingRoutes(app: FastifyInstance, _opts: Fastify
       leadingVariant: { index: number; headline: string; ctr: number } | null;
     }> = [];
 
-    const activeEntries = Array.from(headlineTests.entries())
-      .filter(([_, test]) => test.winnerId === null);
+    const activeEntries = await getAllActiveTests();
 
     // Fetch story titles in bulk
     const storyIds = activeEntries.map(([id]) => id);

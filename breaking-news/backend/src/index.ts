@@ -49,6 +49,7 @@ import { socialPublishRoutes } from './routes/social-publish.js';
 import { analyticsEmbedRoutes } from './routes/analytics-embed.js';
 import { dbHealthRoutes } from './routes/db-health.js';
 import { storyResearchRoutes } from './routes/story-research.js';
+import { billingRoutes } from './routes/billing.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -77,9 +78,9 @@ async function buildServer() {
     credentials: true,
   });
 
-  // Rate limiting
+  // Rate limiting — 60 requests per minute per IP (global default)
   await app.register(rateLimit, {
-    max: 100,
+    max: 60,
     timeWindow: '1 minute',
     keyGenerator: (request) => {
       return (
@@ -192,6 +193,7 @@ async function buildServer() {
   await app.register(analyticsEmbedRoutes, { prefix: '/api/v1' });
   await app.register(dbHealthRoutes, { prefix: '/api/v1' });
   await app.register(storyResearchRoutes, { prefix: '/api/v1' });
+  await app.register(billingRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

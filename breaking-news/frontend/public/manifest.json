@@ -1,7 +1,7 @@
 {
-  "name": "Breaking News Intelligence",
-  "short_name": "NewsDesk",
-  "description": "Real-time breaking news monitoring and intelligence dashboard",
+  "name": "TopicPulse — Breaking News Intelligence",
+  "short_name": "TopicPulse",
+  "description": "Real-time breaking news monitoring and intelligence for broadcast newsrooms",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0B0E14",
@@ -9,29 +9,27 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/logo-topicpulse.png",
+      "sizes": "850x331",
+      "type": "image/png"
     }
   ],
   "categories": ["news", "productivity"],
   "shortcuts": [
     {
-      "name": "Dashboard",
+      "name": "Stories",
       "url": "/",
       "description": "Open the news dashboard"
     },
     {
-      "name": "Bookmarks",
-      "url": "/bookmarks",
-      "description": "View saved stories"
+      "name": "Beat Alerts",
+      "url": "/beat-alerts",
+      "description": "Check coverage gaps"
+    },
+    {
+      "name": "Assignments",
+      "url": "/assignments",
+      "description": "View reporter assignments"
     }
   ]
 }

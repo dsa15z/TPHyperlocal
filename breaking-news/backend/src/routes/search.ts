@@ -4,36 +4,59 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '@prisma/client';
 import { semanticSearch, findSimilarStories } from '../lib/vector-search.js';
+import { getRedis } from '../lib/redis.js';
 
-// ─── In-memory trending search tracker ──────────────────────────────────────
+// ─── Redis-backed trending search tracker with in-memory fallback ──────────
 
+const TRENDING_KEY = 'bn:search:trending';
+const TRENDING_TTL = 86400; // 24 hours
+
+// Fallback in-memory tracker
 interface SearchEntry {
   term: string;
   count: number;
   lastSearched: number;
 }
+const searchCounterFallback = new Map<string, SearchEntry>();
 
-const searchCounter = new Map<string, SearchEntry>();
-const TRENDING_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-function trackSearch(term: string) {
+async function trackSearch(term: string): Promise<void> {
   const normalized = term.toLowerCase().trim();
   if (normalized.length < 2) return;
-  const existing = searchCounter.get(normalized);
-  if (existing) {
-    existing.count += 1;
-    existing.lastSearched = Date.now();
-  } else {
-    searchCounter.set(normalized, { term: normalized, count: 1, lastSearched: Date.now() });
+  try {
+    const redis = getRedis();
+    await redis.zincrby(TRENDING_KEY, 1, normalized);
+    // Set TTL on the sorted set (resets on each search, so it expires 24h after last activity)
+    await redis.expire(TRENDING_KEY, TRENDING_TTL);
+  } catch {
+    const existing = searchCounterFallback.get(normalized);
+    if (existing) {
+      existing.count += 1;
+      existing.lastSearched = Date.now();
+    } else {
+      searchCounterFallback.set(normalized, { term: normalized, count: 1, lastSearched: Date.now() });
+    }
   }
 }
 
-function pruneOldSearches() {
-  const cutoff = Date.now() - TRENDING_TTL_MS;
-  for (const [key, entry] of searchCounter) {
-    if (entry.lastSearched < cutoff) {
-      searchCounter.delete(key);
+async function getTrendingSearches(count: number): Promise<Array<{ term: string; count: number }>> {
+  try {
+    const redis = getRedis();
+    const results = await redis.zrevrange(TRENDING_KEY, 0, count - 1, 'WITHSCORES');
+    const trending: Array<{ term: string; count: number }> = [];
+    for (let i = 0; i < results.length; i += 2) {
+      trending.push({ term: results[i], count: parseInt(results[i + 1], 10) });
     }
+    return trending;
+  } catch {
+    // Fallback: prune old entries and return from memory
+    const cutoff = Date.now() - TRENDING_TTL * 1000;
+    for (const [key, entry] of searchCounterFallback) {
+      if (entry.lastSearched < cutoff) searchCounterFallback.delete(key);
+    }
+    return Array.from(searchCounterFallback.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, count)
+      .map((e) => ({ term: e.term, count: e.count }));
   }
 }
 
@@ -123,7 +146,7 @@ export async function searchRoutes(
   _opts: FastifyPluginOptions,
 ) {
   // GET /api/v1/search — Enhanced full-text search across stories
-  app.get('/search', async (request, reply) => {
+  app.get('/search', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parseResult = SearchQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -142,7 +165,7 @@ export async function searchRoutes(
     }
 
     // Track this search for trending
-    trackSearch(htmlStripped);
+    await trackSearch(htmlStripped);
 
     // Sanitize search term for ILIKE
     const sanitized = htmlStripped.replace(/[%_\\]/g, (ch) => `\\${ch}`);
@@ -424,21 +447,15 @@ export async function searchRoutes(
 
   // GET /api/v1/search/trending — Trending search terms (last 24h)
   app.get('/search/trending', async (_request, reply) => {
-    pruneOldSearches();
-
-    const trending = Array.from(searchCounter.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20)
-      .map((entry) => ({
-        term: entry.term,
-        count: entry.count,
-        lastSearched: new Date(entry.lastSearched).toISOString(),
-      }));
+    const trending = await getTrendingSearches(20);
 
     return reply.send({
-      data: trending,
+      data: trending.map((entry) => ({
+        term: entry.term,
+        count: entry.count,
+      })),
       period: '24h',
-      total: searchCounter.size,
+      total: trending.length,
     });
   });
 }

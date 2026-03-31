@@ -4,6 +4,7 @@ import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
 import { generate } from '../lib/llm-factory.js';
+import { createWibbitzVideo, checkWibbitzStatus, uploadToVimeo, getVideoServiceStatus } from '../lib/video-services.js';
 
 const logger = createChildLogger('video-generation');
 
@@ -285,7 +286,70 @@ async function processVideoGeneration(job: Job<VideoGenerationJob>): Promise<voi
     };
   }
 
-  // 6. Store result in FirstDraft table
+  // 6. Attempt Wibbitz video rendering if keys are available
+  const serviceStatus = getVideoServiceStatus();
+  let wibbitzVideoId: string | null = null;
+  let wibbitzVideoUrl: string | null = null;
+  let vimeoUrl: string | null = null;
+
+  if (serviceStatus.wibbitz) {
+    logger.info({ storyId, format }, 'Wibbitz keys available, submitting video for rendering');
+
+    const wibbitzResult = await createWibbitzVideo({
+      title: videoOutput.title,
+      scenes: videoOutput.scenes.map((s) => ({
+        text: s.voiceover || s.lowerThird,
+        duration: s.duration,
+        imagePrompt: s.graphicPrompt || undefined,
+      })),
+      music: videoOutput.musicSuggestion || undefined,
+      format: format === 'SOCIAL_CLIP' ? 'portrait' : 'landscape',
+    });
+
+    if (wibbitzResult) {
+      wibbitzVideoId = wibbitzResult.videoId;
+      logger.info({ storyId, wibbitzVideoId }, 'Wibbitz video submitted for rendering');
+
+      // Poll for completion (up to 5 attempts, 10s apart)
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        const status = await checkWibbitzStatus(wibbitzResult.videoId);
+        if (status?.status === 'ready' && status.url) {
+          wibbitzVideoUrl = status.url;
+          logger.info({ storyId, wibbitzVideoId, url: wibbitzVideoUrl }, 'Wibbitz video ready');
+          break;
+        } else if (status?.status === 'failed') {
+          logger.warn({ storyId, wibbitzVideoId }, 'Wibbitz video rendering failed');
+          break;
+        }
+        logger.info({ storyId, wibbitzVideoId, attempt: attempt + 1 }, 'Wibbitz video still processing');
+      }
+
+      // 7. Upload to Vimeo if video is ready and Vimeo token is available
+      if (wibbitzVideoUrl && serviceStatus.vimeo) {
+        logger.info({ storyId, wibbitzVideoUrl }, 'Uploading rendered video to Vimeo');
+        const vimeoResult = await uploadToVimeo(wibbitzVideoUrl, videoOutput.title);
+        if (vimeoResult) {
+          vimeoUrl = vimeoResult.vimeoUrl;
+          logger.info({ storyId, vimeoUrl, vimeoId: vimeoResult.vimeoId }, 'Video uploaded to Vimeo');
+        }
+      }
+    } else {
+      logger.warn({ storyId }, 'Wibbitz video creation returned null (auth or API error)');
+    }
+  } else {
+    logger.info({ storyId }, 'Wibbitz not configured, storing storyboard only');
+  }
+
+  // 8. Attach rendering results to the video output
+  const enrichedOutput = {
+    ...videoOutput,
+    ...(wibbitzVideoId && { wibbitzVideoId }),
+    ...(wibbitzVideoUrl && { wibbitzVideoUrl }),
+    ...(vimeoUrl && { vimeoUrl }),
+  };
+
+  // 9. Store result in FirstDraft table
   const draftType = FORMAT_TO_DRAFT_TYPE[format] || 'video_social';
 
   await prisma.firstDraft.create({
@@ -293,7 +357,7 @@ async function processVideoGeneration(job: Job<VideoGenerationJob>): Promise<voi
       storyId,
       type: draftType,
       userId: accountId,
-      content: JSON.stringify(videoOutput),
+      content: JSON.stringify(enrichedOutput),
       model: result.model,
       tokens: result.tokens,
     },
@@ -306,6 +370,8 @@ async function processVideoGeneration(job: Job<VideoGenerationJob>): Promise<voi
     sceneCount: videoOutput.scenes.length,
     model: result.model,
     tokens: result.tokens,
+    wibbitzVideoId,
+    vimeoUrl,
   }, 'Video generation completed');
 }
 

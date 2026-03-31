@@ -2,15 +2,9 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken } from '../lib/auth.js';
 import { getQueue } from '../lib/queue.js';
 import { broadcastSSE } from '../lib/sse.js';
-
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
+import { getPayload } from '../lib/route-helpers.js';
 
 export async function breakingPackageRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   // POST /api/v1/stories/:id/breaking-package - generate one-click package

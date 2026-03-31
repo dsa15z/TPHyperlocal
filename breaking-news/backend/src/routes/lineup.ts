@@ -2,16 +2,11 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { verifyToken } from '../lib/auth.js';
+import { getRedis } from '../lib/redis.js';
+import { getPayload } from '../lib/route-helpers.js';
 
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
-
-// In-memory history (no schema change required)
-const lineupHistory: Array<{
+// Fallback in-memory history if Redis is unavailable
+const lineupHistoryFallback: Array<{
   id: string;
   showName: string;
   showTime: string;
@@ -20,6 +15,29 @@ const lineupHistory: Array<{
   stories: any[];
   leadRecommendation: any;
 }> = [];
+
+const LINEUP_HISTORY_KEY = 'bn:lineup:history';
+
+async function pushLineupHistory(entry: any): Promise<void> {
+  try {
+    const redis = getRedis();
+    await redis.lpush(LINEUP_HISTORY_KEY, JSON.stringify(entry));
+    await redis.ltrim(LINEUP_HISTORY_KEY, 0, 49);
+  } catch {
+    lineupHistoryFallback.unshift(entry);
+    if (lineupHistoryFallback.length > 50) lineupHistoryFallback.length = 50;
+  }
+}
+
+async function getLineupHistory(count: number): Promise<any[]> {
+  try {
+    const redis = getRedis();
+    const raw = await redis.lrange(LINEUP_HISTORY_KEY, 0, count - 1);
+    return raw.map((item) => JSON.parse(item));
+  } catch {
+    return lineupHistoryFallback.slice(0, count);
+  }
+}
 
 export async function lineupRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
@@ -155,7 +173,7 @@ export async function lineupRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
       };
     }
 
-    // Store in memory for history
+    // Store in Redis-backed history
     const entry = {
       id: `lineup_${Date.now()}`,
       showName: body.showName,
@@ -165,9 +183,7 @@ export async function lineupRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
       stories: recommended,
       leadRecommendation,
     };
-    lineupHistory.unshift(entry);
-    // Keep only last 50 entries
-    if (lineupHistory.length > 50) lineupHistory.length = 50;
+    await pushLineupHistory(entry);
 
     return reply.send({
       showName: body.showName,
@@ -184,8 +200,9 @@ export async function lineupRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
     const payload = getPayload(request);
     if (!payload?.accountId) return reply.status(401).send({ error: 'Unauthorized' });
 
+    const history = await getLineupHistory(20);
     return reply.send({
-      data: lineupHistory.slice(0, 20),
+      data: history,
     });
   });
 }
