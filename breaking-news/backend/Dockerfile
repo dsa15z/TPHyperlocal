@@ -34,6 +34,9 @@ COPY package.json package-lock.json* ./
 # Install production dependencies only
 RUN npm install --omit=dev
 
+# Install prisma CLI for db push at startup
+RUN npm install prisma@5.19.1
+
 # Copy prisma schema and generated client
 COPY prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
