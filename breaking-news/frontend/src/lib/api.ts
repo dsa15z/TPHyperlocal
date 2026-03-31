@@ -695,7 +695,7 @@ export async function testSource(url: string, platform: string): Promise<TestSou
   });
 }
 
-/export async function bulkSourceAction(
+export async function bulkSourceAction(
   ids: string[],
   action: "activate" | "deactivate" | "delete" | "assign_markets",
   marketIds?: string[]

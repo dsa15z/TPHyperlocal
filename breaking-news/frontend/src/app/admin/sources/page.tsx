@@ -386,39 +386,32 @@ export default function SourcesPage() {
           </div>
         </div>
         <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => {
-                if (
-                  confirm(
-                    "Import 200+ pre-configured local news sources? This may take a moment."
-                  )
-                ) {
-                  importMutation.mutate();
-                }
-              }}
-              disabled={importMutation.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2 border border-surface-300/50 hover:border-accent/50 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {importMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              {importMutation.isPending ? "Importing..." : "Import 200+ Sources"}
-            </button>
-            <button
-              onClick={() => {
-                if (editingId) {
-                  resetForm();
-                }
-                setShowForm(!showForm);
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Source
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              if (confirm("Import 200+ pre-configured local news sources? This may take a moment.")) {
+                importMutation.mutate();
+              }
+            }}
+            disabled={importMutation.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-surface-300/50 hover:border-accent/50 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {importMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            {importMutation.isPending ? "Importing..." : "Import 200+ Sources"}
+          </button>
+          <button
+            onClick={() => {
+              if (editingId) resetForm();
+              setShowForm(!showForm);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Source
+          </button>
         </div>
 
         {/* Add Source form */}
@@ -1075,7 +1068,7 @@ export default function SourcesPage() {
                   </button>
                 </div>
               )}
-            )}
+            </div>
           </div>
         )}
       </main>
