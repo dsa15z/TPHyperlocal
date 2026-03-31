@@ -44,6 +44,7 @@ export interface SavedFilters {
   categories?: string[];
   statuses?: string[];
   sourceIds?: string[];
+  marketIds?: string[];
   timeRange?: string;
   minScore?: number;
   uncoveredOnly?: boolean;

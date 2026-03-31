@@ -76,6 +76,7 @@ export interface StoryFilters {
   time_range?: string;
   min_score?: number;
   source_ids?: string[];
+  market_ids?: string[];
   uncovered_only?: boolean;
   trend?: "rising" | "declining" | "all";
   page?: number;
@@ -297,6 +298,9 @@ export async function fetchStories(
   }
   if (filters.source_ids && filters.source_ids.length > 0) {
     backendParams.sourceIds = filters.source_ids.join(",");
+  }
+  if (filters.market_ids && filters.market_ids.length > 0) {
+    backendParams.marketIds = filters.market_ids.join(",");
   }
   if (filters.uncovered_only) {
     backendParams.uncoveredOnly = true;

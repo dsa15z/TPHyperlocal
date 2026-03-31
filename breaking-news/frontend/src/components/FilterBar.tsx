@@ -2,20 +2,30 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Search, X } from "lucide-react";
 import {
   type StoryFilters,
   type SourceWithCount,
   type FacetItem,
+  fetchMarkets,
+  fetchUserProfile,
 } from "@/lib/api";
-import { MultiSelectDropdown, getEffectiveSelection } from "./MultiSelectDropdown";
+import { MultiSelectDropdown, SingleSelectDropdown, getEffectiveSelection } from "./MultiSelectDropdown";
 
-const TIME_RANGES = [
-  { label: "1h", value: "1h" },
-  { label: "6h", value: "6h" },
-  { label: "24h", value: "24h" },
-  { label: "7d", value: "7d" },
+const TIME_RANGE_OPTIONS = [
+  { value: "1h", label: "1 hour" },
+  { value: "6h", label: "6 hours" },
+  { value: "24h", label: "24 hours" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+];
+
+const TREND_OPTIONS = [
+  { value: "all", label: "All Trends" },
+  { value: "rising", label: "Rising", icon: "\u2197" },
+  { value: "declining", label: "Declining", icon: "\u2198" },
 ];
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -50,14 +60,51 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [uncoveredOnly, setUncoveredOnly] = useState(false);
-  const [trend, setTrend] = useState<"all" | "rising" | "declining">("all");
+  const [trend, setTrend] = useState("all");
   const [timeRange, setTimeRange] = useState(
     searchParams.get("time_range") || "24h"
   );
   const [minScore, setMinScore] = useState(
     Number(searchParams.get("min_score") || "0")
   );
+
+  // Fetch user profile to determine accessible markets + superadmin status
+  const { data: profileData } = useQuery({
+    queryKey: ["user-profile-markets"],
+    queryFn: fetchUserProfile,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  // Fetch all markets (superadmin gets all, regular users get their own)
+  const { data: allMarketsData } = useQuery({
+    queryKey: ["all-markets"],
+    queryFn: fetchMarkets,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const isSuperAdmin = (profileData as any)?.isSuperAdmin === true;
+  const userMarkets = (profileData as any)?.markets || [];
+  const allMarkets = ((allMarketsData as any)?.data || allMarketsData || []) as Array<{
+    id: string;
+    name: string;
+    slug: string;
+    state: string | null;
+    isActive: boolean;
+  }>;
+
+  // Superadmin sees all markets; regular users see only their account's markets
+  const availableMarkets = isSuperAdmin
+    ? allMarkets.filter((m) => m.isActive)
+    : userMarkets.filter((m: any) => m.isActive);
+
+  const marketOptions = availableMarkets.map((m: any) => ({
+    value: m.id,
+    label: m.name + (m.state ? `, ${m.state}` : ""),
+  }));
 
   const categoryOptions = (facets?.categories || []).map(
     (c) => ({ value: c.name, label: c.name, count: c.count })
@@ -80,6 +127,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     const effectiveCats = getEffectiveSelection(selectedCategories);
     const effectiveStatuses = getEffectiveSelection(selectedStatuses);
     const effectiveSources = getEffectiveSelection(selectedSources);
+    const effectiveMarkets = getEffectiveSelection(selectedMarkets);
 
     return {
       q: searchInput || undefined,
@@ -88,14 +136,16 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
       time_range: timeRange || undefined,
       min_score: minScore > 0 ? minScore : undefined,
       source_ids: effectiveSources || undefined,
+      market_ids: effectiveMarkets || undefined,
       uncovered_only: uncoveredOnly || undefined,
-      trend: trend !== "all" ? trend : undefined,
+      trend: trend !== "all" ? (trend as "rising" | "declining") : undefined,
     };
   }, [
     searchInput,
     selectedCategories,
     selectedStatuses,
     selectedSources,
+    selectedMarkets,
     uncoveredOnly,
     trend,
     timeRange,
@@ -114,6 +164,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedCategories,
     selectedStatuses,
     selectedSources,
+    selectedMarkets,
     uncoveredOnly,
     trend,
     timeRange,
@@ -130,6 +181,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     if (filters.time_range) params.set("time_range", filters.time_range);
     if (filters.min_score) params.set("min_score", String(filters.min_score));
     if (filters.source_ids) params.set("sources", filters.source_ids.join(","));
+    if (filters.market_ids) params.set("markets", filters.market_ids.join(","));
     const qs = params.toString();
     router.replace(qs ? `?${qs}` : "/", { scroll: false });
   };
@@ -139,6 +191,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setSelectedCategories([]);
     setSelectedStatuses([]);
     setSelectedSources([]);
+    setSelectedMarkets([]);
     setUncoveredOnly(false);
     setTrend("all");
     setTimeRange("24h");
@@ -150,6 +203,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     selectedCategories.length > 0 ||
     selectedStatuses.length > 0 ||
     selectedSources.length > 0 ||
+    selectedMarkets.length > 0 ||
     uncoveredOnly ||
     trend !== "all" ||
     timeRange !== "24h" ||
@@ -186,45 +240,39 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           placeholder="All Statuses"
         />
 
-        {/* Source multi-select */}
+        {/* Source multi-select with search */}
         <MultiSelectDropdown
           options={sourceOptions}
           selected={selectedSources}
           onChange={setSelectedSources}
           placeholder="All Sources"
+          searchable
         />
 
-        {/* Time range */}
-        <div className="flex items-center gap-1">
-          {TIME_RANGES.map((tr) => (
-            <button
-              key={tr.value}
-              onClick={() => setTimeRange(tr.value)}
-              className={clsx(
-                "filter-btn",
-                timeRange === tr.value && "filter-btn-active"
-              )}
-            >
-              {tr.label}
-            </button>
-          ))}
-        </div>
+        {/* Market multi-select with search */}
+        {marketOptions.length > 0 && (
+          <MultiSelectDropdown
+            options={marketOptions}
+            selected={selectedMarkets}
+            onChange={setSelectedMarkets}
+            placeholder="All Markets"
+            searchable
+          />
+        )}
 
-        {/* Trend filter */}
-        <div className="flex items-center gap-1">
-          {(["all", "rising", "declining"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTrend(t)}
-              className={clsx(
-                "filter-btn text-xs capitalize",
-                trend === t && "filter-btn-active"
-              )}
-            >
-              {t === "rising" ? "\u2197 Rising" : t === "declining" ? "\u2198 Declining" : "All Trends"}
-            </button>
-          ))}
-        </div>
+        {/* Time range dropdown */}
+        <SingleSelectDropdown
+          options={TIME_RANGE_OPTIONS}
+          value={timeRange}
+          onChange={setTimeRange}
+        />
+
+        {/* Trend dropdown */}
+        <SingleSelectDropdown
+          options={TREND_OPTIONS}
+          value={trend}
+          onChange={setTrend}
+        />
 
         {/* Min score */}
         <div className="flex items-center gap-2 text-sm text-gray-400">
