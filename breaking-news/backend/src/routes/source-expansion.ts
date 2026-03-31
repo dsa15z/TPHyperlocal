@@ -160,14 +160,15 @@ export async function sourceExpansionRoutes(app: FastifyInstance, _opts: Fastify
           data: {
             accountId: payload.accountId,
             name: source.name,
-            platform: 'RSS', // Will be treated as scrape by sourceType
-            sourceType: 'SCRAPE',
+            platform: 'RSS',
+            sourceType: 'RSS_FEED',
             url: source.url,
             trustScore: source.trustScore,
             marketId: market?.id || undefined,
             isActive: true,
             metadata: {
               scrapeSource: true,
+              originalSourceType: 'SCRAPE',
               category: source.category,
             },
           },

@@ -901,15 +901,15 @@ async function scheduleWebScrapePolls(): Promise<void> {
     const connection = getSharedConnection();
     const scraperQueue = new Queue('web-scraper', { connection });
 
-    // Find sources marked as SCRAPE type or with scrape metadata
-    const scrapeSources = await prisma.source.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { sourceType: 'SCRAPE' },
-          { sourceType: 'WEB_SCRAPE' },
-        ],
-      },
+    // Find sources marked for scraping via metadata
+    const allSources = await prisma.source.findMany({
+      where: { isActive: true },
+    });
+
+    // Filter to sources with scrapeSource: true in metadata
+    const scrapeSources = allSources.filter((s) => {
+      const meta = s.metadata as Record<string, unknown> | null;
+      return meta?.scrapeSource === true || meta?.originalSourceType === 'SCRAPE';
     });
 
     if (scrapeSources.length === 0) {
