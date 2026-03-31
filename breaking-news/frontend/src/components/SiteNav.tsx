@@ -392,7 +392,7 @@ export function SiteNav() {
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo-topicpulse.png" alt="TopicPulse" className="h-7" />
+            <img src="/logo-topicpulse.png" alt="TopicPulse" className="h-7 brightness-0 invert" />
           </Link>
           <div className="live-indicator">
             <span className="live-dot" />
