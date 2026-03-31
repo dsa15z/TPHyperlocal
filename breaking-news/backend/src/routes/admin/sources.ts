@@ -33,11 +33,15 @@ const updateSourceSchema = z.object({
 });
 
 const listSourcesSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(200),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   platform: platformEnum.optional(),
   sourceType: sourceTypeEnum.optional(),
   marketId: z.string().optional(),
+  search: z.string().optional(),
+  isActive: z.coerce.boolean().optional(),
+  sort: z.enum(['name', 'trustScore', 'lastPolledAt', 'createdAt']).default('name'),
+  order: z.enum(['asc', 'desc']).default('asc'),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -66,29 +70,26 @@ export async function sourceRoutes(
     if (!query.success) {
       return reply.status(400).send({ error: 'Validation error', details: query.error.flatten() });
     }
-    const { limit, offset, platform, sourceType, marketId } = query.data;
+    const { limit, offset, platform, sourceType, marketId, search, isActive, sort, order } = query.data;
 
-    // Get account's market IDs
-    const accountMarkets = await prisma.market.findMany({
-      where: { accountId: au.accountId },
-      select: { id: true },
-    });
-    const marketIds = accountMarkets.map((m) => m.id);
-
-    // Show ALL sources: global, market-linked, account-linked, and unlinked
-    // (Admins need to see everything to manage the full source library)
+    // Build where clause with server-side filtering
     const where: any = { AND: [] };
     if (platform) where.AND.push({ platform });
     if (sourceType) where.AND.push({ sourceType });
-    if (marketId) {
-      // Verify the market belongs to this account
-      if (!marketIds.includes(marketId)) {
-        return reply.status(400).send({ error: 'Market does not belong to this account' });
-      }
-      where.AND.push({ marketId });
+    if (marketId) where.AND.push({ marketId });
+    if (isActive !== undefined) where.AND.push({ isActive });
+    if (search) {
+      where.AND.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { url: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
+    // Remove empty AND
+    if (where.AND.length === 0) delete where.AND;
 
-    const [sources, total] = await Promise.all([
+    const [sources, total, activeCount] = await Promise.all([
       prisma.source.findMany({
         where,
         include: {
@@ -96,12 +97,14 @@ export async function sourceRoutes(
             where: { accountId: au.accountId },
             select: { id: true, isEnabled: true, pollIntervalMs: true },
           },
+          market: { select: { id: true, name: true } },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { [sort]: order },
         take: limit,
         skip: offset,
       }),
       prisma.source.count({ where }),
+      prisma.source.count({ where: { ...where, isActive: true } }),
     ]);
 
     return reply.status(200).send({
@@ -128,8 +131,11 @@ export async function sourceRoutes(
         };
       }),
       total,
+      active: activeCount,
       limit,
       offset,
+      totalPages: Math.ceil(total / limit),
+      page: Math.floor(offset / limit) + 1,
     });
   });
 

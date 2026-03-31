@@ -621,10 +621,10 @@ export function createIngestionWorker(): Worker {
     },
     {
       connection,
-      concurrency: 10,  // Increased to handle 200+ sources
+      concurrency: 20,  // Handle thousands of sources
       limiter: {
-        max: 30,
-        duration: 60000, // Max 30 jobs per minute (up from 10)
+        max: 100,
+        duration: 60000, // Max 100 jobs per minute
       },
     }
   );

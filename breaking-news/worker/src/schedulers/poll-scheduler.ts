@@ -81,23 +81,32 @@ async function scheduleRSSPolls(): Promise<void> {
   const { ingestionQueue } = getQueues();
 
   try {
+    // Staggered polling: only schedule sources that are DUE for a poll.
+    // At scale (thousands of sources), this prevents overwhelming the queue.
+    // Default poll interval: 5 min for RSS, but check lastPolledAt.
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
     const rssSources = await prisma.source.findMany({
       where: {
         platform: 'RSS',
         isActive: true,
+        OR: [
+          { lastPolledAt: null },          // Never polled
+          { lastPolledAt: { lt: fiveMinAgo } }, // Due for re-poll
+        ],
       },
+      orderBy: { lastPolledAt: 'asc' }, // Oldest first (most overdue)
+      take: 50, // Max 50 per cycle to prevent queue flooding
     });
 
-    logger.info({ count: rssSources.length }, 'Scheduling RSS poll jobs');
+    if (rssSources.length === 0) return;
 
+    logger.info({ count: rssSources.length }, 'Scheduling RSS poll jobs (staggered)');
+
+    let queued = 0;
     for (const source of rssSources) {
-      if (!source.url) {
-        logger.warn({ sourceId: source.id, name: source.name }, 'RSS source has no URL, skipping');
-        continue;
-      }
+      if (!source.url) continue;
 
-      // Use deterministic jobId so BullMQ deduplicates — won't add if one
-      // is already waiting/active for this source
       const jobId = `rss-poll-${source.id}`;
       try {
         await ingestionQueue.add(
@@ -115,8 +124,9 @@ async function scheduleRSSPolls(): Promise<void> {
             removeOnFail: { age: 3600 },
           }
         );
+        queued++;
       } catch {
-        // Job with this ID already exists — skip (no backlog buildup)
+        // Job already exists
       }
     }
   } catch (err) {
