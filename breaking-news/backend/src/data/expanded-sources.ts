@@ -20,7 +20,7 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   { name: 'KHOU 11 (CBS)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.khou.com/feeds/syndication/rss/news', trustScore: 0.90 },
   { name: 'KPRC 2 (NBC)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.click2houston.com/rss/', trustScore: 0.90 },
   { name: 'KTRK 13 (ABC)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://abc13.com/feed/', trustScore: 0.90 },
-  { name: 'KRIV FOX 26', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.fox26houston.com/rss', trustScore: 0.85 },
+  { name: 'KRIV FOX 26', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.fox26houston.com/rss.xml', trustScore: 0.85 },
   { name: 'KIAH CW 39', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://cw39.com/feed/', trustScore: 0.80 },
   { name: 'KPRC Breaking News', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.click2houston.com/rss/topic/breaking-news/', trustScore: 0.92 },
   { name: 'KHOU Breaking News', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.khou.com/feeds/syndication/rss/news/breaking-news', trustScore: 0.92 },
@@ -42,10 +42,9 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   { name: 'KEYE CBS Austin', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://cbsaustin.com/feed', trustScore: 0.82 },
 
   // ─── Houston Newspapers & Digital ─────────────────────────────────────────
-  { name: 'Houston Chronicle', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.houstonchronicle.com/rss/feed/Houston-Texas-News-702.php', trustScore: 0.92 },
-  { name: 'Houston Chronicle Breaking', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.houstonchronicle.com/rss/feed/Breaking-News-702.php', trustScore: 0.93 },
-  { name: 'Houston Press', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.houstonpress.com/rss', trustScore: 0.78 },
-  { name: 'Houston Business Journal', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.bizjournals.com/houston/news/rss', trustScore: 0.85 },
+  { name: 'Houston Chronicle (chron.com)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.chron.com/rss/feed/News-270.php', trustScore: 0.92 },
+  // Houston Press: RSS feed no longer available (site shut down RSS)
+  { name: 'Houston Business Journal', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://feeds.bizjournals.com/bizj_houston', trustScore: 0.85 },
   { name: 'InnovationMap Houston', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://houston.innovationmap.com/feed', trustScore: 0.75 },
   { name: 'CultureMap Houston', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://houston.culturemap.com/feed/', trustScore: 0.75 },
   { name: 'Houston Public Media (KUHF)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.houstonpublicmedia.org/rss/', trustScore: 0.90 },
@@ -72,10 +71,9 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   { name: 'Houston Parks & Rec', platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://www.houstontx.gov/parks/rss.xml', trustScore: 0.85 },
 
   // ─── Harris County Government ─────────────────────────────────────────────
-  { name: "Harris County Commissioner's Court", platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://www.harriscountytx.gov/rss/commissioners-court', trustScore: 0.93 },
-  { name: "Harris County Sheriff's Office", platform: 'RSS', sourceType: 'POLICE', url: 'https://www.harriscountytx.gov/rss/sheriff', trustScore: 0.93 },
+  { name: 'Harris County (via Houston Public Media)', platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://www.houstonpublicmedia.org/topics/news/harris-county/feed/', trustScore: 0.90 },
   { name: 'Harris County Flood Control', platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://www.hcfcd.org/rss/', trustScore: 0.92 },
-  { name: 'Harris County Public Health', platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://publichealth.harriscountytx.gov/rss/', trustScore: 0.90 },
+  // Harris County Public Health: no RSS feed available
   { name: 'Harris County District Clerk', platform: 'RSS', sourceType: 'COURTS', url: 'https://www.hcdistrictclerk.com/rss/', trustScore: 0.90 },
 
   // ─── Other County Governments ─────────────────────────────────────────────
@@ -111,7 +109,7 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   { name: 'Conroe PD', platform: 'RSS', sourceType: 'POLICE', url: 'https://www.cityofconroe.org/rss/police', trustScore: 0.80 },
 
   // ─── Fire & Emergency ─────────────────────────────────────────────────────
-  { name: 'Harris County Fire Marshal', platform: 'RSS', sourceType: 'FIRE', url: 'https://www.harriscountytx.gov/rss/fire-marshal', trustScore: 0.90 },
+  // Harris County Fire Marshal: no RSS feed available
   { name: 'Harris County OHS', platform: 'RSS', sourceType: 'GOVERNMENT', url: 'https://www.readyharris.org/rss/', trustScore: 0.92 },
   { name: 'CenterPoint Energy Outages', platform: 'API', sourceType: 'UTILITY', url: 'https://www.centerpointenergy.com/outage/rss', trustScore: 0.90 },
 
@@ -125,7 +123,7 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
 
   // ─── Traffic & Transportation ─────────────────────────────────────────────
   { name: 'Houston TranStar', platform: 'RSS', sourceType: 'TRAFFIC', url: 'https://traffic.houstontranstar.org/rss/', trustScore: 0.90 },
-  { name: 'TxDOT Houston District', platform: 'RSS', sourceType: 'TRAFFIC', url: 'https://www.txdot.gov/rss/houston', trustScore: 0.90 },
+  // TxDOT: no RSS feed available (legacy page from 2013 only)
   { name: 'METRO Next Transit', platform: 'RSS', sourceType: 'TRAFFIC', url: 'https://www.ridemetro.org/rss/', trustScore: 0.85 },
   { name: 'FAA NOTAM - IAH', platform: 'API', sourceType: 'TRAFFIC', url: 'https://www.notams.faa.gov/dinsQueryWeb/queryRetrievalMapAction.do?reportType=Raw&retrieveLocId=KIAH&actionType=notamRetrievalByICAOs', trustScore: 0.95 },
   { name: 'FAA NOTAM - HOU', platform: 'API', sourceType: 'TRAFFIC', url: 'https://www.notams.faa.gov/dinsQueryWeb/queryRetrievalMapAction.do?reportType=Raw&retrieveLocId=KHOU&actionType=notamRetrievalByICAOs', trustScore: 0.95 },
@@ -168,7 +166,7 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   // ─── Business & Energy ────────────────────────────────────────────────────
   { name: 'Oil & Gas Journal', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.ogj.com/rss/', trustScore: 0.85 },
   { name: 'Rigzone', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.rigzone.com/rss/', trustScore: 0.82 },
-  { name: 'Houston Association of Realtors', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.har.com/rss/', trustScore: 0.80 },
+  // Houston Association of Realtors: blocks RSS access (403)
   { name: 'Greater Houston Partnership', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.houston.org/rss/', trustScore: 0.85 },
   { name: 'Port Houston Cargo Stats', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://porthouston.com/cargo-stats/rss/', trustScore: 0.85 },
   { name: 'NASA Johnson Space Center', platform: 'RSS', sourceType: 'BUSINESS', url: 'https://www.nasa.gov/rss/dyn/lg_image_of_the_day.rss', trustScore: 0.95 },
@@ -192,7 +190,7 @@ export const EXPANDED_SOURCES: SourceSeed[] = [
   // ─── Spanish Language ─────────────────────────────────────────────────────
   { name: 'Univision Houston (KXLN)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.univision.com/local/houston-kxln/feed', trustScore: 0.85, category: 'COMMUNITY' },
   { name: 'Telemundo Houston (KTMD)', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://www.telemundohouston.com/rss/', trustScore: 0.85, category: 'COMMUNITY' },
-  { name: 'La Voz de Houston', platform: 'RSS', sourceType: 'LOCAL_NEWS', url: 'https://lavoztx.com/feed/', trustScore: 0.80, category: 'COMMUNITY' },
+  // La Voz de Houston: no working RSS feed (lavoztx.com redirects)
   { name: 'CNN en Español', platform: 'RSS', sourceType: 'NATIONAL', url: 'https://cnnespanol.cnn.com/feed/', trustScore: 0.85 },
   { name: 'BBC Mundo', platform: 'RSS', sourceType: 'NATIONAL', url: 'https://feeds.bbci.co.uk/mundo/rss.xml', trustScore: 0.92 },
   { name: 'Univision Noticias', platform: 'RSS', sourceType: 'NATIONAL', url: 'https://www.univision.com/noticias/feed', trustScore: 0.83 },
