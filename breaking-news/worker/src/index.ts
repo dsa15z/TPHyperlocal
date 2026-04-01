@@ -60,6 +60,21 @@ async function main(): Promise<void> {
     }
   }
 
+  // Log which API keys are available so we can diagnose missing keys
+  const keyStatus: Record<string, string> = {};
+  const optionalKeys = [
+    'OPENAI_API_KEY', 'XAI_API_KEY', 'GOOGLE_AI_KEY', 'ANTHROPIC_API_KEY',
+    'NEWSAPI_KEY', 'TWITTER_BEARER_TOKEN', 'FACEBOOK_ACCESS_TOKEN',
+    'FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET',
+    'NEWSCATCHER_API_KEY', 'EVENT_REGISTRY_KEY', 'EVENT_REGISTRY_API_KEY',
+    'YOUTUBE_API_KEY', 'SCRAPFLY_API_KEY', 'SCRAPINGFISH_API_KEY',
+    'SIMILARWEB_API_KEY', 'STRIPE_SECRET_KEY',
+  ];
+  for (const key of optionalKeys) {
+    keyStatus[key] = process.env[key] ? '✓ set' : '✗ missing';
+  }
+  logger.info({ keys: keyStatus }, 'API key availability on worker service');
+
   // Test database connection
   try {
     await prisma.$connect();
@@ -146,6 +161,12 @@ async function main(): Promise<void> {
       } catch { return 'error'; }
     })();
 
+    // Show which API keys are configured (masked)
+    const keys: Record<string, boolean> = {};
+    for (const k of ['OPENAI_API_KEY', 'XAI_API_KEY', 'GOOGLE_AI_KEY', 'NEWSAPI_KEY', 'TWITTER_BEARER_TOKEN', 'FACEBOOK_ACCESS_TOKEN', 'NEWSCATCHER_API_KEY', 'EVENT_REGISTRY_KEY', 'EVENT_REGISTRY_API_KEY', 'YOUTUBE_API_KEY']) {
+      keys[k] = !!process.env[k];
+    }
+
     const body = JSON.stringify({
       status: 'running',
       workers: workers.length,
@@ -153,6 +174,7 @@ async function main(): Promise<void> {
       uptime: process.uptime(),
       memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
       workerNames: workers.map(w => w.name),
+      apiKeys: keys,
     });
 
     res.writeHead(200, { 'Content-Type': 'application/json' });

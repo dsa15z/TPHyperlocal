@@ -241,6 +241,31 @@ async function purgeSourceJobs(sourceId: string): Promise<void> {
   }
 }
 
+/**
+ * Get an API key by checking env vars first, then the AccountCredential table.
+ * This ensures keys configured on the backend service (via admin UI) work
+ * even if the worker service doesn't have them as env vars.
+ */
+async function getApiKey(platform: string, envVarNames: string[]): Promise<string | null> {
+  // Check env vars first
+  for (const name of envVarNames) {
+    if (process.env[name]) return process.env[name]!;
+  }
+
+  // Fall back to database credentials
+  try {
+    const credential = await prisma.accountCredential.findFirst({
+      where: { platform, isActive: true },
+      select: { apiKey: true },
+    });
+    if (credential?.apiKey) return credential.apiKey;
+  } catch {
+    // Table may not exist yet
+  }
+
+  return null;
+}
+
 // Types for job data
 interface RSSPollJob {
   type: 'rss_poll';
@@ -471,10 +496,10 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
 
 async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
   const { sourceId, query } = job.data;
-  const apiKey = process.env['NEWSAPI_KEY'];
+  const apiKey = await getApiKey('NEWSAPI', ['NEWSAPI_KEY']);
 
   if (!apiKey) {
-    await trackSourceFailure(sourceId, 'NEWSAPI_KEY not configured');
+    await trackSourceFailure(sourceId, 'NEWSAPI_KEY not configured (env or DB)');
     return;
   }
 
@@ -575,10 +600,10 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
 
 async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
   const { sourceId, query } = job.data;
-  const bearerToken = job.data.bearerToken || process.env.TWITTER_BEARER_TOKEN;
+  const bearerToken = job.data.bearerToken || await getApiKey('TWITTER', ['TWITTER_BEARER_TOKEN']);
 
   if (!bearerToken) {
-    await trackSourceFailure(sourceId, 'TWITTER_BEARER_TOKEN not configured');
+    await trackSourceFailure(sourceId, 'TWITTER_BEARER_TOKEN not configured (env or DB)');
     return;
   }
 
