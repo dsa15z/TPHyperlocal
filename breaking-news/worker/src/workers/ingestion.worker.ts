@@ -4,7 +4,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
-import { generateContentHash } from '../utils/text.js';
+import { generateContentHash, decodeHTMLEntities } from '../utils/text.js';
 import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
 
 const logger = createChildLogger('ingestion');
@@ -392,8 +392,8 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
 
   for (const item of items) {
     try {
-      const content = item['content:encoded'] || item.description || item.title || '';
-      const title = item.title || '';
+      const content = decodeHTMLEntities(item['content:encoded'] || item.description || item.title || '');
+      const title = decodeHTMLEntities(item.title || '');
       const guid = getGuid(item, feedUrl);
       const platformPostId = `rss::${feedUrl}::${guid}`;
 
@@ -518,7 +518,8 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
 
   for (const article of data.articles) {
     try {
-      const content = article.content || article.description || article.title;
+      article.title = decodeHTMLEntities(article.title || '');
+      const content = decodeHTMLEntities(article.content || article.description || article.title);
       const platformPostId = `newsapi::${generateContentHash(article.url)}`;
 
       const existing = await prisma.sourcePost.findUnique({

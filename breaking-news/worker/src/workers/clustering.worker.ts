@@ -3,7 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
-import { extractLocation } from '../utils/text.js';
+import { extractLocation, decodeHTMLEntities } from '../utils/text.js';
 import {
   getWordSet,
   calculateJaccardSimilarity,
@@ -18,7 +18,7 @@ const logger = createChildLogger('clustering');
  * E.g. "Fire breaks out in Montrose - FOX 26 Houston" → "Fire breaks out in Montrose"
  */
 function normalizeTitle(title: string): string {
-  return title
+  return decodeHTMLEntities(title)
     .replace(/\s*[-–—|]\s*(FOX|CNN|ABC|NBC|CBS|KHOU|KPRC|KTRK|KRIV|KIAH|AP|Reuters|BBC|NPR|Axios|Houston Chronicle|chron\.com|Click2Houston|The Hill|Washington Post|New York Times|USA Today)[^|–—-]*$/i, '')
     .replace(/\s+[-–—]\s+[A-Z][A-Za-z\s.]+$/, (match) => {
       const afterDash = match.replace(/^\s*[-–—]\s*/, '');

@@ -1,5 +1,43 @@
 import { createHash } from 'crypto';
 
+// ─── HTML Entity Decoding ────────────────────────────────────────────────────
+// RSS feeds often contain HTML entities in titles and content.
+
+const HTML_ENTITIES: Record<string, string> = {
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
+  '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—', '&lsquo;': '\u2018',
+  '&rsquo;': '\u2019', '&ldquo;': '\u201C', '&rdquo;': '\u201D',
+  '&bull;': '\u2022', '&hellip;': '\u2026', '&trade;': '\u2122',
+  '&copy;': '\u00A9', '&reg;': '\u00AE', '&deg;': '\u00B0',
+  '&cent;': '\u00A2', '&pound;': '\u00A3', '&euro;': '\u20AC',
+  '&frac12;': '\u00BD', '&frac14;': '\u00BC', '&frac34;': '\u00BE',
+  '&times;': '\u00D7', '&divide;': '\u00F7',
+};
+
+/**
+ * Decode HTML entities in text — handles named entities (&amp;),
+ * decimal (&#8217;), and hex (&#x2019;) numeric character references.
+ */
+export function decodeHTMLEntities(text: string): string {
+  if (!text) return text;
+  return text
+    // Named entities
+    .replace(/&[a-zA-Z]+;/g, (match) => HTML_ENTITIES[match.toLowerCase()] || match)
+    // Decimal numeric references: &#8217; → '
+    .replace(/&#(\d+);/g, (_match, dec) => {
+      const code = parseInt(dec, 10);
+      return code > 0 && code < 0x10FFFF ? String.fromCodePoint(code) : _match;
+    })
+    // Hex numeric references: &#x2019; → '
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, hex) => {
+      const code = parseInt(hex, 16);
+      return code > 0 && code < 0x10FFFF ? String.fromCodePoint(code) : _match;
+    })
+    // Clean up common junk
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Common English stopwords for filtering
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
