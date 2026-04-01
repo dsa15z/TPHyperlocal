@@ -9,6 +9,7 @@ const ListStoriesQuerySchema = z.object({
   status: z.string().optional(), // comma-separated statuses
   category: z.string().optional(), // comma-separated categories
   sourceIds: z.string().optional(), // comma-separated source IDs
+  marketIds: z.string().optional(), // comma-separated market IDs
   uncoveredOnly: z.coerce.boolean().optional(),
   trend: z.enum(['rising', 'declining', 'all']).optional(),
   minScore: z.coerce.number().min(0).max(1).optional(),
@@ -45,12 +46,56 @@ export async function storiesRoutes(
       });
     }
 
-    const { status, category, sourceIds, uncoveredOnly, trend, minScore, maxAge, limit, offset, sort, order } =
+    const { status, category, sourceIds, marketIds, uncoveredOnly, trend, minScore, maxAge, limit, offset, sort, order } =
       parseResult.data;
 
     const where: Prisma.StoryWhereInput = {
       mergedIntoId: null, // exclude merged stories
     };
+
+    // Market filter: match story location against market name, neighborhoods, and keywords
+    if (marketIds) {
+      const ids = marketIds.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        const markets = await prisma.market.findMany({
+          where: { id: { in: ids } },
+          select: { name: true, state: true, keywords: true, neighborhoods: true },
+        });
+
+        // Build location match terms: market names, states, neighborhoods, keywords
+        const locationTerms: string[] = [];
+        for (const m of markets) {
+          locationTerms.push(m.name);
+          if (m.state) locationTerms.push(m.state);
+          const keywords = (m.keywords || []) as string[];
+          const neighborhoods = (m.neighborhoods || []) as string[];
+          locationTerms.push(...keywords, ...neighborhoods);
+        }
+
+        // Also always include "National" stories
+        if (locationTerms.length > 0) {
+          const uniqueTerms = [...new Set(locationTerms.map((t) => t.toLowerCase()))];
+          // Use AND to nest the OR so it doesn't conflict with category OR
+          if (!where.AND) where.AND = [];
+          (where.AND as Prisma.StoryWhereInput[]).push({
+            OR: [
+              // Match locationName against any term (case-insensitive contains)
+              ...uniqueTerms.map((term) => ({
+                locationName: { contains: term, mode: 'insensitive' as const },
+              })),
+              // Match neighborhood field
+              ...uniqueTerms.map((term) => ({
+                neighborhood: { contains: term, mode: 'insensitive' as const },
+              })),
+              // Always include National stories
+              { locationName: { equals: 'National', mode: 'insensitive' as const } },
+              // Include stories with no location (unresolved)
+              { locationName: null },
+            ],
+          });
+        }
+      }
+    }
 
     if (status) {
       const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
