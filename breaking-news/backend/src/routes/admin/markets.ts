@@ -368,6 +368,23 @@ export async function marketRoutes(
         trustScore: 0.70, isGlobal: false,
         metadata: { type: 'bing-news-local', market: msa.name },
       }, [mktId]);
+
+      // Per-market Twitter/X search — local breaking news
+      await createAndLink({
+        platform: 'TWITTER' as any, sourceType: 'PUBLIC_PAGE' as any,
+        name: `X/Twitter - ${msa.name} News`,
+        url: `${msa.name} ${msa.state} news`,
+        trustScore: 0.65, isGlobal: false,
+        metadata: { type: 'twitter-local', market: msa.name, state: msa.state, query: `${msa.name} ${msa.state} news -is:retweet lang:en` },
+      }, [mktId]);
+
+      await createAndLink({
+        platform: 'TWITTER' as any, sourceType: 'PUBLIC_PAGE' as any,
+        name: `X/Twitter - ${msa.name} Breaking`,
+        url: `${msa.name} breaking`,
+        trustScore: 0.60, isGlobal: false,
+        metadata: { type: 'twitter-breaking', market: msa.name, state: msa.state, query: `${msa.name} breaking -is:retweet lang:en` },
+      }, [mktId]);
     }
 
     // ── Step 3: Shared sources linked to ALL markets or National ──────
