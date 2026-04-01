@@ -12,7 +12,7 @@ import { generateContentHash } from '../utils/text.js';
 
 const logger = createChildLogger('event-registry');
 
-const API_KEY = process.env.EVENT_REGISTRY_KEY || '';
+const API_KEY = process.env.EVENT_REGISTRY_KEY || process.env.EVENT_REGISTRY_API_KEY || '';
 const BASE_URL = process.env.EVENT_REGISTRY_BASE_URL || 'http://eventregistry.org/api/v1/';
 
 interface EventRegistryJob {
