@@ -7,7 +7,7 @@ import prisma from '../lib/prisma.js';
 const logger = createChildLogger('scheduler');
 
 const ACTIVITY_KEY = 'tp:last_ui_activity';
-const IDLE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+const IDLE_THRESHOLD_MS = 6 * 60 * 1000; // 6 minutes — stops ~1 min after browser closes
 
 /**
  * Check if the UI has been active recently.

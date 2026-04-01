@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { getRedis } from '../lib/redis.js';
 
 const ACTIVITY_KEY = 'tp:last_ui_activity';
-const ACTIVITY_TTL = 30 * 60; // 30 minutes
+const ACTIVITY_TTL = 6 * 60; // 6 minutes — heartbeat every 5min + 1min grace
 
 export async function healthRoutes(
   app: FastifyInstance,
