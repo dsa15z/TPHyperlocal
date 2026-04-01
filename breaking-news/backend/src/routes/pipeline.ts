@@ -259,6 +259,119 @@ export async function pipelineRoutes(
     }
   });
 
+  // POST /api/v1/pipeline/cleanup-sources — deduplicate sources by URL and name
+  // Keeps the oldest source, migrates market links, deletes duplicates
+  app.post('/pipeline/cleanup-sources', async (_request, reply) => {
+    // Step 1: Find all sources grouped by URL (the real dedup key)
+    const allSources = await prisma.source.findMany({
+      select: { id: true, name: true, url: true, marketId: true, isActive: true, createdAt: true, isGlobal: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Group by URL (normalized)
+    const byUrl = new Map<string, typeof allSources>();
+    const byName = new Map<string, typeof allSources>();
+
+    for (const src of allSources) {
+      const urlKey = (src.url || '').toLowerCase().trim();
+      const nameKey = src.name.toLowerCase().trim();
+
+      if (urlKey) {
+        if (!byUrl.has(urlKey)) byUrl.set(urlKey, []);
+        byUrl.get(urlKey)!.push(src);
+      }
+
+      if (!byName.has(nameKey)) byName.set(nameKey, []);
+      byName.get(nameKey)!.push(src);
+    }
+
+    let duplicatesRemoved = 0;
+    let marketLinksMigrated = 0;
+    const removedIds: string[] = [];
+
+    // Step 2: For each group with duplicates, keep the oldest and remove the rest
+    for (const [key, group] of [...byUrl.entries(), ...byName.entries()]) {
+      if (group.length <= 1) continue;
+
+      // Keep the first (oldest by createdAt) and preferably the active one
+      const sorted = group.sort((a, b) => {
+        // Prefer active sources
+        if (a.isActive && !b.isActive) return -1;
+        if (!a.isActive && b.isActive) return 1;
+        // Then oldest
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      });
+
+      const keeper = sorted[0];
+      const dupes = sorted.slice(1).filter(d => !removedIds.includes(d.id) && d.id !== keeper.id);
+
+      for (const dupe of dupes) {
+        if (removedIds.includes(dupe.id)) continue;
+
+        // Migrate market links from dupe to keeper
+        if (dupe.marketId && dupe.marketId !== keeper.marketId) {
+          try {
+            await prisma.sourceMarket.create({
+              data: { sourceId: keeper.id, marketId: dupe.marketId },
+            }).catch(() => {}); // Ignore if already linked
+            marketLinksMigrated++;
+          } catch {}
+        }
+
+        // Migrate any SourceMarket records
+        try {
+          const dupeMarkets = await prisma.sourceMarket.findMany({
+            where: { sourceId: dupe.id },
+          });
+          for (const sm of dupeMarkets) {
+            await prisma.sourceMarket.create({
+              data: { sourceId: keeper.id, marketId: sm.marketId },
+            }).catch(() => {}); // Ignore unique constraint
+            marketLinksMigrated++;
+          }
+        } catch {}
+
+        // Move any story links from dupe to keeper
+        try {
+          await prisma.storySource.updateMany({
+            where: { sourcePostId: { in: await prisma.sourcePost.findMany({ where: { sourceId: dupe.id }, select: { id: true } }).then(posts => posts.map(p => p.id)) } },
+            data: {}, // StorySource links to sourcePost, not source directly
+          });
+        } catch {}
+
+        // Delete the duplicate
+        try {
+          await prisma.accountSource.deleteMany({ where: { sourceId: dupe.id } });
+          await prisma.sourceMarket.deleteMany({ where: { sourceId: dupe.id } });
+          // Move posts to keeper before deleting
+          await prisma.sourcePost.updateMany({
+            where: { sourceId: dupe.id },
+            data: { sourceId: keeper.id },
+          });
+          await prisma.source.delete({ where: { id: dupe.id } });
+          removedIds.push(dupe.id);
+          duplicatesRemoved++;
+        } catch (err: any) {
+          // Log but continue
+        }
+      }
+    }
+
+    // Step 3: Set isGlobal=false on all sources (deprecated field)
+    await prisma.source.updateMany({
+      where: { isGlobal: true },
+      data: { isGlobal: false },
+    });
+
+    return reply.send({
+      message: `Cleanup complete: removed ${duplicatesRemoved} duplicates, migrated ${marketLinksMigrated} market links`,
+      duplicatesRemoved,
+      marketLinksMigrated,
+      totalSourcesBefore: allSources.length,
+      totalSourcesAfter: allSources.length - duplicatesRemoved,
+    });
+  });
+
   // POST /api/v1/pipeline/seed-sources - seed default sources if none exist
   app.post('/pipeline/seed-sources', async (_request, reply) => {
     const count = await prisma.source.count();
