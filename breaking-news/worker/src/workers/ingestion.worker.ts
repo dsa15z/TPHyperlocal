@@ -474,8 +474,8 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
   const apiKey = process.env['NEWSAPI_KEY'];
 
   if (!apiKey) {
-    logger.error('NEWSAPI_KEY environment variable not set');
-    throw new Error('NEWSAPI_KEY not configured');
+    logger.warn('NEWSAPI_KEY not set, skipping NewsAPI poll');
+    return;
   }
 
   const searchQuery = query || 'Houston Texas';
