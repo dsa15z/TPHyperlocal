@@ -81,22 +81,41 @@ async function scheduleRSSPolls(): Promise<void> {
   const { ingestionQueue } = getQueues();
 
   try {
-    // Staggered polling: only schedule sources that are DUE for a poll.
-    // At scale (thousands of sources), this prevents overwhelming the queue.
-    // Default poll interval: 5 min for RSS, but check lastPolledAt.
+    // Only poll sources that are linked to markets with active accounts
+    // This prevents polling Houston TV stations if no account has Houston
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    // Find markets that have at least one active account
+    const activeMarketIds = await prisma.market.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    }).then(markets => markets.map(m => m.id));
 
     const rssSources = await prisma.source.findMany({
       where: {
         platform: 'RSS',
         isActive: true,
         OR: [
-          { lastPolledAt: null },          // Never polled
-          { lastPolledAt: { lt: fiveMinAgo } }, // Due for re-poll
+          // Sources linked to active markets via SourceMarket join
+          { sourceMarkets: { some: { marketId: { in: activeMarketIds } } } },
+          // Legacy: sources with direct marketId (backward compat)
+          { marketId: { in: activeMarketIds } },
+          // Legacy: global sources (being migrated to National market)
+          { isGlobal: true },
+          // Sources with no market link (catch-all, will be migrated)
+          { AND: [{ marketId: null }, { isGlobal: false }, { sourceMarkets: { none: {} } }] },
+        ],
+        AND: [
+          {
+            OR: [
+              { lastPolledAt: null },
+              { lastPolledAt: { lt: fiveMinAgo } },
+            ],
+          },
         ],
       },
-      orderBy: { lastPolledAt: 'asc' }, // Oldest first (most overdue)
-      take: 50, // Max 50 per cycle to prevent queue flooding
+      orderBy: { lastPolledAt: 'asc' },
+      take: 50,
     });
 
     if (rssSources.length === 0) return;
