@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -138,7 +139,19 @@ function getSourceHealth(source: Source): { status: "healthy" | "warning" | "fai
 
 export default function SourcesPage() {
   const queryClient = useQueryClient();
+  const urlParams = useSearchParams();
   const [showForm, setShowForm] = useState(false);
+
+  // Auto-open form if linked from Markets page with addSource=true
+  useEffect(() => {
+    if (urlParams.get("addSource") === "true") {
+      setShowForm(true);
+      const mktId = urlParams.get("marketId");
+      if (mktId) {
+        setFormMarketIds([mktId]);
+      }
+    }
+  }, [urlParams]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);

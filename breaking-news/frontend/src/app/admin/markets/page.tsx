@@ -659,6 +659,14 @@ export default function MarketsPage() {
                                 {totalSrc === 0 && (
                                   <p className="text-gray-600 text-xs">No sources linked to this market yet.</p>
                                 )}
+                                <div className="pt-3 border-t border-surface-300/20 mt-3">
+                                  <a
+                                    href={`/admin/sources?addSource=true&marketId=${market.id}&marketName=${encodeURIComponent(market.name)}`}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 rounded transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add TV/Radio Station to {market.name}
+                                  </a>
+                                </div>
                               </div>
                             </td>
                           </tr>
