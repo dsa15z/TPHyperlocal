@@ -50,6 +50,8 @@ interface Source {
   marketId: string | null;
   market?: { name: string } | null;
   metadata?: Record<string, unknown> | null;
+  totalPosts?: number;
+  recentPosts?: number;
   _count?: { posts: number };
 }
 
@@ -112,6 +114,7 @@ const SOURCE_COLUMNS = [
   { id: "market", label: "Market", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "health", label: "Health", width: 80, defaultWidth: 80, minWidth: 60 },
   { id: "trust", label: "Trust", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "stories", label: "Stories", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "active", label: "Active", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "lastPolled", label: "Last Polled", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "actions", label: "Actions", width: 100, defaultWidth: 100, minWidth: 70 },
@@ -917,6 +920,7 @@ export default function SourcesPage() {
                     {isColVisible("trust") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("trust") }}>
                       Trust
                     </th>}
+                    {isColVisible("stories") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("stories") }}>Stories</th>}
                     {isColVisible("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("active") }}>
                       Active
                     </th>}
@@ -1039,6 +1043,10 @@ export default function SourcesPage() {
                               {Math.round(source.trustScore * 100)}%
                             </span>
                           </div>
+                        </td>}
+                        {isColVisible("stories") && <td className="px-4 py-3 tabular-nums" style={{ width: colWidth("stories") }}>
+                          <span className="text-white text-sm">{source.totalPosts ?? 0}</span>
+                          <span className="text-gray-600 text-xs">/{source.recentPosts ?? 0}</span>
                         </td>}
                         {isColVisible("active") && <td className="px-4 py-3" style={{ width: colWidth("active") }}>
                           <button

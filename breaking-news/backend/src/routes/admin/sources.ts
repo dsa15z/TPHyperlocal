@@ -89,6 +89,8 @@ export async function sourceRoutes(
     // Remove empty AND
     if (where.AND.length === 0) delete where.AND;
 
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
     const [sources, total, activeCount] = await Promise.all([
       prisma.source.findMany({
         where,
@@ -98,6 +100,7 @@ export async function sourceRoutes(
             select: { id: true, isEnabled: true, pollIntervalMs: true },
           },
           market: { select: { id: true, name: true } },
+          _count: { select: { posts: true } },
         },
         orderBy: { [sort]: order },
         take: limit,
@@ -106,6 +109,20 @@ export async function sourceRoutes(
       prisma.source.count({ where }),
       prisma.source.count({ where: { ...where, isActive: true } }),
     ]);
+
+    // Get 24h post counts for all returned sources in one query
+    const sourceIds = sources.map((s) => s.id);
+    const recentCounts = sourceIds.length > 0
+      ? await prisma.sourcePost.groupBy({
+          by: ['sourceId'],
+          where: {
+            sourceId: { in: sourceIds },
+            createdAt: { gte: twentyFourHoursAgo },
+          },
+          _count: { id: true },
+        })
+      : [];
+    const recentCountMap = new Map(recentCounts.map((r) => [r.sourceId, r._count.id]));
 
     return reply.status(200).send({
       data: sources.map((s) => {
@@ -121,6 +138,7 @@ export async function sourceRoutes(
           isActive: s.isActive,
           isGlobal: s.isGlobal,
           marketId: s.marketId,
+          market: s.market,
           metadata: s.metadata,
           lastPolledAt: s.lastPolledAt,
           createdAt: s.createdAt,
@@ -128,6 +146,8 @@ export async function sourceRoutes(
           enabled: accountSource?.isEnabled ?? false,
           accountSourceId: accountSource?.id ?? null,
           pollIntervalMs: accountSource?.pollIntervalMs ?? null,
+          totalPosts: s._count.posts,
+          recentPosts: recentCountMap.get(s.id) || 0,
         };
       }),
       total,
