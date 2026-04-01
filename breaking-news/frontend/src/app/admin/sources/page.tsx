@@ -110,8 +110,7 @@ const STATUS_OPTIONS = [
 
 const SOURCE_COLUMNS = [
   { id: "name", label: "Name", width: 280, defaultWidth: 280, minWidth: 150 },
-  { id: "platform", label: "Platform", width: 100, defaultWidth: 100, minWidth: 70 },
-  { id: "type", label: "Type", width: 110, defaultWidth: 110, minWidth: 80 },
+  { id: "platform", label: "Source Type", width: 110, defaultWidth: 110, minWidth: 70 },
   { id: "market", label: "Market", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "health", label: "Health", width: 80, defaultWidth: 80, minWidth: 60 },
   { id: "trust", label: "Trust", width: 90, defaultWidth: 90, minWidth: 60 },
@@ -137,7 +136,6 @@ export default function SourcesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
 
@@ -362,7 +360,6 @@ export default function SourcesPage() {
 
   // Build filter options
   const platformOptions = PLATFORMS.map((p) => ({ value: p.value, label: p.label }));
-  const typeOptions = SOURCE_TYPES.map((t) => ({ value: t.value, label: t.label }));
   const marketOptions = [
     { value: "__global__", label: "Global (no market)" },
     ...markets.filter((m) => m.isActive).map((m) => ({
@@ -376,10 +373,6 @@ export default function SourcesPage() {
     const effectivePlatforms = getEffectiveSelection(selectedPlatforms);
     if (effectivePlatforms && effectivePlatforms.length > 0 && !effectivePlatforms.includes(s.platform)) return false;
     if (effectivePlatforms && effectivePlatforms.length === 0) return false;
-
-    const effectiveTypes = getEffectiveSelection(selectedTypes);
-    if (effectiveTypes && effectiveTypes.length > 0 && !effectiveTypes.includes(s.sourceType)) return false;
-    if (effectiveTypes && effectiveTypes.length === 0) return false;
 
     const effectiveMarkets = getEffectiveSelection(selectedMarkets);
     if (effectiveMarkets && effectiveMarkets.length > 0) {
@@ -406,11 +399,6 @@ export default function SourcesPage() {
         if (eff && eff.length > 0 && !eff.includes(s.platform)) return false;
         if (eff && eff.length === 0) return false;
       }
-      if (exclude !== "type") {
-        const eff = getEffectiveSelection(selectedTypes);
-        if (eff && eff.length > 0 && !eff.includes(s.sourceType)) return false;
-        if (eff && eff.length === 0) return false;
-      }
       if (exclude !== "market") {
         const eff = getEffectiveSelection(selectedMarkets);
         if (eff && eff.length > 0) {
@@ -434,12 +422,6 @@ export default function SourcesPage() {
   const platformOptionsWithCounts = PLATFORMS.map((p) => {
     const count = platformFacet.filter((s: Source) => s.platform === p.value).length;
     return { value: p.value, label: p.label, count };
-  }).filter((o) => o.count > 0);
-
-  const typeFacet = filterExcluding("type");
-  const typeOptionsWithCounts = SOURCE_TYPES.map((t) => {
-    const count = typeFacet.filter((s: Source) => s.sourceType === t.value).length;
-    return { value: t.value, label: t.label, count };
   }).filter((o) => o.count > 0);
 
   const marketFacet = filterExcluding("market");
@@ -807,13 +789,7 @@ export default function SourcesPage() {
             options={platformOptionsWithCounts}
             selected={selectedPlatforms}
             onChange={setSelectedPlatforms}
-            placeholder="All Platforms"
-          />
-          <MultiSelectDropdown
-            options={typeOptionsWithCounts}
-            selected={selectedTypes}
-            onChange={setSelectedTypes}
-            placeholder="All Types"
+            placeholder="All Source Types"
           />
           <MultiSelectDropdown
             options={marketOptionsWithCounts}
@@ -992,10 +968,7 @@ export default function SourcesPage() {
                       Name
                     </th>}
                     {isColVisible("platform") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("platform") }}>
-                      Platform
-                    </th>}
-                    {isColVisible("type") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("type") }}>
-                      Type
+                      Source Type
                     </th>}
                     {isColVisible("market") && <th className="text-left px-4 py-3 text-gray-400 font-medium" style={{ width: colWidth("market") }}>
                       Market
@@ -1089,11 +1062,6 @@ export default function SourcesPage() {
                           >
                             {platformLabel(source.platform)}
                           </span>
-                        </td>}
-                        {isColVisible("type") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("type") }}>
-                          {SOURCE_TYPES.find(
-                            (t) => t.value === source.sourceType
-                          )?.label || source.sourceType}
                         </td>}
                         {isColVisible("market") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("market") }}>
                           {source.market?.name || (
