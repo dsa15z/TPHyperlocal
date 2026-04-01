@@ -111,7 +111,6 @@ export async function storiesRoutes(
         (where.AND as Prisma.StoryWhereInput[]).push({ OR: orConditions });
       }
     }
-    }
 
     if (status) {
       const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
