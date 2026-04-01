@@ -54,21 +54,20 @@ export async function storiesRoutes(
     };
 
     // Market filter: match story location against market name, neighborhoods, and keywords
+    let marketOrConditions: Prisma.StoryWhereInput[] | null = null;
+
     if (marketIds) {
       const rawIds = marketIds.split(',').map((s) => s.trim()).filter(Boolean);
       const includeNational = rawIds.includes('__national__');
       const ids = rawIds.filter((id) => id !== '__national__');
 
-      // Build the OR conditions for location matching
       const orConditions: Prisma.StoryWhereInput[] = [];
 
-      // National filter — only include if explicitly selected
       if (includeNational) {
         orConditions.push({ locationName: { equals: 'National', mode: 'insensitive' as const } });
-        orConditions.push({ locationName: null }); // unresolved locations
+        orConditions.push({ locationName: null });
       }
 
-      // Market-specific filters
       if (ids.length > 0) {
         const markets = await prisma.market.findMany({
           where: { id: { in: ids } },
@@ -81,7 +80,6 @@ export async function storiesRoutes(
         for (const m of markets) {
           exactTerms.push(m.name.toLowerCase());
           containsTerms.push(m.name.toLowerCase());
-
           if (m.state) exactTerms.push(m.state.toLowerCase());
 
           const keywords = (m.keywords || []) as string[];
@@ -98,22 +96,21 @@ export async function storiesRoutes(
           }
         }
 
-        const uniqueExact = [...new Set(exactTerms)];
-        const uniqueContains = [...new Set(containsTerms)];
-
-        for (const term of uniqueExact) {
+        for (const term of [...new Set(exactTerms)]) {
           orConditions.push({ locationName: { equals: term, mode: 'insensitive' as const } });
           orConditions.push({ neighborhood: { equals: term, mode: 'insensitive' as const } });
         }
-        for (const term of uniqueContains) {
+        for (const term of [...new Set(containsTerms)]) {
           orConditions.push({ locationName: { contains: term, mode: 'insensitive' as const } });
         }
       }
 
       if (orConditions.length > 0) {
+        marketOrConditions = orConditions;
         if (!where.AND) where.AND = [];
         (where.AND as Prisma.StoryWhereInput[]).push({ OR: orConditions });
       }
+    }
     }
 
     if (status) {
@@ -186,6 +183,11 @@ export async function storiesRoutes(
       if (ids.length > 0) {
         baseFacetWhere.storySources = { some: { sourcePost: { sourceId: { in: ids } } } };
       }
+    }
+    // Apply market filter to ALL facets so dropdowns reflect the market context
+    if (marketOrConditions) {
+      if (!baseFacetWhere.AND) baseFacetWhere.AND = [];
+      (baseFacetWhere.AND as Prisma.StoryWhereInput[]).push({ OR: marketOrConditions });
     }
 
     // Category facet where: includes status + source filters, excludes category
