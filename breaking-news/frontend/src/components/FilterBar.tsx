@@ -101,10 +101,13 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     ? allMarkets.filter((m) => m.isActive)
     : userMarkets.filter((m: any) => m.isActive);
 
-  const marketOptions = availableMarkets.map((m: any) => ({
-    value: m.id,
-    label: m.name + (m.state ? `, ${m.state}` : ""),
-  }));
+  const marketOptions = [
+    { value: "__national__", label: "National" },
+    ...availableMarkets.map((m: any) => ({
+      value: m.id,
+      label: m.name + (m.state ? `, ${m.state}` : ""),
+    })),
+  ];
 
   const categoryOptions = (facets?.categories || []).map(
     (c) => ({ value: c.name, label: c.name, count: c.count })
