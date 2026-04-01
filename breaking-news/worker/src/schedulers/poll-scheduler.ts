@@ -961,6 +961,78 @@ async function scheduleWebScrapePolls(): Promise<void> {
   }
 }
 
+/**
+ * Schedule Event Registry polls for all active markets.
+ * Runs every 15 minutes — searches for articles by market keywords.
+ */
+async function scheduleEventRegistryPolls(): Promise<void> {
+  const apiKey = process.env['EVENT_REGISTRY_KEY'] || process.env['EVENT_REGISTRY_API_KEY'];
+  if (!apiKey) return; // No key, skip silently
+
+  try {
+    const connection = getSharedConnection();
+    const erQueue = new Queue('event-registry', { connection });
+
+    // Find sources with metadata.type = 'event-registry' or with platform containing event
+    const markets = await prisma.market.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, state: true, keywords: true },
+    });
+
+    if (markets.length === 0) {
+      await erQueue.close();
+      return;
+    }
+
+    for (const market of markets) {
+      const keywords = (market.keywords || []) as string[];
+      const query = keywords.slice(0, 5).join(' ') || market.name;
+
+      // Find an Event Registry source for this market
+      let source = await prisma.source.findFirst({
+        where: {
+          name: { contains: 'Event Registry', mode: 'insensitive' },
+          marketId: market.id,
+          isActive: true,
+        },
+      });
+
+      if (!source) {
+        // Auto-create
+        source = await prisma.source.create({
+          data: {
+            platform: 'NEWSAPI' as any,
+            sourceType: 'API_PROVIDER' as any,
+            name: `Event Registry - ${market.name}`,
+            url: 'https://eventregistry.org',
+            marketId: market.id,
+            trustScore: 0.85,
+            isGlobal: false,
+            metadata: { type: 'event-registry', query },
+          },
+        });
+      }
+
+      await erQueue.add('event-registry-poll', {
+        sourceId: source.id,
+        query,
+        market: market.name,
+      }, {
+        jobId: `er-poll-${market.id}-${Date.now()}`,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 10000 },
+        removeOnComplete: true,
+        removeOnFail: { age: 86400 },
+      });
+    }
+
+    await erQueue.close();
+    logger.info({ markets: markets.length }, 'Scheduled Event Registry polls');
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule Event Registry polls');
+  }
+}
+
 // Interval handles for cleanup on shutdown
 const intervals: NodeJS.Timeout[] = [];
 
@@ -1046,6 +1118,10 @@ export function startSchedulers(): void {
   const scraperInterval = setInterval(scheduleWebScrapePolls, 30 * 60 * 1000);
   intervals.push(scraperInterval);
 
+  // Event Registry: every 15 minutes
+  const erInterval = setInterval(scheduleEventRegistryPolls, 15 * 60 * 1000);
+  intervals.push(erInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -1058,6 +1134,7 @@ export function startSchedulers(): void {
   void scheduleNewscatcherPolls();
   void scheduleHyperLocalIntelPolls();
   void scheduleWebScrapePolls();
+  void scheduleEventRegistryPolls();
 
   logger.info('All schedulers started');
 }
