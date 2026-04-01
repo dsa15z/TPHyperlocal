@@ -339,87 +339,69 @@ export async function marketRoutes(
         } catch { /* dedup */ }
       }
 
-      // Create Google News RSS feeds for this market
-      // Google News provides free RSS feeds by geo location and keyword search
-      const googleKeywords = [
-        msa.name, // "Houston"
-        `${msa.name} ${msa.state}`, // "Houston TX"
-        ...(msa.keywords || []).slice(0, 5), // Top 5 market keywords
-      ];
-      // Also add category-specific feeds
-      const googleCategories = [
-        { topic: 'NATION', label: 'Top Stories' },
-        { topic: 'BUSINESS', label: 'Business' },
-        { topic: 'TECHNOLOGY', label: 'Technology' },
-        { topic: 'ENTERTAINMENT', label: 'Entertainment' },
-        { topic: 'SPORTS', label: 'Sports' },
-        { topic: 'SCIENCE', label: 'Science' },
-        { topic: 'HEALTH', label: 'Health' },
-      ];
-
-      for (const kw of googleKeywords) {
-        const gName = `Google News - ${msa.name} - ${kw}`;
-        const exists = await prisma.source.findFirst({ where: { name: gName, marketId } });
-        if (!exists) {
-          try {
-            const gUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(kw)}&hl=en-US&gl=US&ceid=US:en`;
-            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: gName, url: gUrl, marketId, trustScore: 0.75, isGlobal: false, metadata: { type: 'google-news', keyword: kw, market: msa.name } } });
-            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
-            sourcesCreated++;
-          } catch { /* dedup */ }
-        }
-      }
-
-      // Google News geo-local feed
-      const geoName = `Google News - ${msa.name} Local`;
+      // Per-market Google News: ONE geo-targeted local feed per market
+      // This captures truly local news that wouldn't appear in national feeds
+      const geoName = `Google News Local - ${msa.name}`;
       const geoExists = await prisma.source.findFirst({ where: { name: geoName, marketId } });
       if (!geoExists) {
         try {
-          const geoUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(msa.name)}+local+news&hl=en-US&gl=US&ceid=US:en`;
-          const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: geoName, url: geoUrl, marketId, trustScore: 0.75, isGlobal: false, metadata: { type: 'google-news', subtype: 'local', market: msa.name } } });
+          const geoUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(`"${msa.name}" OR "${msa.name}, ${msa.state}"`)}&hl=en-US&gl=US&ceid=US:en`;
+          const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: geoName, url: geoUrl, marketId, trustScore: 0.75, isGlobal: false, metadata: { type: 'google-news-local', market: msa.name, state: msa.state } } });
           await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
           sourcesCreated++;
         } catch { /* dedup */ }
       }
 
-      // Google News category feeds for this market
-      for (const cat of googleCategories) {
-        const catName = `Google News - ${msa.name} ${cat.label}`;
-        const catExists = await prisma.source.findFirst({ where: { name: catName, marketId } });
-        if (!catExists) {
-          try {
-            const catUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(msa.name)}+${encodeURIComponent(cat.label.toLowerCase())}&hl=en-US&gl=US&ceid=US:en`;
-            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: catName, url: catUrl, marketId, trustScore: 0.70, isGlobal: false, metadata: { type: 'google-news', subtype: 'category', category: cat.topic, market: msa.name } } });
-            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
-            sourcesCreated++;
-          } catch { /* dedup */ }
-        }
-      }
-
-      // Create Bing News RSS feeds for this market
-      const bingKeywords = [
-        msa.name,
-        `${msa.name} ${msa.state} news`,
-        `${msa.name} breaking news`,
-        `${msa.name} crime`,
-        `${msa.name} weather`,
-      ];
-
-      for (const kw of bingKeywords) {
-        const bName = `Bing News - ${msa.name} - ${kw}`;
-        const exists = await prisma.source.findFirst({ where: { name: bName, marketId } });
-        if (!exists) {
-          try {
-            const bUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(kw)}&format=RSS`;
-            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: bName, url: bUrl, marketId, trustScore: 0.70, isGlobal: false, metadata: { type: 'bing-news', keyword: kw, market: msa.name } } });
-            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
-            sourcesCreated++;
-          } catch { /* dedup */ }
-        }
+      // Per-market Bing News: ONE local feed per market
+      const bingLocalName = `Bing News Local - ${msa.name}`;
+      const bingLocalExists = await prisma.source.findFirst({ where: { name: bingLocalName, marketId } });
+      if (!bingLocalExists) {
+        try {
+          const bUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(`${msa.name} ${msa.state} local news`)}&format=RSS`;
+          const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: bingLocalName, url: bUrl, marketId, trustScore: 0.70, isGlobal: false, metadata: { type: 'bing-news-local', market: msa.name, state: msa.state } } });
+          await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+          sourcesCreated++;
+        } catch { /* dedup */ }
       }
     }
 
-    return reply.status(201).send({ message: `Seeded ${marketsSeeded} markets, created ${sourcesCreated} sources (TV, radio, Google News, Bing News, HyperLocal)`, marketsSeeded, sourcesCreated, marketsUpdated: skipped.length, total: MSA_DATABASE.length });
+    // ── Global sources (scraped once, shared across all markets) ──────────
+    // These are NOT linked to any market — they produce national/global stories
+    // that get location-tagged during enrichment and filtered at access time.
+    const globalFeeds = [
+      // Google News by category (national, no geo filter)
+      { name: 'Google News - US Top Stories', url: 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', trust: 0.80, meta: { type: 'google-news', subtype: 'national' } },
+      { name: 'Google News - US Business', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'business' } },
+      { name: 'Google News - US Technology', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGRqTVhZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'technology' } },
+      { name: 'Google News - US Entertainment', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNREpxYW5RU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'entertainment' } },
+      { name: 'Google News - US Sports', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp1ZEdvU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'sports' } },
+      { name: 'Google News - US Science', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFp0Y1RjU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'science' } },
+      { name: 'Google News - US Health', url: 'https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNR3QwTlRFU0FtVnVLQUFQAQ?hl=en-US&gl=US&ceid=US:en', trust: 0.75, meta: { type: 'google-news', subtype: 'health' } },
+      // Bing News national
+      { name: 'Bing News - US Top Stories', url: 'https://www.bing.com/news/search?q=breaking+news&format=RSS', trust: 0.70, meta: { type: 'bing-news', subtype: 'national' } },
+      { name: 'Bing News - US Politics', url: 'https://www.bing.com/news/search?q=US+politics&format=RSS', trust: 0.70, meta: { type: 'bing-news', subtype: 'politics' } },
+      // Wire services
+      { name: 'AP News - Top Stories', url: 'https://rsshub.app/apnews/topics/apf-topnews', trust: 0.95, meta: { type: 'wire', provider: 'AP' } },
+      { name: 'AP News - US News', url: 'https://rsshub.app/apnews/topics/apf-usnews', trust: 0.95, meta: { type: 'wire', provider: 'AP' } },
+      { name: 'Reuters - World', url: 'https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best', trust: 0.95, meta: { type: 'wire', provider: 'Reuters' } },
+      { name: 'NPR - News', url: 'https://feeds.npr.org/1001/rss.xml', trust: 0.92, meta: { type: 'wire', provider: 'NPR' } },
+      { name: 'NPR - Politics', url: 'https://feeds.npr.org/1014/rss.xml', trust: 0.92, meta: { type: 'wire', provider: 'NPR' } },
+      { name: 'BBC News - US & Canada', url: 'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml', trust: 0.92, meta: { type: 'wire', provider: 'BBC' } },
+      { name: 'USA Today - Top Stories', url: 'https://rssfeeds.usatoday.com/UsatodaycomNation-TopStories', trust: 0.85, meta: { type: 'wire', provider: 'USA Today' } },
+    ];
+
+    for (const gf of globalFeeds) {
+      const exists = await prisma.source.findFirst({ where: { name: gf.name } });
+      if (!exists) {
+        try {
+          const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: gf.name, url: gf.url, marketId: null, trustScore: gf.trust, isGlobal: true, metadata: gf.meta } });
+          await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+          sourcesCreated++;
+        } catch { /* dedup */ }
+      }
+    }
+
+    return reply.status(201).send({ message: `Seeded ${marketsSeeded} markets, created ${sourcesCreated} sources`, marketsSeeded, sourcesCreated, marketsUpdated: skipped.length, total: MSA_DATABASE.length });
   });
 
   // POST /admin/markets/autofill — MUST also be before /:id routes
