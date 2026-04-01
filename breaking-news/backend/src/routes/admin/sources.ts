@@ -261,9 +261,21 @@ export async function sourceRoutes(
     // Do not allow editing global sources
     // Allow admins to edit any source (including global ones)
 
+    // When re-activating a source, reset failure count so it gets a fresh start
+    const updateData: any = { ...parsed.data };
+    if (parsed.data.isActive === true && !existing.isActive) {
+      const meta = (existing.metadata || {}) as Record<string, unknown>;
+      updateData.metadata = {
+        ...meta,
+        consecutiveFailures: 0,
+        reactivatedAt: new Date().toISOString(),
+        deactivateReason: undefined,
+      };
+    }
+
     const source = await prisma.source.update({
       where: { id },
-      data: parsed.data,
+      data: updateData,
     });
 
     return reply.status(200).send(source);
