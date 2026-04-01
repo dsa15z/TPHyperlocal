@@ -232,7 +232,7 @@ function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
 
 export function NewsProgressPanel() {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedLookback, setSelectedLookback] = useState(168);
+  const [selectedLookback, setSelectedLookback] = useState(1);
   const queryClient = useQueryClient();
   const { isLoggedIn } = useUser();
 

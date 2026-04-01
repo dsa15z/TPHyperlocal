@@ -75,7 +75,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const [uncoveredOnly, setUncoveredOnly] = useState(saved.current.uncoveredOnly || false);
   const [trend, setTrend] = useState(saved.current.trend || "all");
   const [timeRange, setTimeRange] = useState(
-    searchParams.get("time_range") || saved.current.timeRange || "24h"
+    searchParams.get("time_range") || saved.current.timeRange || "1h"
   );
   const [minScore, setMinScore] = useState(
     Number(searchParams.get("min_score") || saved.current.minScore || "0")
@@ -224,7 +224,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setSelectedMarkets([]);
     setUncoveredOnly(false);
     setTrend("all");
-    setTimeRange("24h");
+    setTimeRange("1h");
     setMinScore(0);
     try { localStorage.removeItem(FILTER_STORAGE_KEY); } catch {}
   };

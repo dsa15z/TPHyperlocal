@@ -7,6 +7,7 @@ import {
   MapPin,
   Pencil,
   Trash2,
+  Download,
   AlertCircle,
   X,
   Check,
@@ -251,6 +252,18 @@ export default function MarketsPage() {
           </h1>
           <div className="flex items-center gap-3">
             <ColumnCustomizer columns={marketCols} onChange={setMarketCols} allColumns={MARKET_COLUMNS} />
+            <button
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-surface-300/50 hover:border-accent/50 text-gray-300 hover:text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {seedMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {seedMutation.isPending ? "Seeding..." : "Sync All 50 Markets"}
+            </button>
             <button
               onClick={() => {
                 if (editingId) {
