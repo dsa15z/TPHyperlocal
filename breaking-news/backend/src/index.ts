@@ -53,6 +53,11 @@ import { dbHealthRoutes } from './routes/db-health.js';
 import { storyResearchRoutes } from './routes/story-research.js';
 import { billingRoutes } from './routes/billing.js';
 import { accountStoryRoutes } from './routes/account-stories.js';
+import { conversationStarterRoutes } from './routes/conversation-starters.js';
+import { moderationRoutes } from './routes/moderation.js';
+import { voiceToneRoutes } from './routes/voice-tone.js';
+import { mediaModerationRoutes } from './routes/media-moderation.js';
+import { extrasRoutes } from './routes/extras.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -198,6 +203,11 @@ async function buildServer() {
   await app.register(storyResearchRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
   await app.register(accountStoryRoutes, { prefix: '/api/v1' });
+  await app.register(conversationStarterRoutes, { prefix: '/api/v1' });
+  await app.register(moderationRoutes, { prefix: '/api/v1' });
+  await app.register(voiceToneRoutes, { prefix: '/api/v1' });
+  await app.register(mediaModerationRoutes, { prefix: '/api/v1' });
+  await app.register(extrasRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown
@@ -271,6 +281,13 @@ async function ensureTables() {
       `CREATE TABLE IF NOT EXISTS "SourceMarket" (id TEXT PRIMARY KEY, "sourceId" TEXT NOT NULL, "marketId" TEXT NOT NULL, "createdAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("sourceId", "marketId"))`,
       `CREATE INDEX IF NOT EXISTS "SourceMarket_sourceId_idx" ON "SourceMarket"("sourceId")`,
       `CREATE INDEX IF NOT EXISTS "SourceMarket_marketId_idx" ON "SourceMarket"("marketId")`,
+      // Moderation words (blacklist + flag)
+      `CREATE TABLE IF NOT EXISTS "ModerationWord" (id TEXT PRIMARY KEY, word TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'flag', "createdAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE(word, type))`,
+      // Merge phrases
+      `CREATE TABLE IF NOT EXISTS "MergePhrase" (id TEXT PRIMARY KEY, phrase TEXT NOT NULL UNIQUE, action TEXT DEFAULT 'merge', notes TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      // Surveys
+      `CREATE TABLE IF NOT EXISTS "Survey" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, title TEXT NOT NULL, questions JSONB NOT NULL, "targetGroup" TEXT DEFAULT 'all', "isActive" BOOLEAN DEFAULT true, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "SurveyResponse" (id TEXT PRIMARY KEY, "surveyId" TEXT NOT NULL, "userId" TEXT, answers JSONB NOT NULL, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
     ];
 
     let created = 0;
