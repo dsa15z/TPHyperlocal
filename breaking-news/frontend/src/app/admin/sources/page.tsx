@@ -765,7 +765,6 @@ export default function SourcesPage() {
                 )}
               </div>
             )}
-          </div>
         </Modal>
 
         {/* Search + Filters */}
