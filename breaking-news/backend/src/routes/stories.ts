@@ -62,34 +62,66 @@ export async function storiesRoutes(
           select: { name: true, state: true, keywords: true, neighborhoods: true },
         });
 
-        // Build location match terms: market names, states, neighborhoods, keywords
-        const locationTerms: string[] = [];
+        // Build two tiers of match terms:
+        // Tier 1 (exact match on locationName): market name, multi-word keywords/neighborhoods
+        // Tier 2 (contains): only the primary market name
+        const exactTerms: string[] = [];
+        const containsTerms: string[] = [];
+
         for (const m of markets) {
-          locationTerms.push(m.name);
-          if (m.state) locationTerms.push(m.state);
+          // Primary market name — use for both exact and contains
+          exactTerms.push(m.name.toLowerCase());
+          containsTerms.push(m.name.toLowerCase());
+
+          // State abbreviation — exact only (TX, CA, etc. are too short for contains)
+          if (m.state) exactTerms.push(m.state.toLowerCase());
+
+          // Keywords — only multi-word ones (2+ words) to avoid false positives
+          // e.g. "harris county" is safe, but "spring" matches "Palm Springs"
           const keywords = (m.keywords || []) as string[];
+          for (const kw of keywords) {
+            const normalized = kw.toLowerCase().trim();
+            if (normalized.split(/\s+/).length >= 2) {
+              exactTerms.push(normalized);
+            }
+            // Also exact-match single-word keywords that are specific enough (6+ chars)
+            if (normalized.length >= 6) {
+              exactTerms.push(normalized);
+            }
+          }
+
+          // Neighborhoods — only multi-word or long ones
           const neighborhoods = (m.neighborhoods || []) as string[];
-          locationTerms.push(...keywords, ...neighborhoods);
+          for (const nb of neighborhoods) {
+            const normalized = nb.toLowerCase().trim();
+            if (normalized.split(/\s+/).length >= 2 || normalized.length >= 8) {
+              exactTerms.push(normalized);
+            }
+          }
         }
 
-        // Also always include "National" stories
-        if (locationTerms.length > 0) {
-          const uniqueTerms = [...new Set(locationTerms.map((t) => t.toLowerCase()))];
-          // Use AND to nest the OR so it doesn't conflict with category OR
+        const uniqueExact = [...new Set(exactTerms)];
+        const uniqueContains = [...new Set(containsTerms)];
+
+        if (uniqueExact.length > 0 || uniqueContains.length > 0) {
           if (!where.AND) where.AND = [];
           (where.AND as Prisma.StoryWhereInput[]).push({
             OR: [
-              // Match locationName against any term (case-insensitive contains)
-              ...uniqueTerms.map((term) => ({
+              // Exact match on locationName (case-insensitive)
+              ...uniqueExact.map((term) => ({
+                locationName: { equals: term, mode: 'insensitive' as const },
+              })),
+              // Contains match only for primary market name
+              ...uniqueContains.map((term) => ({
                 locationName: { contains: term, mode: 'insensitive' as const },
               })),
-              // Match neighborhood field
-              ...uniqueTerms.map((term) => ({
-                neighborhood: { contains: term, mode: 'insensitive' as const },
+              // Exact match on neighborhood field
+              ...uniqueExact.map((term) => ({
+                neighborhood: { equals: term, mode: 'insensitive' as const },
               })),
               // Always include National stories
               { locationName: { equals: 'National', mode: 'insensitive' as const } },
-              // Include stories with no location (unresolved)
+              // Include stories with no location
               { locationName: null },
             ],
           });
