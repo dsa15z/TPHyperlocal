@@ -62,6 +62,24 @@ Sources → Ingestion Worker → SourcePost table
   → REST API / MCP Server / RSS feeds serve the results
 ```
 
+### Story Ownership Model (Copy-on-Write)
+
+Stories follow a **shared base + private derivative** model:
+
+1. **Base Story** — shared, read-only. Ingested from sources, enriched, clustered, scored. All accounts see the same base data. No account owns it.
+
+2. **Account Story (Derivative)** — created automatically when any user takes an action on a base story (edit, assign reporter, add notes, generate AI draft, create video, mark as covered, etc.). This is a **fork** that belongs to that account.
+
+3. **Live upstream sync** — The derivative stays linked to the base story and receives ongoing updates: new source posts added, score changes, status transitions, summary refreshes. But the account's custom work (edits, AI content, videos, assignments, notes) is private to them.
+
+4. **Access control** — Users only see base stories that match their account's paid markets. National stories are visible to all. An account's derivatives are only visible to that account's users.
+
+**Implementation**: `AccountStory` join table with:
+- `accountId` + `baseStoryId` (unique) — links to the shared Story
+- Account-specific fields: `editedTitle`, `editedSummary`, `assignedTo`, `notes`, `aiDrafts`, `videos`, `status` (account's editorial status, independent of base story status)
+- `lastSyncedAt` — tracks when base story updates were last pulled in
+- Created lazily on first user action, not on story ingestion
+
 ### Fastify Route Registration
 Static routes (e.g. `/markets/seed`, `/markets/autofill`) MUST be registered BEFORE parametric routes (e.g. `/markets/:id`). Fastify matches routes in registration order — a parametric route registered first will capture literal path segments as parameters, causing 404s on the static route.
 
