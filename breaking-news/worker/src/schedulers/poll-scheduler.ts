@@ -6,6 +6,26 @@ import prisma from '../lib/prisma.js';
 
 const logger = createChildLogger('scheduler');
 
+const ACTIVITY_KEY = 'tp:last_ui_activity';
+const IDLE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Check if the UI has been active recently.
+ * Workers skip polling when no users are watching to save API costs.
+ * Returns true if UI is active or if Redis is unavailable (fail-open).
+ */
+async function isUIActive(): Promise<boolean> {
+  try {
+    const connection = getSharedConnection();
+    const lastActivity = await connection.get(ACTIVITY_KEY);
+    if (!lastActivity) return false; // No heartbeat ever recorded
+    const idleMs = Date.now() - parseInt(lastActivity, 10);
+    return idleMs < IDLE_THRESHOLD_MS;
+  } catch {
+    return true; // Fail-open: if Redis is down, assume active
+  }
+}
+
 let ingestionQueue: Queue;
 let scoringQueue: Queue;
 let llmIngestionQueue: Queue;
@@ -78,6 +98,12 @@ function getQueues() {
  * Schedule RSS feed polling jobs for all active RSS sources
  */
 async function scheduleRSSPolls(): Promise<void> {
+  // Skip polling when no users are active (saves API costs)
+  if (!(await isUIActive())) {
+    logger.debug('UI idle — skipping RSS polls to save costs');
+    return;
+  }
+
   const { ingestionQueue } = getQueues();
 
   try {
@@ -155,6 +181,7 @@ async function scheduleRSSPolls(): Promise<void> {
  * Schedule NewsAPI polling jobs for all active NewsAPI sources
  */
 async function scheduleNewsAPIPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleNewsAPIPolls'); return; }
   const { ingestionQueue } = getQueues();
 
   try {
@@ -195,6 +222,7 @@ async function scheduleNewsAPIPolls(): Promise<void> {
  * Schedule Facebook Page polling jobs for all active Facebook sources
  */
 async function scheduleFacebookPagePolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleFacebookPagePolls'); return; }
   const { ingestionQueue } = getQueues();
 
   try {
@@ -247,6 +275,7 @@ async function scheduleFacebookPagePolls(): Promise<void> {
  * Schedule Twitter/X polling jobs for all active Twitter sources
  */
 async function scheduleTwitterPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleTwitterPolls'); return; }
   const { ingestionQueue } = getQueues();
 
   try {
@@ -285,6 +314,7 @@ async function scheduleTwitterPolls(): Promise<void> {
  * Runs every 10 minutes.
  */
 async function scheduleNewscatcherPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleNewscatcherPolls'); return; }
   const { newscatcherQueue } = getQueues();
 
   const apiKey = process.env['NEWSCATCHER_API_KEY'];
@@ -371,6 +401,7 @@ async function scheduleStockMonitor(): Promise<void> {
  * Schedule LLM polling jobs for all active LLM sources
  */
 async function scheduleLLMPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleLLMPolls'); return; }
   const { llmIngestionQueue } = getQueues();
 
   try {
@@ -837,6 +868,7 @@ async function runCleanup(): Promise<void> {
  * Runs every 5 minutes (vs 10 min for other LLMs).
  */
 async function scheduleGrokFastPoll(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleGrokFastPoll'); return; }
   const { llmIngestionQueue } = getQueues();
 
   try {
@@ -890,6 +922,7 @@ async function scheduleGrokFastPoll(): Promise<void> {
  * Runs every 15 minutes — fetches curated news from 12 sources per market.
  */
 async function scheduleHyperLocalIntelPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleHyperLocalIntelPolls'); return; }
   try {
     if (!hyperLocalIntelQueue) {
       hyperLocalIntelQueue = new Queue('hyperlocal-intel', { connection: getSharedConnection() });
@@ -931,6 +964,7 @@ async function scheduleHyperLocalIntelPolls(): Promise<void> {
  * Runs every 30 minutes (be polite to scraped sites).
  */
 async function scheduleWebScrapePolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleWebScrapePolls'); return; }
   try {
     const connection = getSharedConnection();
     const scraperQueue = new Queue('web-scraper', { connection });
@@ -983,6 +1017,7 @@ async function scheduleWebScrapePolls(): Promise<void> {
  * Runs every 15 minutes — searches for articles by market keywords.
  */
 async function scheduleEventRegistryPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleEventRegistryPolls'); return; }
   const apiKey = process.env['EVENT_REGISTRY_KEY'] || process.env['EVENT_REGISTRY_API_KEY'];
   if (!apiKey) return; // No key, skip silently
 

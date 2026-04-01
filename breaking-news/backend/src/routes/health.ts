@@ -2,6 +2,9 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { prisma } from '../lib/prisma.js';
 import { getRedis } from '../lib/redis.js';
 
+const ACTIVITY_KEY = 'tp:last_ui_activity';
+const ACTIVITY_TTL = 30 * 60; // 30 minutes
+
 export async function healthRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
@@ -56,6 +59,41 @@ export async function healthRoutes(
       version: process.env['npm_package_version'] ?? '1.0.0',
       checks,
     });
+  });
+
+  // POST /api/v1/heartbeat — UI sends this every 5 min to indicate active users
+  app.post('/heartbeat', async (_request, reply) => {
+    try {
+      const redis = getRedis();
+      await redis.set(ACTIVITY_KEY, Date.now().toString(), 'EX', ACTIVITY_TTL);
+      return reply.send({ ok: true });
+    } catch {
+      return reply.send({ ok: true }); // Don't fail if Redis is down
+    }
+  });
+
+  // GET /api/v1/activity — Workers check this before polling
+  // Returns whether UI is active and optimal lookback hours
+  app.get('/activity', async (_request, reply) => {
+    try {
+      const redis = getRedis();
+      const lastActivity = await redis.get(ACTIVITY_KEY);
+      const lastActiveMs = lastActivity ? parseInt(lastActivity, 10) : 0;
+      const idleMs = Date.now() - lastActiveMs;
+      const isActive = idleMs < ACTIVITY_TTL * 1000;
+
+      // Optimal lookback: min(24h, time since last activity)
+      const lookbackHours = Math.min(24, Math.ceil(idleMs / (1000 * 60 * 60)));
+
+      return reply.send({
+        isActive,
+        lastActivityAt: lastActiveMs > 0 ? new Date(lastActiveMs).toISOString() : null,
+        idleMinutes: Math.round(idleMs / 60000),
+        lookbackHours: isActive ? 1 : lookbackHours, // If active, just pull last hour
+      });
+    } catch {
+      return reply.send({ isActive: true, lookbackHours: 1 }); // Default to active if Redis fails
+    }
   });
 
   // POST /api/v1/health/db-sync — Create any missing tables

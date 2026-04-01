@@ -125,7 +125,7 @@ export async function pipelineRoutes(
 
   // POST /api/v1/pipeline/trigger - trigger ingestion for all active sources
   const TriggerSchema = z.object({
-    lookbackHours: z.number().int().min(1).max(168).default(24),
+    lookbackHours: z.number().int().min(1).max(24).default(24), // Max 24h to control costs
   });
 
   // POST /api/v1/pipeline/clear-failed - clear failed jobs from a queue
