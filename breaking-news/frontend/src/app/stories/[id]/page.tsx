@@ -23,7 +23,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch, type SourcePost } from "@/lib/api";
+import { apiFetch, type SourcePost, updateAccountStory, type AccountStoryOverlay } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { StoryResearchPanel } from "@/components/StoryResearchPanel";
@@ -380,6 +380,81 @@ function SourceCard({ source }: { source: SourcePost }) {
   );
 }
 
+// ─── Account Workspace Bar ──────────────────────────────────────────────────
+
+const ACCOUNT_STATUSES = [
+  { value: "INBOX", label: "Inbox", color: "text-gray-400 bg-gray-500/10" },
+  { value: "ASSIGNED", label: "Assigned", color: "text-blue-400 bg-blue-500/10" },
+  { value: "IN_PROGRESS", label: "In Progress", color: "text-amber-400 bg-amber-500/10" },
+  { value: "DRAFT_READY", label: "Draft Ready", color: "text-cyan-400 bg-cyan-500/10" },
+  { value: "PUBLISHED", label: "Published", color: "text-green-400 bg-green-500/10" },
+  { value: "KILLED", label: "Killed", color: "text-red-400 bg-red-500/10" },
+];
+
+function AccountWorkspaceBar({ accountStory, storyId }: { accountStory: AccountStoryOverlay; storyId: string }) {
+  const queryClient = useQueryClient();
+  const statusInfo = ACCOUNT_STATUSES.find((s) => s.value === accountStory.accountStatus) || ACCOUNT_STATUSES[0];
+
+  const mutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => updateAccountStory(storyId, data as any),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["story", storyId] }),
+  });
+
+  return (
+    <div className="glass-card-strong p-3 flex items-center gap-3 flex-wrap">
+      <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Your Workspace</span>
+      <div className="h-4 w-px bg-surface-300/50" />
+
+      {/* Status selector */}
+      <select
+        value={accountStory.accountStatus}
+        onChange={(e) => mutation.mutate({ accountStatus: e.target.value })}
+        className={clsx("px-2 py-1 rounded text-xs font-semibold border-0 cursor-pointer", statusInfo.color)}
+      >
+        {ACCOUNT_STATUSES.map((s) => (
+          <option key={s.value} value={s.value}>{s.label}</option>
+        ))}
+      </select>
+
+      {/* Assigned to */}
+      {accountStory.assignedTo && (
+        <span className="text-xs text-gray-400">
+          Assigned to: <span className="text-white">{accountStory.assignedTo}</span>
+        </span>
+      )}
+
+      {/* AI content counts */}
+      {(accountStory.aiDraftCount > 0 || accountStory.aiScriptCount > 0 || accountStory.aiVideoCount > 0) && (
+        <>
+          <div className="h-4 w-px bg-surface-300/50" />
+          {accountStory.aiDraftCount > 0 && (
+            <span className="text-xs text-cyan-400">{accountStory.aiDraftCount} draft{accountStory.aiDraftCount !== 1 ? "s" : ""}</span>
+          )}
+          {accountStory.aiScriptCount > 0 && (
+            <span className="text-xs text-amber-400">{accountStory.aiScriptCount} script{accountStory.aiScriptCount !== 1 ? "s" : ""}</span>
+          )}
+          {accountStory.aiVideoCount > 0 && (
+            <span className="text-xs text-purple-400">{accountStory.aiVideoCount} video{accountStory.aiVideoCount !== 1 ? "s" : ""}</span>
+          )}
+        </>
+      )}
+
+      {/* Covered timestamp */}
+      {accountStory.coveredAt && (
+        <>
+          <div className="h-4 w-px bg-surface-300/50" />
+          <span className="text-xs text-green-400">Covered {formatRelativeTime(accountStory.coveredAt)}</span>
+        </>
+      )}
+
+      {/* Notes indicator */}
+      {accountStory.notes && (
+        <span className="text-xs text-gray-500" title={accountStory.notes}>Has notes</span>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function StoryDetailPage() {
@@ -534,14 +609,25 @@ export default function StoryDetailPage() {
 
           {/* ─── Main Content (scrollable) ─── */}
           <div className="flex-1 min-w-0 space-y-8">
-            {/* Story header */}
+            {/* Account workspace panel — shows derivative status */}
+            {story.accountStory && (
+              <AccountWorkspaceBar
+                accountStory={story.accountStory}
+                storyId={id}
+              />
+            )}
+
+            {/* Story header — shows account edits if present */}
             <div className="space-y-4">
               <h1 className="text-3xl font-bold text-white leading-tight">
-                {story.title}
+                {story.accountStory?.editedTitle || story.title}
+                {story.accountStory?.editedTitle && (
+                  <span className="ml-2 text-xs text-accent font-normal">(edited)</span>
+                )}
               </h1>
 
               <p className="text-gray-400 text-lg leading-relaxed">
-                {stripHtml(story.summary)}
+                {stripHtml(story.accountStory?.editedSummary || story.summary)}
               </p>
             </div>
 

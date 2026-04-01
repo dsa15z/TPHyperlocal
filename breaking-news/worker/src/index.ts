@@ -43,6 +43,7 @@ import { createHyperLocalIntelWorker } from './workers/hyperlocal-intel.worker.j
 import { createVelocityScorerWorker } from './workers/velocity-scorer.worker.js';
 import { createWebScraperWorker } from './workers/web-scraper.worker.js';
 import { createEventRegistryWorker } from './workers/event-registry.worker.js';
+import { createAccountStorySyncWorker } from './workers/account-story-sync.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
     ['web-scraper', createWebScraperWorker],
     ['event-registry', createEventRegistryWorker],
     ['velocity-scorer', createVelocityScorerWorker],
+    ['account-story-sync', createAccountStorySyncWorker],
   ];
 
   let started = 0;

@@ -1122,6 +1122,10 @@ export function startSchedulers(): void {
   const erInterval = setInterval(scheduleEventRegistryPolls, 15 * 60 * 1000);
   intervals.push(erInterval);
 
+  // Account story derivative sync: every 5 minutes
+  const syncInterval = setInterval(scheduleAccountStorySync, 5 * 60 * 1000);
+  intervals.push(syncInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -1135,8 +1139,28 @@ export function startSchedulers(): void {
   void scheduleHyperLocalIntelPolls();
   void scheduleWebScrapePolls();
   void scheduleEventRegistryPolls();
+  void scheduleAccountStorySync();
 
   logger.info('All schedulers started');
+}
+
+/**
+ * Sync account story derivatives with base story updates.
+ * Runs every 5 minutes.
+ */
+async function scheduleAccountStorySync(): Promise<void> {
+  try {
+    const connection = getSharedConnection();
+    const syncQueue = new Queue('account-story-sync', { connection });
+    await syncQueue.add('sync_all', { type: 'sync_all' }, {
+      jobId: `account-story-sync-${Date.now()}`,
+      removeOnComplete: true,
+      removeOnFail: { age: 3600 },
+    });
+    await syncQueue.close();
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule account story sync');
+  }
 }
 
 /**

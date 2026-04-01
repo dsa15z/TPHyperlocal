@@ -112,14 +112,35 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
         const story = info.row.original;
         const hasParent = !!story.parentStory;
         const hasFollowUps = (story.followUps?.length ?? 0) > 0;
+        const acct = story.accountStory;
+        const displayTitle = acct?.editedTitle || info.getValue();
         return (
           <div className="flex items-start gap-1.5">
-            <Link
-              href={`/stories/${story.id}`}
-              className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2 flex-1"
-            >
-              {info.getValue()}
-            </Link>
+            <div className="flex-1 min-w-0">
+              <Link
+                href={`/stories/${story.id}`}
+                className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
+              >
+                {displayTitle}
+              </Link>
+              {acct && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={clsx(
+                    "px-1 py-px rounded text-[9px] font-semibold uppercase",
+                    acct.accountStatus === 'PUBLISHED' ? "text-green-400 bg-green-500/10" :
+                    acct.accountStatus === 'IN_PROGRESS' ? "text-amber-400 bg-amber-500/10" :
+                    acct.accountStatus === 'ASSIGNED' ? "text-blue-400 bg-blue-500/10" :
+                    acct.accountStatus === 'DRAFT_READY' ? "text-cyan-400 bg-cyan-500/10" :
+                    acct.accountStatus === 'KILLED' ? "text-red-400 bg-red-500/10" :
+                    "text-gray-500 bg-gray-500/10"
+                  )}>
+                    {acct.accountStatus.replace('_', ' ')}
+                  </span>
+                  {acct.aiDraftCount > 0 && <span className="text-[9px] text-cyan-500">{acct.aiDraftCount}d</span>}
+                  {acct.aiScriptCount > 0 && <span className="text-[9px] text-amber-500">{acct.aiScriptCount}s</span>}
+                </div>
+              )}
+            </div>
             {(hasParent || hasFollowUps) && (
               <span
                 className="flex-shrink-0 mt-0.5 text-cyan-400"
