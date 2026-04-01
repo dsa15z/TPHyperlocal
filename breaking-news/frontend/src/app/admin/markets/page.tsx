@@ -151,6 +151,14 @@ export default function MarketsPage() {
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      updateMarket(id, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
+    },
+  });
+
   const autofillMutation = useMutation({
     mutationFn: (params: { name: string; state: string }) =>
       apiFetch<any>("/api/v1/admin/markets/autofill", {
@@ -532,7 +540,28 @@ export default function MarketsPage() {
                           {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
                           {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
                           {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
-                          {isCol("active") && <td className="px-4 py-3">{market.isActive ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-gray-600" />}</td>}
+                          {isCol("active") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                if (market.isActive) {
+                                  if (confirm(`Deactivate "${market.name}"? Sources linked to this market will stop being polled. Existing stories remain visible.`)) {
+                                    toggleActiveMutation.mutate({ id: market.id, isActive: false });
+                                  }
+                                } else {
+                                  toggleActiveMutation.mutate({ id: market.id, isActive: true });
+                                }
+                              }}
+                              className={clsx(
+                                "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                                market.isActive ? "bg-green-500" : "bg-gray-600"
+                              )}
+                            >
+                              <span className={clsx(
+                                "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform",
+                                market.isActive ? "translate-x-4" : "translate-x-0.5"
+                              )} />
+                            </button>
+                          </td>}
                           {isCol("sources") && <td className="px-4 py-3">
                             <span className="text-gray-400">{totalSrc}</span>
                             {totalSrc > 0 && <span className="text-gray-600 text-xs ml-1">({tvStations.length} TV, {radioStations.length} Radio)</span>}

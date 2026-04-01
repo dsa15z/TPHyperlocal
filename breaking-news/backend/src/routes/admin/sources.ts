@@ -19,7 +19,8 @@ const createSourceSchema = z.object({
   sourceType: sourceTypeEnum,
   name: z.string().min(1).max(255),
   url: z.string().url().optional(),
-  marketId: z.string().optional(),
+  marketId: z.string().optional(), // Legacy single market
+  marketIds: z.array(z.string()).optional(), // M:N market IDs via SourceMarket
   trustScore: z.number().min(0).max(1).default(0.5),
   metadata: z.record(z.unknown()).optional(),
 });
@@ -29,6 +30,7 @@ const updateSourceSchema = z.object({
   url: z.string().url().optional().nullable(),
   trustScore: z.number().min(0).max(1).optional(),
   isActive: z.boolean().optional(),
+  marketIds: z.array(z.string()).optional(), // Replace market links
   metadata: z.record(z.unknown()).optional().nullable(),
 });
 
@@ -100,6 +102,7 @@ export async function sourceRoutes(
             select: { id: true, isEnabled: true, pollIntervalMs: true },
           },
           market: { select: { id: true, name: true } },
+          sourceMarkets: { select: { marketId: true, market: { select: { id: true, name: true, state: true, isActive: true } } } },
           _count: { select: { posts: true } },
         },
         orderBy: { [sort]: order },
@@ -148,6 +151,12 @@ export async function sourceRoutes(
           pollIntervalMs: accountSource?.pollIntervalMs ?? null,
           totalPosts: s._count.posts,
           recentPosts: recentCountMap.get(s.id) || 0,
+          sourceMarkets: s.sourceMarkets.map((sm) => ({
+            marketId: sm.marketId,
+            name: sm.market.name,
+            state: sm.market.state,
+            isActive: sm.market.isActive,
+          })),
         };
       }),
       total,
@@ -206,12 +215,21 @@ export async function sourceRoutes(
         sourceType: data.sourceType as any,
         name: data.name,
         url: data.url,
-        marketId: data.marketId,
+        marketId: data.marketIds?.[0] || data.marketId, // Primary market (backward compat)
         trustScore: data.trustScore,
         metadata: data.metadata ?? undefined,
         isGlobal: false,
       },
     });
+
+    // Link to markets via SourceMarket M:N
+    if (data.marketIds && data.marketIds.length > 0) {
+      for (const mktId of data.marketIds) {
+        await prisma.sourceMarket.create({
+          data: { sourceId: source.id, marketId: mktId },
+        }).catch(() => {}); // Ignore unique constraint
+      }
+    }
 
     // Automatically enable it for the account
     await prisma.accountSource.create({
@@ -273,10 +291,29 @@ export async function sourceRoutes(
       };
     }
 
+    // Remove marketIds from updateData — it's handled separately via SourceMarket
+    const { marketIds: newMarketIds, ...sourceUpdateData } = updateData;
+
+    // Update primary market (backward compat)
+    if (newMarketIds && newMarketIds.length > 0) {
+      sourceUpdateData.marketId = newMarketIds[0];
+    }
+
     const source = await prisma.source.update({
       where: { id },
-      data: updateData,
+      data: sourceUpdateData,
     });
+
+    // Sync SourceMarket records if marketIds provided
+    if (newMarketIds !== undefined) {
+      // Delete existing links and recreate
+      await prisma.sourceMarket.deleteMany({ where: { sourceId: id } });
+      for (const mktId of (newMarketIds || [])) {
+        await prisma.sourceMarket.create({
+          data: { sourceId: id, marketId: mktId },
+        }).catch(() => {});
+      }
+    }
 
     return reply.status(200).send(source);
   });

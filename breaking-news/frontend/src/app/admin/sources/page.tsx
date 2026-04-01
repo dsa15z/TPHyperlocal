@@ -146,7 +146,7 @@ export default function SourcesPage() {
   const [formPlatform, setFormPlatform] = useState("");
   const [formSourceType, setFormSourceType] = useState("");
   const [formUrl, setFormUrl] = useState("");
-  const [formMarketId, setFormMarketId] = useState("");
+  const [formMarketIds, setFormMarketIds] = useState<string[]>([]);
   const [formTrustScore, setFormTrustScore] = useState(50);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -308,7 +308,7 @@ export default function SourcesPage() {
     setFormPlatform("");
     setFormSourceType("");
     setFormUrl("");
-    setFormMarketId("");
+    setFormMarketIds([]);
     setFormTrustScore(50);
     setEditingId(null);
     setTestResult(null);
@@ -320,7 +320,9 @@ export default function SourcesPage() {
     setFormPlatform(source.platform);
     setFormSourceType(source.sourceType);
     setFormUrl(source.url || "");
-    setFormMarketId(source.marketId || "");
+    // Load market IDs from sourceMarkets or fallback to legacy marketId
+    const mktIds = (source as any).sourceMarkets?.map((sm: any) => sm.marketId) || [];
+    setFormMarketIds(mktIds.length > 0 ? mktIds : source.marketId ? [source.marketId] : []);
     setFormTrustScore(Math.round(source.trustScore * 100));
     setShowForm(true);
   };
@@ -342,7 +344,8 @@ export default function SourcesPage() {
       platform: formPlatform,
       sourceType: formSourceType,
       url: formUrl.trim(),
-      marketId: formMarketId || undefined,
+      marketId: formMarketIds.length > 0 ? formMarketIds[0] : undefined, // Primary market (backward compat)
+      marketIds: formMarketIds.length > 0 ? formMarketIds : undefined, // All markets via SourceMarket
       trustScore: formTrustScore / 100,
     };
 
@@ -642,23 +645,31 @@ export default function SourcesPage() {
 
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">
-                      Assign to Market
+                      Assign to Markets
                     </label>
-                    <select
-                      value={formMarketId}
-                      onChange={(e) => setFormMarketId(e.target.value)}
-                      className="filter-select w-full"
-                    >
-                      <option value="">Global (all markets)</option>
-                      {markets
-                        .filter((m) => m.isActive)
-                        .map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                            {m.state ? `, ${m.state}` : ""}
-                          </option>
-                        ))}
-                    </select>
+                    <MultiSelectDropdown
+                      options={markets.map((m: Market) => ({
+                        value: m.id,
+                        label: m.name + (m.state ? `, ${m.state}` : "") + (!m.isActive ? " (INACTIVE)" : ""),
+                        badge: !m.isActive ? "OFF" : undefined,
+                      }))}
+                      selected={formMarketIds}
+                      onChange={(ids) => {
+                        // Warn about inactive markets
+                        const newIds = ids.filter(id => !formMarketIds.includes(id));
+                        for (const id of newIds) {
+                          const mkt = markets.find((m: Market) => m.id === id);
+                          if (mkt && !mkt.isActive) {
+                            if (!confirm(`"${mkt.name}" is inactive. Sources won't be polled. Add anyway?`)) {
+                              return; // Cancel the change
+                            }
+                          }
+                        }
+                        setFormMarketIds(ids);
+                      }}
+                      placeholder="No markets (global)"
+                      searchable
+                    />
                   </div>
 
                   <div>
@@ -877,12 +888,15 @@ export default function SourcesPage() {
                     Select markets (multi-select)
                   </div>
                   <div className="overflow-y-auto flex-1">
-                    {markets.filter((m: Market) => m.isActive).map((m: Market) => {
+                    {markets.map((m: Market) => {
                       const checked = bulkMarketIds.includes(m.id);
                       return (
                         <button
                           key={m.id}
                           onClick={() => {
+                            if (!m.isActive && !checked) {
+                              if (!confirm(`"${m.name}" is inactive. Sources won't be polled. Add anyway?`)) return;
+                            }
                             setBulkMarketIds((prev) =>
                               checked ? prev.filter((id) => id !== m.id) : [...prev, m.id]
                             );
