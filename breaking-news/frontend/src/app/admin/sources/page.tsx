@@ -26,9 +26,10 @@ import {
   Power,
   PowerOff,
   MapPin,
+  Play,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, fetchMarkets, type TestSourceResult } from "@/lib/api";
+import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, pollSourceNow, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 // PageTabBar removed — filters handle the same functionality
@@ -219,6 +220,13 @@ export default function SourcesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteSource(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+    },
+  });
+
+  const pollMutation = useMutation({
+    mutationFn: (id: string) => pollSourceNow(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
@@ -1140,6 +1148,14 @@ export default function SourcesPage() {
                         </td>}
                         {isColVisible("actions") && <td className="px-4 py-3" style={{ width: colWidth("actions") }}>
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => pollMutation.mutate(source.id)}
+                              disabled={pollMutation.isPending}
+                              className="filter-btn flex items-center gap-1 text-xs text-accent hover:border-accent/50"
+                              title="Poll this source now"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
                             <button
                               onClick={() => startEdit(source)}
                               className="filter-btn flex items-center gap-1 text-xs"

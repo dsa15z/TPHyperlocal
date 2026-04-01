@@ -19,6 +19,8 @@ import {
   fetchPipelineStatus,
   fetchPipelineJobs,
   triggerPipelineIngestion,
+  clearFailedJobs,
+  forceRunQueue,
   type QueueStatus,
   type PipelineJob,
 } from "@/lib/api";
@@ -94,6 +96,17 @@ function JobRow({ job }: { job: PipelineJob }) {
 function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
   const [expanded, setExpanded] = useState(false);
   const [jobState, setJobState] = useState<string>("failed");
+  const queryClient = useQueryClient();
+
+  const clearMutation = useMutation({
+    mutationFn: () => clearFailedJobs(queue.name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-status"] }),
+  });
+
+  const runMutation = useMutation({
+    mutationFn: () => forceRunQueue(queue.name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pipeline-status"] }),
+  });
 
   const info = QUEUE_LABELS[queue.name] || { label: queue.name, icon: "\u2699\uFE0F" };
   const isActive = queue.active > 0;
@@ -177,6 +190,25 @@ function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
                 </button>
               );
             })}
+            <div className="ml-auto flex items-center gap-1.5">
+              {queue.failed > 0 && (
+                <button
+                  onClick={() => clearMutation.mutate()}
+                  disabled={clearMutation.isPending}
+                  className="px-2 py-0.5 text-[11px] rounded text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  {clearMutation.isPending ? "Clearing..." : `Clear ${queue.failed} failed`}
+                </button>
+              )}
+              <button
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending}
+                className="px-2 py-0.5 text-[11px] rounded text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
+              >
+                <Play className="w-2.5 h-2.5" />
+                {runMutation.isPending ? "Running..." : "Run Now"}
+              </button>
+            </div>
           </div>
 
           {/* Job list */}

@@ -128,6 +128,137 @@ export async function pipelineRoutes(
     lookbackHours: z.number().int().min(1).max(168).default(24),
   });
 
+  // POST /api/v1/pipeline/clear-failed - clear failed jobs from a queue
+  app.post('/pipeline/clear-failed', async (request, reply) => {
+    const body = z.object({
+      queue: z.string().min(1),
+    }).safeParse(request.body || {});
+    if (!body.success) return reply.status(400).send({ error: 'queue name required' });
+
+    try {
+      const queue = getQueue(body.data.queue);
+      const failed = await queue.getFailed(0, 5000);
+      let removed = 0;
+      for (const job of failed) {
+        try { await job.remove(); removed++; } catch { /* already removed */ }
+      }
+      return reply.send({ message: `Cleared ${removed} failed jobs from ${body.data.queue}`, removed, queue: body.data.queue });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/clear-all - clear all jobs (waiting + failed) from a queue
+  app.post('/pipeline/clear-all', async (request, reply) => {
+    const body = z.object({
+      queue: z.string().min(1),
+    }).safeParse(request.body || {});
+    if (!body.success) return reply.status(400).send({ error: 'queue name required' });
+
+    try {
+      const queue = getQueue(body.data.queue);
+      await queue.obliterate({ force: true });
+      return reply.send({ message: `Cleared all jobs from ${body.data.queue}`, queue: body.data.queue });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/run-queue - force run a specific queue's scheduler now
+  app.post('/pipeline/run-queue', async (request, reply) => {
+    const body = z.object({
+      queue: z.string().min(1),
+    }).safeParse(request.body || {});
+    if (!body.success) return reply.status(400).send({ error: 'queue name required' });
+
+    const queueName = body.data.queue;
+
+    // Enqueue a trigger job that the scheduler would normally create
+    try {
+      const queue = getQueue(queueName === 'ingestion' ? 'ingestion' : queueName);
+
+      if (queueName === 'ingestion') {
+        // Trigger RSS poll for all active RSS sources
+        const sources = await prisma.source.findMany({
+          where: { isActive: true, platform: 'RSS' },
+          take: 100,
+        });
+        let queued = 0;
+        for (const source of sources) {
+          if (!source.url) continue;
+          await queue.add('rss_poll', {
+            type: 'rss_poll',
+            sourceId: source.id,
+            feedUrl: source.url,
+          }, {
+            jobId: `force-rss-${source.id}-${Date.now()}`,
+            attempts: 2,
+            removeOnComplete: true,
+            removeOnFail: { age: 3600 },
+          });
+          queued++;
+        }
+        return reply.send({ message: `Force-triggered ${queued} RSS ingestion jobs`, queued });
+      }
+
+      if (queueName === 'scoring') {
+        const stories = await prisma.story.findMany({
+          where: { status: { notIn: ['ARCHIVED', 'STALE'] } },
+          select: { id: true },
+          take: 500,
+        });
+        for (const story of stories) {
+          await queue.add('score', { storyId: story.id }, {
+            jobId: `force-score-${story.id}-${Date.now()}`,
+            removeOnComplete: true,
+          });
+        }
+        return reply.send({ message: `Force-triggered scoring for ${stories.length} stories`, queued: stories.length });
+      }
+
+      return reply.send({ message: `Queue ${queueName} does not support force-run yet` });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/poll-source/:id - force poll a single source now
+  app.post('/pipeline/poll-source/:id', async (request, reply) => {
+    const { id: sourceId } = request.params as { id: string };
+
+    const source = await prisma.source.findUnique({ where: { id: sourceId } });
+    if (!source) return reply.status(404).send({ error: 'Source not found' });
+
+    try {
+      const queue = getQueue('ingestion');
+      const platform = source.platform as string;
+
+      let jobName = 'rss_poll';
+      let jobData: Record<string, any> = { type: 'rss_poll', sourceId: source.id, feedUrl: source.url };
+
+      if (platform === 'NEWSAPI') {
+        jobName = 'newsapi_poll';
+        const meta = source.metadata as Record<string, any> | null;
+        jobData = { type: 'newsapi_poll', sourceId: source.id, query: meta?.query || source.name };
+      } else if (platform === 'TWITTER') {
+        jobName = 'twitter_poll';
+        const meta = source.metadata as Record<string, any> | null;
+        jobData = { type: 'twitter_poll', sourceId: source.id, query: meta?.query || source.url || '' };
+      }
+
+      await queue.add(jobName, jobData, {
+        jobId: `force-poll-${sourceId}-${Date.now()}`,
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: { age: 3600 },
+      });
+
+      return reply.send({ message: `Poll triggered for ${source.name}`, sourceId, jobName });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /api/v1/pipeline/seed-sources - seed default sources if none exist
   app.post('/pipeline/seed-sources', async (_request, reply) => {
     const count = await prisma.source.count();

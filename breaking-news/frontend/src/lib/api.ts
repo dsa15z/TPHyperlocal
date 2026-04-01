@@ -616,6 +616,34 @@ export async function triggerPipelineIngestion(
   });
 }
 
+export async function clearFailedJobs(queue: string): Promise<{ removed: number }> {
+  return apiFetch("/api/v1/pipeline/clear-failed", {
+    method: "POST",
+    body: JSON.stringify({ queue }),
+  });
+}
+
+export async function clearAllJobs(queue: string): Promise<{ message: string }> {
+  return apiFetch("/api/v1/pipeline/clear-all", {
+    method: "POST",
+    body: JSON.stringify({ queue }),
+  });
+}
+
+export async function forceRunQueue(queue: string): Promise<{ message: string; queued?: number }> {
+  return apiFetch("/api/v1/pipeline/run-queue", {
+    method: "POST",
+    body: JSON.stringify({ queue }),
+  });
+}
+
+export async function pollSourceNow(sourceId: string): Promise<{ message: string }> {
+  return apiFetch(`/api/v1/pipeline/poll-source/${sourceId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
