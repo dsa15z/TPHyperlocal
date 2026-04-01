@@ -64,17 +64,19 @@ interface Market {
   isActive: boolean;
 }
 
-// Must match Prisma Platform enum
+// Source types for the create form and filter dropdown
+// Maps to Prisma Platform enum values but with user-friendly labels
 const PLATFORMS = [
   { value: "RSS", label: "RSS Feed", icon: <Rss className="w-4 h-4" />, description: "Add an RSS/Atom feed URL to poll for articles" },
-  { value: "NEWSAPI", label: "NewsAPI", icon: <Newspaper className="w-4 h-4" />, description: "NewsAPI.org aggregated news articles" },
+  { value: "NEWSAPI", label: "API (News)", icon: <Newspaper className="w-4 h-4" />, description: "News API sources (Event Registry, NewsAPI.org, HyperLocal Intel, Newscatcher)" },
   { value: "TWITTER", label: "Twitter/X", icon: <Globe className="w-4 h-4" />, description: "Twitter API v2 search or list monitoring" },
-  { value: "FACEBOOK", label: "Facebook Pages", icon: <Globe className="w-4 h-4" />, description: "Facebook Graph API page monitoring" },
-  { value: "GDELT", label: "GDELT Project", icon: <Globe className="w-4 h-4" />, description: "Free global event/news validation layer" },
-  { value: "LLM_OPENAI", label: "LLM: OpenAI", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via OpenAI" },
-  { value: "LLM_CLAUDE", label: "LLM: Claude", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Claude" },
-  { value: "LLM_GROK", label: "LLM: Grok", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Grok" },
-  { value: "LLM_GEMINI", label: "LLM: Gemini", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Gemini" },
+  { value: "FACEBOOK", label: "Facebook", icon: <Globe className="w-4 h-4" />, description: "Facebook Graph API page monitoring" },
+  { value: "GDELT", label: "GDELT", icon: <Globe className="w-4 h-4" />, description: "Free global event/news validation layer" },
+  { value: "NEWSCATCHER", label: "Newscatcher", icon: <Newspaper className="w-4 h-4" />, description: "Newscatcher API news search" },
+  { value: "LLM_OPENAI", label: "AI: OpenAI", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via OpenAI" },
+  { value: "LLM_CLAUDE", label: "AI: Claude", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Claude" },
+  { value: "LLM_GROK", label: "AI: Grok", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Grok (real-time X data)" },
+  { value: "LLM_GEMINI", label: "AI: Gemini", icon: <Bot className="w-4 h-4" />, description: "AI-generated news analysis via Gemini" },
   { value: "MANUAL", label: "Manual", icon: <Radio className="w-4 h-4" />, description: "Manually submitted stories" },
 ];
 
@@ -91,6 +93,8 @@ const SOURCE_TYPES = [
 const PLATFORM_COLORS: Record<string, string> = {
   RSS: "text-orange-400 bg-orange-500/10",
   NEWSAPI: "text-blue-400 bg-blue-500/10",
+  NEWSCATCHER: "text-blue-400 bg-blue-500/10",
+  PERIGON: "text-blue-400 bg-blue-500/10",
   TWITTER: "text-sky-400 bg-sky-500/10",
   FACEBOOK: "text-indigo-400 bg-indigo-500/10",
   GDELT: "text-green-400 bg-green-500/10",
