@@ -474,7 +474,7 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
   const apiKey = process.env['NEWSAPI_KEY'];
 
   if (!apiKey) {
-    logger.warn('NEWSAPI_KEY not set, skipping NewsAPI poll');
+    await trackSourceFailure(sourceId, 'NEWSAPI_KEY not configured');
     return;
   }
 
@@ -578,7 +578,8 @@ async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
   const bearerToken = job.data.bearerToken || process.env.TWITTER_BEARER_TOKEN;
 
   if (!bearerToken) {
-    throw new Error('TWITTER_BEARER_TOKEN not configured');
+    await trackSourceFailure(sourceId, 'TWITTER_BEARER_TOKEN not configured');
+    return;
   }
 
   logger.info({ sourceId, query }, 'Polling Twitter/X');

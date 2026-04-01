@@ -323,17 +323,11 @@ async function startBackendScheduler() {
   // ── Enqueue RSS/API source polls ─────────────────────────────────────
   async function enqueueSourcePolls() {
     try {
-      // Only poll platforms that have their API keys configured
-      const activePlatforms: string[] = ['RSS']; // RSS always works (no key needed)
-      if (process.env['NEWSAPI_KEY']) activePlatforms.push('NEWSAPI');
-      if (process.env['TWITTER_BEARER_TOKEN']) activePlatforms.push('TWITTER');
-      if (process.env['FACEBOOK_ACCESS_TOKEN']) activePlatforms.push('FACEBOOK');
-
       const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
       const sources = await prisma.source.findMany({
         where: {
           isActive: true,
-          platform: { in: activePlatforms as any[] },
+          platform: { in: ['RSS', 'NEWSAPI', 'TWITTER', 'FACEBOOK'] as any[] },
           OR: [
             { lastPolledAt: null },
             { lastPolledAt: { lt: fiveMinAgo } },

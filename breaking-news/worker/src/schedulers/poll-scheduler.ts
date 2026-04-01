@@ -138,8 +138,6 @@ async function scheduleRSSPolls(): Promise<void> {
  * Schedule NewsAPI polling jobs for all active NewsAPI sources
  */
 async function scheduleNewsAPIPolls(): Promise<void> {
-  if (!process.env['NEWSAPI_KEY']) return; // Skip if not configured
-
   const { ingestionQueue } = getQueues();
 
   try {
@@ -180,8 +178,6 @@ async function scheduleNewsAPIPolls(): Promise<void> {
  * Schedule Facebook Page polling jobs for all active Facebook sources
  */
 async function scheduleFacebookPagePolls(): Promise<void> {
-  if (!process.env['FACEBOOK_ACCESS_TOKEN']) return;
-
   const { ingestionQueue } = getQueues();
 
   try {
