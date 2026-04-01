@@ -338,8 +338,12 @@ async function startBackendScheduler() {
         include: { market: true },
       });
 
-      if (sources.length === 0) return;
+      if (sources.length === 0) {
+        console.log('[scheduler] No overdue sources to poll');
+        return;
+      }
 
+      console.log(`[scheduler] Found ${sources.length} overdue sources, enqueuing...`);
       const queue = new Queue('ingestion', { connection });
       let queued = 0;
       for (const source of sources) {
@@ -367,15 +371,18 @@ async function startBackendScheduler() {
 
         try {
           await queue.add(jobName, jobData, {
-            jobId: `auto-${platform.toLowerCase()}-${source.id}`,
+            jobId: `auto-${platform.toLowerCase()}-${source.id}-${Date.now()}`,
             attempts: 2,
             backoff: { type: 'exponential', delay: 5000 },
-            removeOnComplete: { age: 1800 },
+            removeOnComplete: true,
             removeOnFail: { age: 3600 },
           });
           queued++;
-        } catch {
-          // Job already exists
+        } catch (e: any) {
+          // Log but don't crash
+          if (!e.message?.includes('exists')) {
+            console.error(`[scheduler] Failed to enqueue ${jobName} for ${source.id}: ${e.message}`);
+          }
         }
       }
       await queue.close();
@@ -420,14 +427,18 @@ async function startBackendScheduler() {
             marketKeywords: marketKeywords || [],
             apiKey,
           }, {
-            jobId: `auto-llm-${source.id}`,
+            jobId: `auto-llm-${source.id}-${Date.now()}`,
             attempts: 2,
             backoff: { type: 'exponential', delay: 10000 },
-            removeOnComplete: { age: 1800 },
+            removeOnComplete: true,
             removeOnFail: { age: 3600 },
           });
           queued++;
-        } catch { /* dedup */ }
+        } catch (e: any) {
+          if (!e.message?.includes('exists')) {
+            console.error(`[scheduler] Failed to enqueue LLM poll for ${source.id}: ${e.message}`);
+          }
+        }
       }
       await queue.close();
       if (queued > 0) console.log(`[scheduler] Enqueued ${queued} LLM poll jobs`);
@@ -449,9 +460,9 @@ async function startBackendScheduler() {
       for (const story of stories) {
         try {
           await queue.add('score', { storyId: story.id }, {
-            jobId: `decay-${story.id}`,
+            jobId: `decay-${story.id}-${Date.now()}`,
             attempts: 2,
-            removeOnComplete: { age: 1800 },
+            removeOnComplete: true,
             removeOnFail: { age: 3600 },
           });
         } catch { /* dedup */ }
@@ -488,7 +499,9 @@ async function main() {
     app.log.info(`Swagger docs available at http://${HOST}:${PORT}/docs`);
 
     // Start backend-side auto-poll after server is ready
-    void startBackendScheduler();
+    startBackendScheduler().catch((err) => {
+      console.error('[scheduler] FATAL: startBackendScheduler crashed:', err);
+    });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
