@@ -169,44 +169,45 @@ export async function storiesRoutes(
       where.firstSeenAt = { gte: cutoff };
     }
 
-    // Build facet where clauses — each facet excludes its own filter
-    // so counts show what's available if you change that filter
-    const baseFacetWhere: Prisma.StoryWhereInput = { mergedIntoId: null };
-    if (maxAge !== undefined) {
-      baseFacetWhere.firstSeenAt = { gte: new Date(Date.now() - maxAge * 60 * 60 * 1000) };
-    }
-    if (minScore !== undefined) {
-      baseFacetWhere.compositeScore = { gte: minScore };
-    }
-    if (sourceIds) {
-      const ids = sourceIds.split(',').map((s) => s.trim()).filter(Boolean);
-      if (ids.length > 0) {
-        baseFacetWhere.storySources = { some: { sourcePost: { sourceId: { in: ids } } } };
+    // ── Cross-cutting facet queries ───────────────────────────────────────
+    // Each facet includes ALL other filters except its own, so selecting
+    // BUSINESS category updates source/status counts, and vice versa.
+    // Filters stack: market + category + status + source + time + score.
+
+    // Helper: build a fresh base with shared non-facet filters
+    function makeFacetBase(): Prisma.StoryWhereInput {
+      const w: Prisma.StoryWhereInput = { mergedIntoId: null };
+      const conditions: Prisma.StoryWhereInput[] = [];
+
+      if (maxAge !== undefined) {
+        w.firstSeenAt = { gte: new Date(Date.now() - maxAge * 60 * 60 * 1000) };
       }
-    }
-    // Apply market filter to ALL facets so dropdowns reflect the market context
-    if (marketOrConditions) {
-      if (!baseFacetWhere.AND) baseFacetWhere.AND = [];
-      (baseFacetWhere.AND as Prisma.StoryWhereInput[]).push({ OR: marketOrConditions });
+      if (minScore !== undefined) {
+        w.compositeScore = { gte: minScore };
+      }
+      if (marketOrConditions) {
+        conditions.push({ OR: marketOrConditions });
+      }
+      if (conditions.length > 0) w.AND = conditions;
+      return w;
     }
 
-    // Category facet where: includes status + source filters, excludes category
-    const catFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
-    if (status) {
+    // Helper: apply status filter
+    function applyStatusFilter(w: Prisma.StoryWhereInput) {
+      if (!status) return;
       const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
-      catFacetWhere.status = statuses.length === 1
-        ? (statuses[0] as StoryStatus)
-        : { in: statuses as StoryStatus[] };
+      w.status = statuses.length === 1 ? (statuses[0] as StoryStatus) : { in: statuses as StoryStatus[] };
     }
 
-    // Helper: apply category filter to a where clause (handles Unknown → null)
+    // Helper: apply category filter (handles Unknown → null)
     function applyCategoryFilter(w: Prisma.StoryWhereInput) {
       if (!category) return;
       const cats = category.split(',').map((s) => s.trim()).filter(Boolean);
       const hasUnknown = cats.includes('Unknown');
       const named = cats.filter((c) => c !== 'Unknown');
       if (hasUnknown && named.length > 0) {
-        w.OR = [...(w.OR || []), { category: { in: named } }, { category: null }];
+        if (!w.AND) w.AND = [];
+        (w.AND as Prisma.StoryWhereInput[]).push({ OR: [{ category: { in: named } }, { category: null }] });
       } else if (hasUnknown) {
         w.category = null;
       } else if (named.length === 1) {
@@ -216,18 +217,28 @@ export async function storiesRoutes(
       }
     }
 
-    // Status facet where: includes category + source filters, excludes status
-    const statusFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
-    applyCategoryFilter(statusFacetWhere);
-
-    // Source facet where: includes status + category filters, excludes source
-    const sourceFacetWhere: Prisma.StoryWhereInput = { ...baseFacetWhere };
-    if (status) {
-      const statuses = status.split(',').map((s) => s.trim()).filter(Boolean);
-      sourceFacetWhere.status = statuses.length === 1
-        ? (statuses[0] as StoryStatus)
-        : { in: statuses as StoryStatus[] };
+    // Helper: apply source filter
+    function applySourceFilter(w: Prisma.StoryWhereInput) {
+      if (!sourceIds) return;
+      const ids = sourceIds.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        w.storySources = { some: { sourcePost: { sourceId: { in: ids } } } };
+      }
     }
+
+    // Category facet: includes status + source + market, excludes category
+    const catFacetWhere = makeFacetBase();
+    applyStatusFilter(catFacetWhere);
+    applySourceFilter(catFacetWhere);
+
+    // Status facet: includes category + source + market, excludes status
+    const statusFacetWhere = makeFacetBase();
+    applyCategoryFilter(statusFacetWhere);
+    applySourceFilter(statusFacetWhere);
+
+    // Source facet: includes status + category + market, excludes source
+    const sourceFacetWhere = makeFacetBase();
+    applyStatusFilter(sourceFacetWhere);
     applyCategoryFilter(sourceFacetWhere);
 
     const [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
