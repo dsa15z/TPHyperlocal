@@ -387,6 +387,67 @@ export default function SourcesPage() {
     return true;
   });
 
+  // Cross-cutting facet counts: each dropdown shows counts based on ALL OTHER filters
+  function filterExcluding(exclude: string) {
+    return sources.filter((s: Source) => {
+      if (exclude !== "platform") {
+        const eff = getEffectiveSelection(selectedPlatforms);
+        if (eff && eff.length > 0 && !eff.includes(s.platform)) return false;
+        if (eff && eff.length === 0) return false;
+      }
+      if (exclude !== "type") {
+        const eff = getEffectiveSelection(selectedTypes);
+        if (eff && eff.length > 0 && !eff.includes(s.sourceType)) return false;
+        if (eff && eff.length === 0) return false;
+      }
+      if (exclude !== "market") {
+        const eff = getEffectiveSelection(selectedMarkets);
+        if (eff && eff.length > 0) {
+          if (!eff.includes(s.marketId || "__global__")) return false;
+        }
+        if (eff && eff.length === 0) return false;
+      }
+      if (exclude !== "status") {
+        const eff = getEffectiveSelection(selectedStatus);
+        if (eff && eff.length > 0) {
+          if (!eff.includes(getSourceHealth(s).status)) return false;
+        }
+        if (eff && eff.length === 0) return false;
+      }
+      return true;
+    });
+  }
+
+  // Compute options with counts from cross-filtered data
+  const platformFacet = filterExcluding("platform");
+  const platformOptionsWithCounts = PLATFORMS.map((p) => {
+    const count = platformFacet.filter((s: Source) => s.platform === p.value).length;
+    return { value: p.value, label: p.label, count };
+  }).filter((o) => o.count > 0);
+
+  const typeFacet = filterExcluding("type");
+  const typeOptionsWithCounts = SOURCE_TYPES.map((t) => {
+    const count = typeFacet.filter((s: Source) => s.sourceType === t.value).length;
+    return { value: t.value, label: t.label, count };
+  }).filter((o) => o.count > 0);
+
+  const marketFacet = filterExcluding("market");
+  const marketOptionsWithCounts = [
+    { value: "__global__", label: "Global (no market)", count: marketFacet.filter((s: Source) => !s.marketId).length },
+    ...markets.filter((m: Market) => m.isActive).map((m: Market) => ({
+      value: m.id,
+      label: m.name + (m.state ? `, ${m.state}` : ""),
+      count: marketFacet.filter((s: Source) => s.marketId === m.id).length,
+    })),
+  ].filter((o) => o.count > 0);
+
+  const statusFacet = filterExcluding("status");
+  const statusOptionsWithCounts = STATUS_OPTIONS.map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+    count: statusFacet.filter((s: Source) => getSourceHealth(s).status === opt.value).length,
+  })).filter((o) => o.count > 0);
+
   const platformLabel = (p: string) =>
     PLATFORMS.find((pl) => pl.value === p)?.label || p;
 
@@ -724,25 +785,26 @@ export default function SourcesPage() {
             />
           </div>
           <MultiSelectDropdown
-            options={platformOptions}
+            options={platformOptionsWithCounts}
             selected={selectedPlatforms}
             onChange={setSelectedPlatforms}
             placeholder="All Platforms"
           />
           <MultiSelectDropdown
-            options={typeOptions}
+            options={typeOptionsWithCounts}
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="All Types"
           />
           <MultiSelectDropdown
-            options={marketOptions}
+            options={marketOptionsWithCounts}
             selected={selectedMarkets}
             onChange={setSelectedMarkets}
             placeholder="All Markets"
+            searchable
           />
           <MultiSelectDropdown
-            options={STATUS_OPTIONS}
+            options={statusOptionsWithCounts}
             selected={selectedStatus}
             onChange={setSelectedStatus}
             placeholder="All Status"
