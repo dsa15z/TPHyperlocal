@@ -244,6 +244,39 @@ export async function storiesRoutes(
     applyStatusFilter(sourceFacetWhere);
     applyCategoryFilter(sourceFacetWhere);
 
+    // Build market location SQL filter for source facet raw query
+    let marketSql = Prisma.empty;
+    if (marketOrConditions && marketIds) {
+      const rawIds = marketIds.split(',').map((s) => s.trim()).filter(Boolean);
+      const includeNational = rawIds.includes('__national__');
+      const mktIds = rawIds.filter((id) => id !== '__national__');
+      const sqlParts: string[] = [];
+      if (includeNational) {
+        sqlParts.push(`LOWER(st."locationName") = 'national'`);
+        sqlParts.push(`st."locationName" IS NULL`);
+      }
+      if (mktIds.length > 0) {
+        const mkts = await prisma.market.findMany({
+          where: { id: { in: mktIds } },
+          select: { name: true, state: true, keywords: true, neighborhoods: true },
+        });
+        for (const m of mkts) {
+          sqlParts.push(`LOWER(st."locationName") LIKE '%' || LOWER('${m.name.replace(/'/g, "''")}') || '%'`);
+          if (m.state) sqlParts.push(`LOWER(st."locationName") = LOWER('${m.state.replace(/'/g, "''")}')`);
+          const terms: string[] = [];
+          for (const kw of ((m.keywords || []) as string[])) { const n = kw.trim(); if (n.split(/\s+/).length >= 2 || n.length >= 6) terms.push(n); }
+          for (const nb of ((m.neighborhoods || []) as string[])) { const n = nb.trim(); if (n.split(/\s+/).length >= 2 || n.length >= 8) terms.push(n); }
+          for (const t of terms) {
+            sqlParts.push(`LOWER(st."locationName") = LOWER('${t.replace(/'/g, "''")}')`);
+            sqlParts.push(`LOWER(st."neighborhood") = LOWER('${t.replace(/'/g, "''")}')`);
+          }
+        }
+      }
+      if (sqlParts.length > 0) {
+        marketSql = Prisma.sql`AND (${Prisma.raw(sqlParts.join(' OR '))})`;
+      }
+    }
+
     const [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
       prisma.story.findMany({
         where,
@@ -327,51 +360,7 @@ export async function storiesRoutes(
         _count: { _all: true },
         orderBy: { _count: { status: 'desc' } },
       }),
-      // For source facets, we need to go through SourcePost → Source
-      // Build market location SQL filter
-      let marketSql = Prisma.empty;
-      if (marketOrConditions && marketIds) {
-        const rawIds = marketIds.split(',').map((s) => s.trim()).filter(Boolean);
-        const includeNational = rawIds.includes('__national__');
-        const ids = rawIds.filter((id) => id !== '__national__');
-
-        const sqlParts: string[] = [];
-        if (includeNational) {
-          sqlParts.push(`LOWER(st."locationName") = 'national'`);
-          sqlParts.push(`st."locationName" IS NULL`);
-        }
-        if (ids.length > 0) {
-          // Re-fetch markets for SQL building
-          const mkts = await prisma.market.findMany({
-            where: { id: { in: ids } },
-            select: { name: true, state: true, keywords: true, neighborhoods: true },
-          });
-          for (const m of mkts) {
-            // Contains match on market name
-            sqlParts.push(`LOWER(st."locationName") LIKE '%' || LOWER('${m.name.replace(/'/g, "''")}') || '%'`);
-            // Exact match on state
-            if (m.state) sqlParts.push(`LOWER(st."locationName") = LOWER('${m.state.replace(/'/g, "''")}')`);
-            // Multi-word keywords and long neighborhoods
-            const terms: string[] = [];
-            for (const kw of ((m.keywords || []) as string[])) {
-              const n = kw.trim();
-              if (n.split(/\s+/).length >= 2 || n.length >= 6) terms.push(n);
-            }
-            for (const nb of ((m.neighborhoods || []) as string[])) {
-              const n = nb.trim();
-              if (n.split(/\s+/).length >= 2 || n.length >= 8) terms.push(n);
-            }
-            for (const t of terms) {
-              sqlParts.push(`LOWER(st."locationName") = LOWER('${t.replace(/'/g, "''")}')`);
-              sqlParts.push(`LOWER(st."neighborhood") = LOWER('${t.replace(/'/g, "''")}')`);
-            }
-          }
-        }
-        if (sqlParts.length > 0) {
-          marketSql = Prisma.sql`AND (${Prisma.raw(sqlParts.join(' OR '))})`;
-        }
-      }
-
+      // Source facet raw query (uses pre-built marketSql)
       prisma.$queryRaw<Array<{ id: string; name: string; platform: string; count: bigint }>>`
         SELECT s.id, s.name, s.platform, COUNT(DISTINCT st.id)::bigint as count
         FROM "Source" s
