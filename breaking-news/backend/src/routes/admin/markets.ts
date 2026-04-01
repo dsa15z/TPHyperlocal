@@ -177,7 +177,8 @@ export async function marketRoutes(
         updatedAt: m.updatedAt,
         sourceCount: m._count.sources,
         storyCount: m._count.stories,
-        sources: m.sources.map((s) => {
+        // Deduplicate sources by name (Event Registry scheduler created dupes)
+        sources: [...new Map(m.sources.map(s => [s.name, s])).values()].map((s) => {
           const meta = s.metadata as Record<string, any> | null;
           return {
             id: s.id,

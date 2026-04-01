@@ -1040,22 +1040,18 @@ async function scheduleEventRegistryPolls(): Promise<void> {
       const keywords = (market.keywords || []) as string[];
       const query = keywords.slice(0, 5).join(' ') || market.name;
 
-      // Find an Event Registry source for this market
+      // Find an Event Registry source for this market (exact name match to prevent duplicates)
+      const exactName = `Event Registry - ${market.name}`;
       let source = await prisma.source.findFirst({
-        where: {
-          name: { contains: 'Event Registry', mode: 'insensitive' },
-          marketId: market.id,
-          isActive: true,
-        },
+        where: { name: exactName },
       });
 
       if (!source) {
-        // Auto-create
         source = await prisma.source.create({
           data: {
             platform: 'NEWSAPI' as any,
             sourceType: 'API_PROVIDER' as any,
-            name: `Event Registry - ${market.name}`,
+            name: exactName,
             url: 'https://eventregistry.org',
             marketId: market.id,
             trustScore: 0.85,
