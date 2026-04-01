@@ -40,7 +40,7 @@ const updateMarketSchema = z.object({
 });
 
 const paginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
 
@@ -139,6 +139,19 @@ export async function marketRoutes(
         include: {
           _count: { select: { sources: true, stories: true } },
           account: { select: { name: true } },
+          sources: {
+            select: {
+              id: true,
+              name: true,
+              platform: true,
+              sourceType: true,
+              url: true,
+              isActive: true,
+              trustScore: true,
+              metadata: true,
+            },
+            orderBy: { name: 'asc' },
+          },
         },
         orderBy: { createdAt: 'asc' },
         take: limit,
@@ -164,6 +177,22 @@ export async function marketRoutes(
         updatedAt: m.updatedAt,
         sourceCount: m._count.sources,
         storyCount: m._count.stories,
+        sources: m.sources.map((s) => {
+          const meta = s.metadata as Record<string, any> | null;
+          return {
+            id: s.id,
+            name: s.name,
+            platform: s.platform,
+            sourceType: s.sourceType,
+            url: s.url,
+            isActive: s.isActive,
+            trustScore: s.trustScore,
+            type: meta?.type || (s.sourceType === 'NEWS_ORG' ? (meta?.network ? 'tv' : meta?.format ? 'radio' : 'news') : 'other'),
+            callSign: meta?.callSign,
+            network: meta?.network,
+            format: meta?.format,
+          };
+        }),
       })),
       total,
       limit,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -12,6 +12,11 @@ import {
   Check,
   Sparkles,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  Radio,
+  Tv,
+  Globe,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -36,6 +41,20 @@ const MARKET_COLUMNS = [
   { id: "actions", label: "Actions", width: 120, defaultWidth: 120, minWidth: 80 },
 ];
 
+interface MarketSource {
+  id: string;
+  name: string;
+  platform: string;
+  sourceType: string;
+  url: string;
+  isActive: boolean;
+  trustScore: number;
+  type: string; // tv, radio, hyperlocal-intel, news, other
+  callSign?: string;
+  network?: string;
+  format?: string;
+}
+
 interface Market {
   id: string;
   name: string;
@@ -49,12 +68,14 @@ interface Market {
   neighborhoods: string[];
   isActive: boolean;
   sourceCount?: number;
+  sources?: MarketSource[];
 }
 
 export default function MarketsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -70,11 +91,16 @@ export default function MarketsPage() {
   const { columns: marketCols, updateColumns: setMarketCols, visibleColumns } = useTableColumns("markets", MARKET_COLUMNS);
   const isCol = (id: string) => visibleColumns.some(c => c.id === id);
 
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
   const { data: marketsData, isLoading } = useQuery({
-    queryKey: ["admin-markets"],
-    queryFn: fetchMarkets,
+    queryKey: ["admin-markets", page],
+    queryFn: () => apiFetch<any>(`/api/v1/admin/markets?limit=${pageSize}&offset=${(page - 1) * pageSize}`, { headers: getAuthHeaders() }),
   });
   const markets: Market[] = (marketsData as any)?.data || marketsData || [];
+  const totalMarkets = (marketsData as any)?.total || markets.length;
+  const totalPages = Math.max(1, Math.ceil(totalMarkets / pageSize));
 
   // Auto-seed default markets if none exist
   const seedMutation = useMutation({
@@ -482,55 +508,131 @@ export default function MarketsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {markets.map((market: Market) => (
-                    <tr
-                      key={market.id}
-                      className="border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors"
-                    >
-                      {isCol("name") && <td className="px-4 py-3 text-white font-medium">{market.name}</td>}
-                      {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
-                      {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
-                      {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
-                      {isCol("active") && <td className="px-4 py-3">{market.isActive ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-gray-600" />}</td>}
-                      {isCol("sources") && <td className="px-4 py-3 text-gray-400">{market.sourceCount ?? "-"}</td>}
-                      {isCol("actions") && <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => startEdit(market)}
-                            className="filter-btn flex items-center gap-1 text-xs"
-                            title="Edit market"
-                          >
-                            <Pencil className="w-3 h-3" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Delete market "${market.name}"? This cannot be undone.`
-                                )
-                              ) {
-                                deleteMutation.mutate(market.id);
-                              }
-                            }}
-                            className="filter-btn text-gray-500 hover:text-red-400"
-                            title="Delete market"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>}
-                    </tr>
-                  ))}
+                  {markets.map((market: Market) => {
+                    const isExpanded = expandedId === market.id;
+                    const tvStations = (market.sources || []).filter((s) => s.type === "tv");
+                    const radioStations = (market.sources || []).filter((s) => s.type === "radio");
+                    const hlSources = (market.sources || []).filter((s) => s.type === "hyperlocal-intel");
+                    const otherSources = (market.sources || []).filter((s) => !["tv", "radio", "hyperlocal-intel"].includes(s.type));
+                    const totalSrc = market.sourceCount ?? (market.sources?.length || 0);
+                    const colCount = visibleColumns.length;
+
+                    return (
+                      <React.Fragment key={market.id}>
+                        <tr
+                          className={clsx("border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer", isExpanded && "bg-surface-300/10")}
+                          onClick={() => setExpandedId(isExpanded ? null : market.id)}
+                        >
+                          {isCol("name") && <td className="px-4 py-3 text-white font-medium">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                              {market.name}
+                            </div>
+                          </td>}
+                          {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
+                          {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
+                          {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
+                          {isCol("active") && <td className="px-4 py-3">{market.isActive ? <Check className="w-4 h-4 text-green-400" /> : <X className="w-4 h-4 text-gray-600" />}</td>}
+                          {isCol("sources") && <td className="px-4 py-3">
+                            <span className="text-gray-400">{totalSrc}</span>
+                            {totalSrc > 0 && <span className="text-gray-600 text-xs ml-1">({tvStations.length} TV, {radioStations.length} Radio)</span>}
+                          </td>}
+                          {isCol("actions") && <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => startEdit(market)} className="filter-btn flex items-center gap-1 text-xs" title="Edit market">
+                                <Pencil className="w-3 h-3" /> Edit
+                              </button>
+                              <button onClick={() => { if (confirm(`Delete market "${market.name}"? This cannot be undone.`)) deleteMutation.mutate(market.id); }}
+                                className="filter-btn text-gray-500 hover:text-red-400" title="Delete market">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>}
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-surface-200/20">
+                            <td colSpan={colCount} className="px-6 py-4">
+                              <div className="space-y-3">
+                                {tvStations.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                      <Tv className="w-3 h-3" /> TV Stations ({tvStations.length})
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {tvStations.map((s) => (
+                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                                          <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
+                                          <span className="text-gray-500 truncate flex-1">{s.network ? `${s.network}` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
+                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {radioStations.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                      <Radio className="w-3 h-3" /> Radio Stations ({radioStations.length})
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                      {radioStations.map((s) => (
+                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                                          <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
+                                          <span className="text-gray-500 truncate flex-1">{s.format ? `(${s.format})` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
+                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {hlSources.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                      <Globe className="w-3 h-3" /> HyperLocal Intel ({hlSources.length})
+                                    </h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                      {hlSources.map((s) => (
+                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                                          <span className="text-white">{s.name}</span>
+                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {otherSources.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Other Sources ({otherSources.length})</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {otherSources.map((s) => (
+                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                                          <span className="text-white">{s.name}</span>
+                                          <span className="text-gray-600">{s.platform}</span>
+                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {totalSrc === 0 && (
+                                  <p className="text-gray-600 text-xs">No sources linked to this market yet.</p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <TablePagination
               shown={markets.length}
-              total={markets.length}
-              page={1}
-              totalPages={1}
-              onPageChange={() => {}}
+              total={totalMarkets}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
               extra={`${markets.filter((m: Market) => m.isActive).length} active`}
             />
           </div>
