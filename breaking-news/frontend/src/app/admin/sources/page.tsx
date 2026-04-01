@@ -29,6 +29,7 @@ import {
   Play,
 } from "lucide-react";
 import clsx from "clsx";
+import { Modal } from "@/components/Modal";
 import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, pollSourceNow, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
@@ -511,23 +512,13 @@ export default function SourcesPage() {
           </button>
         </div>
 
-        {/* Add Source form */}
-        {showForm && (
-          <div className="glass-card-strong p-6 space-y-6 animate-in">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                {editingId ? "Edit Data Feed" : "Add New Data Feed"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  resetForm();
-                }}
-                className="text-gray-500 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        {/* Add/Edit Source modal */}
+        <Modal
+          isOpen={showForm}
+          onClose={() => { setShowForm(false); resetForm(); }}
+          title={editingId ? "Edit Data Feed" : "Add New Data Feed"}
+          width="max-w-4xl"
+        >
 
             {/* Step 1: Choose platform */}
             <div className="space-y-2">
@@ -775,7 +766,7 @@ export default function SourcesPage() {
               </div>
             )}
           </div>
-        )}
+        </Modal>
 
         {/* Search + Filters */}
         <div className="flex items-center gap-3 flex-wrap">

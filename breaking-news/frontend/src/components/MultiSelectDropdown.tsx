@@ -90,7 +90,7 @@ export function MultiSelectDropdown({
   };
 
   return (
-    <div ref={ref} className={clsx("relative", className)}>
+    <div ref={ref} className={clsx("relative", isOpen && "z-[60]", className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
@@ -250,7 +250,7 @@ export function SingleSelectDropdown({
   const current = options.find((o) => o.value === value);
 
   return (
-    <div ref={ref} className={clsx("relative", className)}>
+    <div ref={ref} className={clsx("relative", isOpen && "z-[60]", className)}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="filter-select flex items-center gap-2 min-w-[100px] text-left"

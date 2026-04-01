@@ -105,6 +105,7 @@ Static routes (e.g. `/markets/seed`, `/markets/autofill`) MUST be registered BEF
 - **When changing a shared component, update ALL pages that use it.** Do not branch code or make a one-off change for a single page. If a shared component (e.g. `TablePagination`, `MultiSelectDropdown`, `ColumnCustomizer`, `StatusBadge`, `FilterBar`) is modified, assume the change applies everywhere that component is used unless explicitly told otherwise.
 - All tables/lists must use the shared `TablePagination` footer, `ColumnCustomizer` for column visibility/reorder, and `useTableColumns` hook for localStorage persistence.
 - All filter dropdowns must use `MultiSelectDropdown` (with `searchable` for long lists) or `SingleSelectDropdown`. No raw `<select>` elements or button-group toggles for filters.
+- **All edit/create forms must use the `Modal` component** — no inline editing. Forms open in a centered overlay dialog with backdrop blur, escape-to-close, and click-outside-to-close. Use `<Modal isOpen={} onClose={} title="">` wrapper.
 - UI patterns established in one page must be replicated across all similar pages. Consistency is mandatory.
 
 ### State Management
