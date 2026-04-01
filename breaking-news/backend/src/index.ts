@@ -268,6 +268,9 @@ async function ensureTables() {
       `CREATE INDEX IF NOT EXISTS "AccountStory_accountId_accountStatus_idx" ON "AccountStory"("accountId", "accountStatus")`,
       `CREATE INDEX IF NOT EXISTS "AccountStory_baseStoryId_idx" ON "AccountStory"("baseStoryId")`,
       `CREATE INDEX IF NOT EXISTS "AccountStory_assignedTo_idx" ON "AccountStory"("assignedTo")`,
+      `CREATE TABLE IF NOT EXISTS "SourceMarket" (id TEXT PRIMARY KEY, "sourceId" TEXT NOT NULL, "marketId" TEXT NOT NULL, "createdAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("sourceId", "marketId"))`,
+      `CREATE INDEX IF NOT EXISTS "SourceMarket_sourceId_idx" ON "SourceMarket"("sourceId")`,
+      `CREATE INDEX IF NOT EXISTS "SourceMarket_marketId_idx" ON "SourceMarket"("marketId")`,
     ];
 
     let created = 0;

@@ -157,11 +157,29 @@ model Market {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  sources Source[]
-  stories Story[]
+  sources      Source[]
+  stories      Story[]
+  sourceMarkets SourceMarket[]
 
   @@unique([accountId, slug])
   @@index([accountId, isActive])
+}
+
+// ─── Source ↔ Market M:N Join Table ────────────────────────────────────────
+// A source can serve multiple markets. "National" is a market.
+// Only sources linked to markets with active accounts get polled.
+
+model SourceMarket {
+  id        String   @id @default(cuid())
+  sourceId  String
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, marketId])
+  @@index([sourceId])
+  @@index([marketId])
 }
 
 // ─── Multi-Tenant: Per-Account Credentials ──────────────────────────────────
@@ -218,8 +236,8 @@ model Source {
   platformId   String?
   trustScore   Float        @default(0.5)
   isActive     Boolean      @default(true)
-  isGlobal     Boolean      @default(false) // available to all accounts
-  marketId     String?
+  isGlobal     Boolean      @default(false) // DEPRECATED: use sourceMarkets with National market instead
+  marketId     String?      // DEPRECATED: primary market (kept for backward compat)
   market       Market?      @relation(fields: [marketId], references: [id], onDelete: SetNull)
   metadata     Json?
   lastPolledAt DateTime?
@@ -228,6 +246,7 @@ model Source {
 
   posts          SourcePost[]
   accountSources AccountSource[]
+  sourceMarkets  SourceMarket[]
 
   @@index([platform, isActive])
   @@index([sourceType])

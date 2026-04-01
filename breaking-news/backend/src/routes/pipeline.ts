@@ -136,7 +136,7 @@ export async function pipelineRoutes(
     if (!body.success) return reply.status(400).send({ error: 'queue name required' });
 
     try {
-      const queue = getQueue(body.data.queue);
+      const queue = getQueue(body.data.queue as any);
       const failed = await queue.getFailed(0, 5000);
       let removed = 0;
       for (const job of failed) {
@@ -156,7 +156,7 @@ export async function pipelineRoutes(
     if (!body.success) return reply.status(400).send({ error: 'queue name required' });
 
     try {
-      const queue = getQueue(body.data.queue);
+      const queue = getQueue(body.data.queue as any);
       await queue.obliterate({ force: true });
       return reply.send({ message: `Cleared all jobs from ${body.data.queue}`, queue: body.data.queue });
     } catch (err: any) {
@@ -175,7 +175,7 @@ export async function pipelineRoutes(
 
     // Enqueue a trigger job that the scheduler would normally create
     try {
-      const queue = getQueue(queueName === 'ingestion' ? 'ingestion' : queueName);
+      const queue = getQueue((queueName === 'ingestion' ? 'ingestion' : queueName) as any);
 
       if (queueName === 'ingestion') {
         // Trigger RSS poll for all active RSS sources
