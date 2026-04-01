@@ -71,6 +71,7 @@ model Account {
   users          AccountUser[]
   markets        Market[]
   accountSources AccountSource[]
+  accountStories AccountStory[]
   credentials    AccountCredential[]
   apiKeys        APIKey[]
   feeds          RSSFeed[]
@@ -361,6 +362,7 @@ model Story {
   translations       TranslatedContent[]
   assignments        Assignment[]
   breakingPackages   BreakingPackage[]
+  accountStories     AccountStory[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -374,6 +376,55 @@ model Story {
   @@index([horizon, compositeScore(sort: Desc)])
   @@index([statusChangedAt])
   @@index([parentStoryId])
+}
+
+// ─── Account Story (per-account derivative workspace) ──────────────────────
+// Created lazily on first user action. Links an account to a base story
+// with account-private overlay data. Base story updates flow downstream;
+// account edits/content are private.
+
+model AccountStory {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  baseStoryId     String
+  baseStory       Story    @relation(fields: [baseStoryId], references: [id], onDelete: Cascade)
+
+  // ── Account-private editorial overlay ──────────────────────────────────
+  editedTitle     String?              // account's custom title (null = use base)
+  editedSummary   String?  @db.Text    // account's custom summary
+  notes           String?  @db.Text    // editorial notes
+  editedBy        String?              // userId of last editor
+  editedAt        DateTime?
+
+  // ── Account editorial workflow (independent of base story status) ──────
+  accountStatus   String   @default("INBOX")  // INBOX, ASSIGNED, IN_PROGRESS, DRAFT_READY, PUBLISHED, KILLED
+  assignedTo      String?              // userId of assigned reporter
+  assignedAt      DateTime?
+  coveredAt       DateTime?            // when account published/aired this story
+  coverageFeedId  String?              // which show/feed covered it
+
+  // ── AI-generated content (private to account) ─────────────────────────
+  aiDrafts        Json?    // array of { model, content, format, createdAt }
+  aiScripts       Json?    // array of { type: "tv"|"radio"|"web", content, createdAt }
+  aiVideos        Json?    // array of { provider, url, thumbnailUrl, createdAt }
+
+  // ── Research & context (private to account) ───────────────────────────
+  research        Json?    // { backgroundContext, relatedLinks, factChecks, timeline }
+  tags            Json?    // account-specific tags/labels
+
+  // ── Sync tracking ─────────────────────────────────────────────────────
+  lastSyncedAt    DateTime @default(now())  // when base story data was last pulled
+  baseSnapshotAt  DateTime?                 // base story updatedAt at last sync
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([accountId, baseStoryId])
+  @@index([accountId, accountStatus])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@index([baseStoryId])
+  @@index([assignedTo])
 }
 
 // ─── Story-Source Links ─────────────────────────────────────────────────────

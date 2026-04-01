@@ -52,6 +52,7 @@ import { analyticsEmbedRoutes } from './routes/analytics-embed.js';
 import { dbHealthRoutes } from './routes/db-health.js';
 import { storyResearchRoutes } from './routes/story-research.js';
 import { billingRoutes } from './routes/billing.js';
+import { accountStoryRoutes } from './routes/account-stories.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -196,6 +197,7 @@ async function buildServer() {
   await app.register(dbHealthRoutes, { prefix: '/api/v1' });
   await app.register(storyResearchRoutes, { prefix: '/api/v1' });
   await app.register(billingRoutes, { prefix: '/api/v1' });
+  await app.register(accountStoryRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown
@@ -262,6 +264,10 @@ async function ensureTables() {
       `CREATE TABLE IF NOT EXISTS "HistoryEvent" (id TEXT PRIMARY KEY, month INTEGER NOT NULL, day INTEGER NOT NULL, year INTEGER, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT, significance INTEGER DEFAULT 5, source TEXT, "isLocal" BOOLEAN DEFAULT false, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
       `CREATE TABLE IF NOT EXISTS "StockAlert" (id TEXT PRIMARY KEY, ticker TEXT NOT NULL, "companyName" TEXT NOT NULL, "changePercent" DOUBLE PRECISION NOT NULL, price DOUBLE PRECISION NOT NULL, "previousClose" DOUBLE PRECISION NOT NULL, direction TEXT NOT NULL, magnitude TEXT NOT NULL, headline TEXT, "storyId" TEXT, "detectedAt" TIMESTAMPTZ DEFAULT NOW())`,
       `CREATE TABLE IF NOT EXISTS "StoryEditSession" (id TEXT PRIMARY KEY, "storyId" TEXT NOT NULL, "userId" TEXT NOT NULL, "isActive" BOOLEAN DEFAULT true, "lastHeartbeat" TIMESTAMPTZ DEFAULT NOW(), cursor JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE TABLE IF NOT EXISTS "AccountStory" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "baseStoryId" TEXT NOT NULL, "editedTitle" TEXT, "editedSummary" TEXT, notes TEXT, "editedBy" TEXT, "editedAt" TIMESTAMPTZ, "accountStatus" TEXT DEFAULT 'INBOX', "assignedTo" TEXT, "assignedAt" TIMESTAMPTZ, "coveredAt" TIMESTAMPTZ, "coverageFeedId" TEXT, "aiDrafts" JSONB, "aiScripts" JSONB, "aiVideos" JSONB, research JSONB, tags JSONB, "lastSyncedAt" TIMESTAMPTZ DEFAULT NOW(), "baseSnapshotAt" TIMESTAMPTZ, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("accountId", "baseStoryId"))`,
+      `CREATE INDEX IF NOT EXISTS "AccountStory_accountId_accountStatus_idx" ON "AccountStory"("accountId", "accountStatus")`,
+      `CREATE INDEX IF NOT EXISTS "AccountStory_baseStoryId_idx" ON "AccountStory"("baseStoryId")`,
+      `CREATE INDEX IF NOT EXISTS "AccountStory_assignedTo_idx" ON "AccountStory"("assignedTo")`,
     ];
 
     let created = 0;

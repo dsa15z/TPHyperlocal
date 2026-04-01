@@ -37,7 +37,11 @@ export async function storiesRoutes(
   _opts: FastifyPluginOptions,
 ) {
   // GET /api/v1/stories - list stories with filtering and pagination
+  // If authenticated, includes account derivative data (edits, status, assignments)
   app.get('/stories', async (request, reply) => {
+    // Optional auth — if present, we include account derivative overlay
+    const accountId = (request as any).accountUser?.accountId || null;
+
     const parseResult = ListStoriesQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -288,6 +292,26 @@ export async function storiesRoutes(
           _count: {
             select: { storySources: true },
           },
+          // Include account derivative if authenticated
+          ...(accountId ? {
+            accountStories: {
+              where: { accountId },
+              select: {
+                id: true,
+                editedTitle: true,
+                editedSummary: true,
+                accountStatus: true,
+                assignedTo: true,
+                notes: true,
+                coveredAt: true,
+                tags: true,
+                aiDrafts: true,
+                aiScripts: true,
+                aiVideos: true,
+              },
+              take: 1,
+            },
+          } : {}),
         },
       }),
       prisma.story.count({ where }),
@@ -389,8 +413,34 @@ export async function storiesRoutes(
       });
     }
 
+    // Merge account derivative overlay into story response
+    const mergedStories = filteredStories.map((s: any) => {
+      const deriv = s.accountStories?.[0] || null;
+      if (!deriv) return s;
+      return {
+        ...s,
+        // Account derivative overlay
+        accountStory: {
+          id: deriv.id,
+          editedTitle: deriv.editedTitle,
+          editedSummary: deriv.editedSummary,
+          accountStatus: deriv.accountStatus,
+          assignedTo: deriv.assignedTo,
+          notes: deriv.notes,
+          coveredAt: deriv.coveredAt,
+          tags: deriv.tags,
+          aiDraftCount: Array.isArray(deriv.aiDrafts) ? deriv.aiDrafts.length : 0,
+          aiScriptCount: Array.isArray(deriv.aiScripts) ? deriv.aiScripts.length : 0,
+          aiVideoCount: Array.isArray(deriv.aiVideos) ? deriv.aiVideos.length : 0,
+        },
+        // Override title/summary with account edits if present
+        editedTitle: deriv.editedTitle || s.editedTitle,
+        editedSummary: deriv.editedSummary || s.editedSummary,
+      };
+    });
+
     return reply.send({
-      data: filteredStories,
+      data: mergedStories,
       pagination: {
         total: trend && trend !== 'all' ? filteredStories.length : total,
         limit,

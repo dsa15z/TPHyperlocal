@@ -40,6 +40,8 @@ export interface Story {
   merged_from?: Array<{ id: string; title: string; compositeScore: number }>;
   parentStory?: { id: string; title: string; status: string; compositeScore: number; firstSeenAt: string } | null;
   followUps?: Array<{ id: string; title: string; status: string; compositeScore: number; firstSeenAt: string }>;
+  // Account derivative overlay (present when authenticated)
+  accountStory?: AccountStoryOverlay | null;
 }
 
 export interface SourcePost {
@@ -718,6 +720,92 @@ export async function bulkSourceAction(
     headers: getAuthHeaders(),
     body: JSON.stringify({ ids, action, marketIds }),
   });
+}
+
+// ─── Account Stories (per-account derivative workspace) ─────────────────────
+
+export interface AccountStoryOverlay {
+  id: string;
+  editedTitle: string | null;
+  editedSummary: string | null;
+  accountStatus: string;
+  assignedTo: string | null;
+  notes: string | null;
+  coveredAt: string | null;
+  tags: string[] | null;
+  aiDraftCount: number;
+  aiScriptCount: number;
+  aiVideoCount: number;
+}
+
+export async function activateAccountStory(baseStoryId: string): Promise<unknown> {
+  return apiFetch(`/api/v1/account-stories/${baseStoryId}/activate`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({}),
+  });
+}
+
+export async function updateAccountStory(
+  baseStoryId: string,
+  data: {
+    editedTitle?: string;
+    editedSummary?: string;
+    notes?: string;
+    accountStatus?: string;
+    assignedTo?: string;
+    tags?: string[];
+  }
+): Promise<unknown> {
+  return apiFetch(`/api/v1/account-stories/${baseStoryId}`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function addAIDraft(
+  baseStoryId: string,
+  data: { format: string; content: string; model?: string }
+): Promise<unknown> {
+  return apiFetch(`/api/v1/account-stories/${baseStoryId}/ai-draft`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function addResearch(
+  baseStoryId: string,
+  data: Record<string, unknown>
+): Promise<unknown> {
+  return apiFetch(`/api/v1/account-stories/${baseStoryId}/research`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function syncAccountStory(baseStoryId: string): Promise<unknown> {
+  return apiFetch(`/api/v1/account-stories/${baseStoryId}/sync`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({}),
+  });
+}
+
+export async function fetchAccountStories(params?: {
+  status?: string;
+  assignedTo?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<unknown> {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.assignedTo) qs.set("assignedTo", params.assignedTo);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  return apiFetch(`/api/v1/account-stories?${qs}`, { headers: getAuthHeaders() });
 }
 
 // ─── Admin: Credentials ─────────────────────────────────────────────────────
