@@ -739,3 +739,4 @@ export const MSA_DATABASE: MSAData[] = [
       { callSign: "WDAF-AM", name: "610 Sports KC", format: "Sports", website: "https://www.audacy.com/610sportskc" },
     ],
   },
+];
