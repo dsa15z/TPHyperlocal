@@ -66,14 +66,20 @@ Sources → Ingestion Worker → SourcePost table
 Static routes (e.g. `/markets/seed`, `/markets/autofill`) MUST be registered BEFORE parametric routes (e.g. `/markets/:id`). Fastify matches routes in registration order — a parametric route registered first will capture literal path segments as parameters, causing 404s on the static route.
 
 ### Deployment Targets
-| Service | Platform | Notes |
-|---------|----------|-------|
-| Frontend | Vercel (prj_ZA8AlXP3Gh5RPyyFeGw4NgLMOh1i) | Auto-deploy on push |
-| Backend API | Railway (d361f9bc-3960-42f0-8936-981891df4193) | Persistent process |
-| Worker | Railway (same project) | Long-running BullMQ |
-| MCP Server | Railway (same project) | Stdio transport |
-| PostgreSQL | Railway (managed) | Backed up |
-| Redis | Railway (managed) | Ephemeral |
+| Service | Platform | Branch | Notes |
+|---------|----------|--------|-------|
+| Frontend | Vercel (prj_ZA8AlXP3Gh5RPyyFeGw4NgLMOh1i) | `main` | Auto-deploy on push to main |
+| Backend API | Railway (d361f9bc-3960-42f0-8936-981891df4193) | `main` | Persistent process |
+| Worker | Railway (same project) | `main` | Long-running BullMQ |
+| MCP Server | Railway (same project) | `main` | Stdio transport |
+| PostgreSQL | Railway (managed) | — | Backed up |
+| Redis | Railway (managed) | — | Ephemeral |
+
+### Git Workflow
+- **Always work directly on `main`.** Do not create feature branches.
+- Commit and push to `main` so Vercel and Railway deploy immediately.
+- Both Vercel and Railway are configured to deploy from `main` only.
+- Never force push. Never amend commits. Create new commits.
 
 ## Code Standards
 
