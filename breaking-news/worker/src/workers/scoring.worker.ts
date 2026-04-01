@@ -66,6 +66,52 @@ function calculateGrowthPercent(current: number, past: number): number {
   return 100 * (current / past - 1);
 }
 
+// ─── Social Engagement Score (ported from TopicPulse) ──────────────────────
+// TopicPulse formula: 2×facebook + 2×twitter + sources
+// We extend with all available engagement metrics.
+
+async function calculateSocialScore(storyId: string): Promise<{
+  socialScore: number;
+  rawSocialTotal: number;
+  engagementLikes: number;
+  engagementShares: number;
+  engagementComments: number;
+}> {
+  const storySources = await prisma.storySource.findMany({
+    where: { storyId },
+    include: { sourcePost: true },
+  });
+
+  let totalLikes = 0;
+  let totalShares = 0;
+  let totalComments = 0;
+
+  for (const ss of storySources) {
+    totalLikes += ss.sourcePost.engagementLikes || 0;
+    totalShares += ss.sourcePost.engagementShares || 0;
+    totalComments += ss.sourcePost.engagementComments || 0;
+  }
+
+  // TopicPulse formula: 2×(social) + sources
+  // Shares are most valuable (equivalent to Twitter retweets + Facebook shares)
+  // Comments indicate engagement depth
+  const rawSocialTotal = 2 * (totalShares + totalLikes) + totalComments + storySources.length;
+
+  // Normalize to 0-1 range
+  // Local stories: 50 = strong signal. National: 500+ = strong.
+  const socialScore = Math.min(1.0, rawSocialTotal / 200);
+
+  return { socialScore, rawSocialTotal, engagementLikes: totalLikes, engagementShares: totalShares, engagementComments: totalComments };
+}
+
+// ─── Local Market Detection ────────────────────────────────────────────────
+// TopicPulse uses much lower thresholds for local market stories.
+// A local story with score 85 = trending. National needs 120+.
+
+function isLocalMarketStory(story: any): boolean {
+  return !!story.marketId || !!story.neighborhood || (story.locationName && story.locationName !== 'National');
+}
+
 // ─── Score Calculations ─────────────────────────────────────────────────────
 
 /**
@@ -287,23 +333,37 @@ function determineStatus(
   currentStatus: string,
   breakingScore: number,
   trendingScore: number,
+  socialScore: number,
   growthPercent15: number,
   growthPercent60: number,
   ageMinutes: number,
   lastStatusChangeMinutes: number,
+  isLocal: boolean,
 ): string {
+  // TopicPulse uses MUCH lower thresholds for local markets
+  // National: hot=5250, trending=120. Local: hot=165, trending=85
+  // Our 0-1 scale equivalent:
+  const HOT = isLocal ? 0.35 : 0.6;
+  const TRENDING = isLocal ? 0.25 : 0.4;
+  const BREAKING_HIGH = isLocal ? 0.45 : 0.7;
+  const BREAKING_MED = isLocal ? 0.30 : 0.5;
+
+  // Social score boost: high social engagement can push stories up
+  const boostedBreaking = breakingScore + socialScore * 0.15;
+  const boostedTrending = trendingScore + socialScore * 0.20;
+
   // ── Tier 1: Very fresh (< 15 minutes) ──
   if (ageMinutes < 15) {
-    if (breakingScore > 0.6) return 'BREAKING';
-    if (trendingScore > 0.4 || breakingScore > 0.4) return 'TOP_STORY';
+    if (boostedBreaking > HOT) return 'BREAKING';
+    if (boostedTrending > TRENDING || boostedBreaking > TRENDING) return 'TOP_STORY';
     return 'DEVELOPING';
   }
 
   // ── Tier 2: Developing (15-60 minutes) ──
   if (ageMinutes < 60) {
     // Breaking: high score OR (moderate score + rapid growth)
-    if (breakingScore > 0.7) return 'BREAKING';
-    if (breakingScore > 0.5 && growthPercent15 > 30) return 'BREAKING';
+    if (boostedBreaking > BREAKING_HIGH) return 'BREAKING';
+    if (boostedBreaking > BREAKING_MED && growthPercent15 > 30) return 'BREAKING';
 
     // Breaking retention (ported from TopicPulse level_stay_hot)
     if (currentStatus === 'BREAKING') {
@@ -314,8 +374,8 @@ function determineStatus(
     }
 
     // Trending: sustained growth or high score
-    if (trendingScore > 0.4) return 'TOP_STORY';
-    if (growthPercent15 > 50) return 'TOP_STORY'; // Rapid growth alone triggers trending
+    if (boostedTrending > TRENDING) return 'TOP_STORY';
+    if (growthPercent15 > 50) return 'TOP_STORY';
 
     return 'DEVELOPING';
   }
@@ -323,7 +383,7 @@ function determineStatus(
   // ── Tier 3: Maturing (> 60 minutes) ──
 
   // Breaking with retention check
-  if (breakingScore > 0.7) return 'BREAKING';
+  if (boostedBreaking > BREAKING_HIGH) return 'BREAKING';
   if (currentStatus === 'BREAKING') {
     if (shouldRetainBreaking(breakingScore, lastStatusChangeMinutes, growthPercent15)) {
       return 'BREAKING';
@@ -337,13 +397,13 @@ function determineStatus(
     if (growthPercent60 < 10 && lastStatusChangeMinutes > 60) {
       return 'ONGOING'; // Explicit decay: trending → active
     }
-    if (trendingScore > 0.4) return 'TOP_STORY';
+    if (boostedTrending > TRENDING) return 'TOP_STORY';
     return 'ONGOING';
   }
 
   // New trending detection
-  if (trendingScore > 0.5) return 'TOP_STORY';
-  if (growthPercent15 > 50 && trendingScore > 0.3) return 'TOP_STORY';
+  if (boostedTrending > (isLocal ? 0.30 : 0.5)) return 'TOP_STORY';
+  if (growthPercent15 > 50 && boostedTrending > (isLocal ? 0.20 : 0.3)) return 'TOP_STORY';
 
   // Age-based decay (ported from TopicPulse flat→stop→dead)
   if (ageMinutes > 48 * 60) return 'STALE';
@@ -375,22 +435,27 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     return;
   }
 
-  // Calculate all scores
-  const [breakingScore, trendingResult, confidenceScore, localityScore] = await Promise.all([
+  // Calculate all scores (including social engagement from TopicPulse)
+  const [breakingScore, trendingResult, confidenceScore, localityScore, socialResult] = await Promise.all([
     calculateBreakingScore(storyId),
     calculateTrendingScore(storyId),
     calculateConfidenceScore(storyId),
     calculateLocalityScore(storyId),
+    calculateSocialScore(storyId),
   ]);
 
   const trendingScore = trendingResult.score;
+  const socialScore = socialResult.socialScore;
+  const isLocal = isLocalMarketStory(story);
 
-  // Composite score
+  // Composite score (now includes social engagement)
+  // TopicPulse's score was purely social. Ours blends source velocity + social.
   const compositeScore =
-    0.35 * breakingScore +
-    0.25 * trendingScore +
-    0.20 * confidenceScore +
-    0.20 * localityScore;
+    0.25 * breakingScore +
+    0.20 * trendingScore +
+    0.15 * confidenceScore +
+    0.15 * localityScore +
+    0.25 * socialScore; // Social engagement is a major signal
 
   // Determine status with tiered logic
   const ageMs = Date.now() - story.firstSeenAt.getTime();
@@ -407,13 +472,15 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     previousStatus,
     breakingScore,
     trendingScore,
+    socialScore,
     trendingResult.growthPercent15,
     trendingResult.growthPercent60,
     ageMinutes,
     lastStatusChangeMinutes,
+    isLocal,
   );
 
-  // Update story with scores
+  // Update story with all scores (including social from TopicPulse model)
   await prisma.story.update({
     where: { id: storyId },
     data: {
@@ -422,11 +489,13 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       confidenceScore,
       localityScore,
       compositeScore,
+      sentimentScore: socialScore, // Reuse sentimentScore field for social engagement
+      pastScores, // Historical snapshots for growth % calculation
       status: newStatus as 'ALERT' | 'BREAKING' | 'DEVELOPING' | 'TOP_STORY' | 'ONGOING' | 'FOLLOW_UP' | 'STALE' | 'ARCHIVED',
     },
   });
 
-  // Create score snapshot
+  // Create score snapshot with all scores (TopicPulse stored at 5/15/30/45/60/90/120 min)
   await prisma.scoreSnapshot.create({
     data: {
       storyId,
@@ -435,8 +504,26 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       confidenceScore,
       localityScore,
       compositeScore,
+      // Extended fields stored in metadata for TopicPulse-style growth analysis
     },
   });
+
+  // Store extended snapshot data as story metadata for growth % calculation
+  const pastScores = (story.pastScores || {}) as Record<string, any>;
+  const now = Date.now();
+  pastScores[String(now)] = {
+    composite: compositeScore,
+    social: socialScore,
+    rawSocial: socialResult.rawSocialTotal,
+    breaking: breakingScore,
+    trending: trendingScore,
+    sources: story.sourceCount,
+  };
+  // Keep only last 2 hours of snapshots (cleanup old entries)
+  const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+  for (const ts of Object.keys(pastScores)) {
+    if (Number(ts) < twoHoursAgo) delete pastScores[ts];
+  }
 
   // Log status changes
   if (previousStatus !== newStatus) {
@@ -458,7 +545,10 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     trendingScore: trendingScore.toFixed(3),
     confidenceScore: confidenceScore.toFixed(3),
     localityScore: localityScore.toFixed(3),
+    socialScore: socialScore.toFixed(3),
+    rawSocial: socialResult.rawSocialTotal,
     compositeScore: compositeScore.toFixed(3),
+    isLocal,
     status: newStatus,
   }, 'Scoring complete');
 
