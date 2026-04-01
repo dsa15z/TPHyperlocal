@@ -102,7 +102,6 @@ export async function sourceRoutes(
             select: { id: true, isEnabled: true, pollIntervalMs: true },
           },
           market: { select: { id: true, name: true } },
-          sourceMarkets: { select: { marketId: true, market: { select: { id: true, name: true, state: true, isActive: true } } } },
           _count: { select: { posts: true } },
         },
         orderBy: { [sort]: order },
@@ -151,12 +150,6 @@ export async function sourceRoutes(
           pollIntervalMs: accountSource?.pollIntervalMs ?? null,
           totalPosts: s._count.posts,
           recentPosts: recentCountMap.get(s.id) || 0,
-          sourceMarkets: s.sourceMarkets.map((sm) => ({
-            marketId: sm.marketId,
-            name: sm.market.name,
-            state: sm.market.state,
-            isActive: sm.market.isActive,
-          })),
         };
       }),
       total,

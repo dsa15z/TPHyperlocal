@@ -96,14 +96,12 @@ async function scheduleRSSPolls(): Promise<void> {
         platform: 'RSS',
         isActive: true,
         OR: [
-          // Sources linked to active markets via SourceMarket join
-          { sourceMarkets: { some: { marketId: { in: activeMarketIds } } } },
-          // Legacy: sources with direct marketId (backward compat)
+          // Sources with direct marketId in active markets
           { marketId: { in: activeMarketIds } },
-          // Legacy: global sources (being migrated to National market)
+          // Global sources
           { isGlobal: true },
-          // Sources with no market link (catch-all, will be migrated)
-          { AND: [{ marketId: null }, { isGlobal: false }, { sourceMarkets: { none: {} } }] },
+          // Sources with no market link (unlinked/legacy)
+          { marketId: null },
         ],
         AND: [
           {
