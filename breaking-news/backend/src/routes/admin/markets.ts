@@ -338,9 +338,88 @@ export async function marketRoutes(
           sourcesCreated++;
         } catch { /* dedup */ }
       }
+
+      // Create Google News RSS feeds for this market
+      // Google News provides free RSS feeds by geo location and keyword search
+      const googleKeywords = [
+        msa.name, // "Houston"
+        `${msa.name} ${msa.state}`, // "Houston TX"
+        ...(msa.keywords || []).slice(0, 5), // Top 5 market keywords
+      ];
+      // Also add category-specific feeds
+      const googleCategories = [
+        { topic: 'NATION', label: 'Top Stories' },
+        { topic: 'BUSINESS', label: 'Business' },
+        { topic: 'TECHNOLOGY', label: 'Technology' },
+        { topic: 'ENTERTAINMENT', label: 'Entertainment' },
+        { topic: 'SPORTS', label: 'Sports' },
+        { topic: 'SCIENCE', label: 'Science' },
+        { topic: 'HEALTH', label: 'Health' },
+      ];
+
+      for (const kw of googleKeywords) {
+        const gName = `Google News - ${msa.name} - ${kw}`;
+        const exists = await prisma.source.findFirst({ where: { name: gName, marketId } });
+        if (!exists) {
+          try {
+            const gUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(kw)}&hl=en-US&gl=US&ceid=US:en`;
+            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: gName, url: gUrl, marketId, trustScore: 0.75, isGlobal: false, metadata: { type: 'google-news', keyword: kw, market: msa.name } } });
+            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+            sourcesCreated++;
+          } catch { /* dedup */ }
+        }
+      }
+
+      // Google News geo-local feed
+      const geoName = `Google News - ${msa.name} Local`;
+      const geoExists = await prisma.source.findFirst({ where: { name: geoName, marketId } });
+      if (!geoExists) {
+        try {
+          const geoUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(msa.name)}+local+news&hl=en-US&gl=US&ceid=US:en`;
+          const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: geoName, url: geoUrl, marketId, trustScore: 0.75, isGlobal: false, metadata: { type: 'google-news', subtype: 'local', market: msa.name } } });
+          await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+          sourcesCreated++;
+        } catch { /* dedup */ }
+      }
+
+      // Google News category feeds for this market
+      for (const cat of googleCategories) {
+        const catName = `Google News - ${msa.name} ${cat.label}`;
+        const catExists = await prisma.source.findFirst({ where: { name: catName, marketId } });
+        if (!catExists) {
+          try {
+            const catUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(msa.name)}+${encodeURIComponent(cat.label.toLowerCase())}&hl=en-US&gl=US&ceid=US:en`;
+            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: catName, url: catUrl, marketId, trustScore: 0.70, isGlobal: false, metadata: { type: 'google-news', subtype: 'category', category: cat.topic, market: msa.name } } });
+            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+            sourcesCreated++;
+          } catch { /* dedup */ }
+        }
+      }
+
+      // Create Bing News RSS feeds for this market
+      const bingKeywords = [
+        msa.name,
+        `${msa.name} ${msa.state} news`,
+        `${msa.name} breaking news`,
+        `${msa.name} crime`,
+        `${msa.name} weather`,
+      ];
+
+      for (const kw of bingKeywords) {
+        const bName = `Bing News - ${msa.name} - ${kw}`;
+        const exists = await prisma.source.findFirst({ where: { name: bName, marketId } });
+        if (!exists) {
+          try {
+            const bUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(kw)}&format=RSS`;
+            const src = await prisma.source.create({ data: { platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any, name: bName, url: bUrl, marketId, trustScore: 0.70, isGlobal: false, metadata: { type: 'bing-news', keyword: kw, market: msa.name } } });
+            await prisma.accountSource.create({ data: { accountId: au.accountId, sourceId: src.id, isEnabled: true } });
+            sourcesCreated++;
+          } catch { /* dedup */ }
+        }
+      }
     }
 
-    return reply.status(201).send({ message: `Seeded ${marketsSeeded} markets, created ${sourcesCreated} station sources`, marketsSeeded, sourcesCreated, marketsUpdated: skipped.length, total: MSA_DATABASE.length });
+    return reply.status(201).send({ message: `Seeded ${marketsSeeded} markets, created ${sourcesCreated} sources (TV, radio, Google News, Bing News, HyperLocal)`, marketsSeeded, sourcesCreated, marketsUpdated: skipped.length, total: MSA_DATABASE.length });
   });
 
   // POST /admin/markets/autofill — MUST also be before /:id routes
