@@ -11,7 +11,7 @@ import {
   type SortingState,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch, Star, BadgeCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch, Star, BadgeCheck, AlertTriangle, CheckCircle2, CheckSquare } from "lucide-react";
 import clsx from "clsx";
 import type { Story, SourceSummary } from "@/lib/api";
 import type { ColumnConfig } from "@/lib/views";
@@ -106,29 +106,29 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
       cell: (info) => <StatusBadge status={info.getValue()} />,
       size: 120,
     }),
-    famous: columnHelper.display({
+    famous: columnHelper.accessor((row) => row.hasFamousPerson ? 1 : 0, {
       id: "famous",
-      header: () => <Star className="w-3.5 h-3.5 text-yellow-400 mx-auto" />,
+      header: () => <Star className="w-3 h-3 text-yellow-400 mx-auto" />,
       cell: (info) => {
         const story = info.row.original;
         if (!story.hasFamousPerson || !story.famousPersonNames?.length) return null;
         return (
           <span className="inline-flex items-center group/famous relative justify-center w-full">
-            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
             <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/famous:opacity-100 transition-opacity pointer-events-none z-50">
               {story.famousPersonNames.join(', ')}
             </span>
           </span>
         );
       },
-      size: 32,
+      size: 28,
     }),
-    verified: columnHelper.display({
+    verified: columnHelper.accessor("source_count", {
       id: "verified",
-      header: () => <BadgeCheck className="w-3.5 h-3.5 text-gray-500 mx-auto" />,
+      header: () => <BadgeCheck className="w-3 h-3 text-gray-500 mx-auto" />,
       cell: (info) => {
         const story = info.row.original;
-        const count = story.source_count || 0;
+        const count = info.getValue() || 0;
         const summaries = story.source_summaries || [];
         const isVerified = story.verificationStatus === 'VERIFIED';
         const isSingle = count <= 1;
@@ -243,7 +243,7 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
     }),
     score: columnHelper.accessor("composite_score", {
       id: "score",
-      header: "Score",
+      header: "",
       cell: (info) => {
         const story = info.row.original;
         const raw = info.getValue(); // 0-1 scale
@@ -388,18 +388,20 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
       },
       size: 70,
     }),
-    coverage: columnHelper.display({
+    coverage: columnHelper.accessor((row) => {
+      const acct = row.accountStory;
+      const coverage = row.coverage || [];
+      return (acct?.coveredAt || coverage.some((c) => c.isCovered)) ? 1 : 0;
+    }, {
       id: "coverage",
-      header: () => <CheckCircle2 className="w-3.5 h-3.5 text-gray-500 mx-auto" />,
+      header: () => <CheckSquare className="w-3 h-3 text-gray-500 mx-auto" />,
       cell: (info) => {
-        const acct = info.row.original.accountStory;
-        const coverage = info.row.original.coverage || [];
-        const isCovered = acct?.coveredAt || coverage.some((c) => c.isCovered);
+        const isCovered = info.getValue() === 1;
         return (
           <span className="inline-flex items-center justify-center w-full">
             {isCovered
-              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
-              : <span className="w-3 h-3 rounded-sm border border-gray-600" />
+              ? <CheckSquare className="w-3 h-3 text-green-400" />
+              : <span className="w-2.5 h-2.5 rounded-sm border border-gray-700" />
             }
           </span>
         );
