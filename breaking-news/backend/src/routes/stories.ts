@@ -87,12 +87,13 @@ Only include fields that the query clearly implies. Omit fields that aren't ment
           const parsed = JSON.parse(jsonMatch[0]);
           // Merge NLP results into filter params (NLP overrides dropdowns)
           if (parsed.textSearch) nlpTextSearch = parsed.textSearch;
-          if (parsed.category && !category) category = parsed.category;
-          if (parsed.status && !status) status = parsed.status;
-          if (parsed.minScore && !minScore) minScore = parsed.minScore;
-          if (parsed.maxAge && !maxAge) maxAge = parsed.maxAge;
+          // NLP values OVERRIDE dropdown selections (NLP is more specific)
+          if (parsed.category) category = parsed.category;
+          if (parsed.status) status = parsed.status;
+          if (parsed.minScore) minScore = parsed.minScore;
+          if (parsed.maxAge) maxAge = parsed.maxAge;
           if (parsed.sort) sort = parsed.sort;
-          if (parsed.trend && !trend) trend = parsed.trend;
+          if (parsed.trend) trend = parsed.trend;
           // Market resolution: look up market ID from city name
           if (parsed.market && !marketIds) {
             const market = await prisma.market.findFirst({
@@ -123,10 +124,18 @@ Only include fields that the query clearly implies. Omit fields that aren't ment
         else if (lower.includes('trending') && !status) status = 'TOP_STORY';
         else if (lower.includes('developing') && !status) status = 'DEVELOPING';
 
-        // Time detection
-        if (lower.includes('last hour') && !maxAge) maxAge = 1;
-        else if (lower.includes('today') && !maxAge) maxAge = 24;
-        else if (lower.includes('this week') && !maxAge) maxAge = 168;
+        // Time detection — NLP time OVERRIDES dropdown time range
+        const minMatch = lower.match(/(\d+)\s*min/);
+        const hrMatch = lower.match(/(\d+)\s*hour/);
+        if (minMatch) maxAge = parseInt(minMatch[1]) / 60;
+        else if (hrMatch) maxAge = parseInt(hrMatch[1]);
+        else if (lower.includes('last 15 min')) maxAge = 0.25;
+        else if (lower.includes('last 30 min')) maxAge = 0.5;
+        else if (lower.includes('last hour') || lower.includes('past hour')) maxAge = 1;
+        else if (lower.includes('last 2 hour')) maxAge = 2;
+        else if (lower.includes('last 6 hour')) maxAge = 6;
+        else if (lower.includes('today') || lower.includes('last 24')) maxAge = 24;
+        else if (lower.includes('this week') || lower.includes('last 7 day') || lower.includes('past week')) maxAge = 168;
 
         // Market detection — check if query mentions a known market name
         if (!marketIds) {
@@ -142,8 +151,9 @@ Only include fields that the query clearly implies. Omit fields that aren't ment
 
         // Remaining text after removing detected filters → text search
         let remaining = lower
-          .replace(/\b(breaking|trending|developing|national|local|show|find|get|list|search|stories|news|from|in|the|last|hour|today|this|week|with|high|top|recent|about)\b/gi, '')
+          .replace(/\b(breaking|trending|developing|national|local|show|find|get|list|search|stories|news|from|in|the|last|past|hour|hours|minute|minutes|min|today|this|week|days|with|high|top|recent|about|all|me)\b/gi, '')
           .replace(/\b(crime|sports|politics|weather|business|health|technology|entertainment|education|traffic|environment|emergency|community)\b/gi, '')
+          .replace(/\d+/g, '') // Remove numbers (already captured in time detection)
           .trim().replace(/\s+/g, ' ').trim();
         if (remaining.length > 2) nlpTextSearch = remaining;
       }
