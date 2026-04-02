@@ -445,20 +445,43 @@ export async function sourceRoutes(
     const { url, platform } = body.data;
 
     if (platform === 'RSS') {
+      // Use browser UA to avoid 403 blocks from news sites
+      const browserUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(url, {
           signal: controller.signal,
-          headers: { 'User-Agent': 'TopicPulse/1.0 RSS Validator' },
+          headers: {
+            'User-Agent': browserUA,
+            'Accept': 'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
         });
         clearTimeout(timeout);
 
         if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          const isChallenge = body.includes('cloudflare') || body.includes('Cloudflare') ||
+            body.includes('Just a moment') || body.includes('security verification');
+
+          // If Cloudflare blocked, try to suggest the direct URL
+          let suggestion: string | undefined;
+          if (isChallenge && url.includes('rsshub.app')) {
+            const apMatch = url.match(/rsshub\.app\/apnews\/topics\/(.+)/);
+            if (apMatch) {
+              suggestion = `https://apnews.com/hub/${apMatch[1].replace('apf-', '').replace(/\/$/, '')}?format=rss`;
+            }
+          }
+
           return reply.status(200).send({
             success: false,
-            error: `HTTP ${res.status}: ${res.statusText}`,
+            error: isChallenge
+              ? `Cloudflare bot protection — this proxy URL is blocked. ${suggestion ? `Try the direct URL instead: ${suggestion}` : 'Try a direct RSS URL from the source site.'}`
+              : `HTTP ${res.status}: ${res.statusText}`,
             url,
+            ...(suggestion ? { suggestedUrl: suggestion } : {}),
           });
         }
 
@@ -468,9 +491,13 @@ export async function sourceRoutes(
           text.trimStart().startsWith('<?xml') || text.trimStart().startsWith('<rss') || text.trimStart().startsWith('<feed');
 
         if (!isXml) {
+          // Check if it's HTML (site doesn't serve RSS at this URL)
+          const isHtml = text.includes('<!DOCTYPE html') || text.includes('<html');
           return reply.status(200).send({
             success: false,
-            error: 'Response is not valid RSS/Atom XML',
+            error: isHtml
+              ? 'This URL returns an HTML page, not an RSS feed. The site may not offer RSS at this URL. The system will auto-switch to web scraping if needed.'
+              : 'Response is not valid RSS/Atom XML',
             contentType,
             url,
           });
