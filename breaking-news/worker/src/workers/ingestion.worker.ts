@@ -174,6 +174,30 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
           logger.info({ sourceId: source.id, name: source.name }, 'Self-healed: original URL works with browser User-Agent');
           return true;
         }
+
+        // URL returns 200 but HTML instead of RSS — switch directly to web scraping
+        if (text.includes('<!DOCTYPE html') || text.includes('<html')) {
+          const scrapeUrl = new URL(originalUrl).origin + new URL(originalUrl).pathname;
+          await prisma.source.update({
+            where: { id: source.id },
+            data: {
+              platform: 'WEB_SCRAPE' as any,
+              url: scrapeUrl,
+              metadata: {
+                ...meta,
+                consecutiveFailures: 0,
+                healAttempts,
+                healResult: 'html-not-rss-switched-to-scrape',
+                previousPlatform: 'RSS',
+                previousUrl: originalUrl,
+                useBrowserUA: true,
+                healedAt: new Date().toISOString(),
+              },
+            },
+          });
+          logger.info({ sourceId: source.id, name: source.name, scrapeUrl }, 'Self-healed: URL returns HTML not RSS — switched to web scraping');
+          return true;
+        }
       }
     } catch {
       // Try next strategy
@@ -520,10 +544,19 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
     throw new Error(`RSS fetch failed: ${reason}`);
   }
 
+  const xml = await response.text();
+
+  // Detect HTML served instead of RSS (site doesn't have RSS for this URL)
+  if (!xml.includes('<rss') && !xml.includes('<feed') && !xml.includes('<channel') && !xml.includes('<?xml')) {
+    if (xml.includes('<!DOCTYPE html') || xml.includes('<html') || xml.includes('<head>')) {
+      await trackSourceFailure(sourceId, 'HTML page returned instead of RSS — site may not have RSS feed for this URL');
+      throw new Error('RSS feed returned HTML instead of XML — needs scraping');
+    }
+  }
+
   // Reset failure count on success
   await resetSourceFailures(sourceId);
 
-  const xml = await response.text();
   const parsed = xmlParser.parse(xml);
 
   // Support both RSS 2.0 and Atom formats
