@@ -15,6 +15,48 @@ const HEAL_AT_FAILURE = 3; // Attempt self-healing at this failure count
 // Realistic browser User-Agent to avoid 403 blocks from news sites
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+/**
+ * Known RSS proxy services that are often Cloudflare-blocked.
+ * Maps proxy URL patterns to direct source RSS URLs.
+ */
+const PROXY_TO_DIRECT: Array<{ pattern: RegExp; resolve: (url: string) => string | null }> = [
+  // rsshub.app/apnews/topics/X → apnews.com direct RSS
+  {
+    pattern: /rsshub\.app\/apnews\/topics\/(.+)/,
+    resolve: (url) => {
+      const m = url.match(/rsshub\.app\/apnews\/topics\/(.+)/);
+      if (!m) return null;
+      const topic = m[1].replace(/\/$/, '');
+      // AP News direct RSS: https://apnews.com/hub/{topic}?format=rss
+      // or https://feedx.net/rss/ap-{topic}.xml (public mirror)
+      return `https://apnews.com/hub/${topic.replace('apf-', '')}?format=rss`;
+    },
+  },
+  // rsshub.app/* → try the source domain directly
+  {
+    pattern: /rsshub\.app\/(.+)/,
+    resolve: (url) => {
+      const m = url.match(/rsshub\.app\/([^/]+)\/(.*)/);
+      if (!m) return null;
+      const domain = m[1];
+      const path = m[2];
+      return `https://${domain}.com/${path}/feed`;
+    },
+  },
+];
+
+/**
+ * Detect if a response is a Cloudflare challenge page (not real content).
+ */
+function isCloudflareChallenge(status: number, body: string): boolean {
+  if (status === 403 || status === 503) {
+    return body.includes('cloudflare') || body.includes('Cloudflare') ||
+           body.includes('cf-browser-verification') || body.includes('security verification') ||
+           body.includes('Just a moment') || body.includes('checking your browser');
+  }
+  return false;
+}
+
 // Common RSS URL variants to try when the original URL fails
 const RSS_URL_VARIANTS = [
   (base: string) => base.replace(/\/?$/, '/feed'),
@@ -63,6 +105,47 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
 
   const originalUrl = source.url || '';
   logger.info({ sourceId: source.id, name: source.name, originalUrl }, 'Attempting self-heal for failing source');
+
+  // Strategy -1: If URL is from a known proxy (rsshub.app, etc.), try the direct source
+  if (source.platform === 'RSS' && originalUrl) {
+    for (const mapping of PROXY_TO_DIRECT) {
+      if (mapping.pattern.test(originalUrl)) {
+        const directUrl = mapping.resolve(originalUrl);
+        if (directUrl && directUrl !== originalUrl) {
+          try {
+            const resp = await fetch(directUrl, {
+              headers: { 'User-Agent': BROWSER_UA },
+              signal: AbortSignal.timeout(10000),
+            });
+            if (resp.ok) {
+              const text = await resp.text();
+              if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+                await prisma.source.update({
+                  where: { id: source.id },
+                  data: {
+                    url: directUrl,
+                    metadata: {
+                      ...meta,
+                      consecutiveFailures: 0,
+                      healAttempts,
+                      healResult: 'proxy-to-direct',
+                      previousUrl: originalUrl,
+                      useBrowserUA: true,
+                      healedAt: new Date().toISOString(),
+                    },
+                  },
+                });
+                logger.info({ sourceId: source.id, name: source.name, oldUrl: originalUrl, newUrl: directUrl }, 'Self-healed: switched from proxy to direct RSS');
+                return true;
+              }
+            }
+          } catch {
+            // Try next strategy
+          }
+        }
+      }
+    }
+  }
 
   // Strategy 0: Try original URL with browser User-Agent (many 403s are UA blocks)
   if (source.platform === 'RSS' && originalUrl) {
@@ -427,8 +510,14 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   }
 
   if (!response.ok) {
-    await trackSourceFailure(sourceId, `HTTP ${response.status}`);
-    throw new Error(`RSS fetch failed: ${response.status} ${response.statusText}`);
+    // Check if it's a Cloudflare challenge — give more specific error
+    let body = '';
+    try { body = await response.text(); } catch {}
+    const reason = isCloudflareChallenge(response.status, body)
+      ? `Cloudflare challenge (HTTP ${response.status}) — source may need direct URL`
+      : `HTTP ${response.status}`;
+    await trackSourceFailure(sourceId, reason);
+    throw new Error(`RSS fetch failed: ${reason}`);
   }
 
   // Reset failure count on success
