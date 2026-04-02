@@ -929,7 +929,7 @@ REASON: <one sentence explanation>`;
 
       for (const [idx, result] of [result1, result2].entries()) {
         if (result.status === 'fulfilled') {
-          const text = result.value.text || '';
+          const text = result.value.content || result.value.text || '';
           const verdictMatch = text.match(/VERDICT:\s*(CONFIRMED|UNCONFIRMED|SUSPICIOUS)/i);
           const confMatch = text.match(/CONFIDENCE:\s*(\d+)/);
           const reasonMatch = text.match(/REASON:\s*(.+)/i);

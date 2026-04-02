@@ -831,7 +831,8 @@ export async function pipelineRoutes(
             { maxTokens: 100, temperature: 0.1, systemPrompt: 'You identify famous people in news articles. Be strict — only list truly famous people.' }
           );
 
-          const names = result.text.split('\n')
+          const resultText = result.content || result.text || '';
+          const names = resultText.split('\n')
             .map((l: string) => l.trim().replace(/^[-•*]\s*/, ''))
             .filter((n: string) => n && n.length > 2 && n !== 'NONE' && n !== 'None' && n !== 'N/A');
 
