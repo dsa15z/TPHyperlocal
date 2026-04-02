@@ -31,7 +31,8 @@ import { ColumnCustomizer } from "@/components/ColumnCustomizer";
 /** Convert a SavedFilters snapshot to the filter state the FilterBar understands */
 function savedFiltersToStoryFilters(saved: SavedFilters): StoryFilters {
   return {
-    q: saved.q,
+    q: saved.nlpPrompt || saved.q, // NLP prompt goes into the search bar
+    nlp: saved.nlpPrompt, // Also passed as the NLP param
     category: saved.categories?.join(","),
     status: saved.statuses?.join(","),
     source_ids: saved.sourceIds,
@@ -46,7 +47,8 @@ function savedFiltersToStoryFilters(saved: SavedFilters): StoryFilters {
 /** Extract the filter-related fields from StoryFilters into SavedFilters */
 function storyFiltersToSaved(filters: StoryFilters): SavedFilters {
   return {
-    q: filters.q,
+    q: filters.nlp ? undefined : filters.q, // Don't save text search if NLP is active
+    nlpPrompt: filters.nlp, // Save the NLP prompt with the view
     categories: filters.category ? filters.category.split(",") : undefined,
     statuses: filters.status ? filters.status.split(",") : undefined,
     sourceIds: filters.source_ids,

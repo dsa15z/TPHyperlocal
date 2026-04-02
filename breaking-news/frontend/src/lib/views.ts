@@ -41,6 +41,7 @@ export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
 
 export interface SavedFilters {
   q?: string;
+  nlpPrompt?: string; // Natural language query — parsed server-side into structured filters
   categories?: string[];
   statuses?: string[];
   sourceIds?: string[];

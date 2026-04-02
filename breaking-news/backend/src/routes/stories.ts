@@ -10,6 +10,7 @@ const ListStoriesQuerySchema = z.object({
   category: z.string().optional(), // comma-separated categories
   sourceIds: z.string().optional(), // comma-separated source IDs
   marketIds: z.string().optional(), // comma-separated market IDs
+  nlp: z.string().optional(), // natural language query — parsed into structured filters via LLM
   uncoveredOnly: z.coerce.boolean().optional(),
   trend: z.enum(['rising', 'declining', 'all']).optional(),
   minScore: z.coerce.number().min(0).max(1).optional(),
@@ -50,12 +51,79 @@ export async function storiesRoutes(
       });
     }
 
-    const { status, category, sourceIds, marketIds, uncoveredOnly, trend, minScore, maxAge, limit, offset, sort, order } =
+    let { status, category, sourceIds, marketIds, uncoveredOnly, trend, minScore, maxAge, limit, offset, sort, order } =
       parseResult.data;
+    const nlpQuery = parseResult.data.nlp;
+
+    // ── NLP Query Parsing ────────────────────────────────────────────────
+    // If an NLP query is provided, parse it into structured filters via LLM
+    // These MERGE with (override) any existing dropdown selections
+    let nlpTextSearch: string | undefined;
+
+    if (nlpQuery && nlpQuery.length > 3) {
+      try {
+        const { generateWithFallback } = await import('../lib/llm-factory.js');
+        const nlpResult = await generateWithFallback(
+          `Parse this newsroom search query into structured filters. Return ONLY valid JSON, no explanation.
+
+Query: "${nlpQuery}"
+
+Return JSON with these optional fields:
+- textSearch: string (keywords to search in title/summary, only if the query mentions specific topics)
+- category: string (one of: CRIME, POLITICS, WEATHER, TRAFFIC, BUSINESS, HEALTH, SPORTS, ENTERTAINMENT, TECHNOLOGY, EDUCATION, COMMUNITY, ENVIRONMENT, EMERGENCY)
+- status: string (one of: BREAKING, DEVELOPING, TOP_STORY, ONGOING, STALE)
+- market: string (city name if a location is mentioned)
+- minScore: number 0-1 (if they say "high scoring" or "important" use 0.5, "viral" use 0.7)
+- maxAge: number in hours (if they say "last hour" use 1, "today" use 24, "this week" use 168)
+- sort: string (one of: compositeScore, breakingScore, trendingScore, firstSeenAt)
+- trend: string (one of: rising, declining)
+
+Only include fields that the query clearly implies. Omit fields that aren't mentioned.`,
+          { maxTokens: 200, temperature: 0.1 }
+        );
+
+        const jsonMatch = nlpResult.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          // Merge NLP results into filter params (NLP overrides dropdowns)
+          if (parsed.textSearch) nlpTextSearch = parsed.textSearch;
+          if (parsed.category && !category) category = parsed.category;
+          if (parsed.status && !status) status = parsed.status;
+          if (parsed.minScore && !minScore) minScore = parsed.minScore;
+          if (parsed.maxAge && !maxAge) maxAge = parsed.maxAge;
+          if (parsed.sort) sort = parsed.sort;
+          if (parsed.trend && !trend) trend = parsed.trend;
+          // Market resolution: look up market ID from city name
+          if (parsed.market && !marketIds) {
+            const market = await prisma.market.findFirst({
+              where: { name: { contains: parsed.market, mode: 'insensitive' }, isActive: true },
+              select: { id: true },
+            });
+            if (market) marketIds = market.id;
+          }
+        }
+      } catch {
+        // LLM unavailable — fall back to text search with the NLP query
+        nlpTextSearch = nlpQuery;
+      }
+    }
 
     const where: Prisma.StoryWhereInput = {
       mergedIntoId: null, // exclude merged stories
     };
+
+    // Apply NLP text search if present
+    if (nlpTextSearch) {
+      if (!where.AND) where.AND = [];
+      (where.AND as Prisma.StoryWhereInput[]).push({
+        OR: [
+          { title: { contains: nlpTextSearch, mode: 'insensitive' } },
+          { summary: { contains: nlpTextSearch, mode: 'insensitive' } },
+          { aiSummary: { contains: nlpTextSearch, mode: 'insensitive' } },
+          { locationName: { contains: nlpTextSearch, mode: 'insensitive' } },
+        ],
+      });
+    }
 
     // Market filter: match story location against market name, neighborhoods, and keywords
     let marketOrConditions: Prisma.StoryWhereInput[] | null = null;

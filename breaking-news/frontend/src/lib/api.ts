@@ -75,6 +75,7 @@ export interface StoriesResponse {
 
 export interface StoryFilters {
   q?: string;
+  nlp?: string; // NLP natural language query — parsed server-side into structured filters
   category?: string;
   status?: string;
   time_range?: string;
@@ -313,6 +314,9 @@ export async function fetchStories(
   }
   if (filters.market_ids && filters.market_ids.length > 0) {
     backendParams.marketIds = filters.market_ids.join(",");
+  }
+  if (filters.nlp) {
+    backendParams.nlp = filters.nlp;
   }
   if (filters.uncovered_only) {
     backendParams.uncoveredOnly = true;

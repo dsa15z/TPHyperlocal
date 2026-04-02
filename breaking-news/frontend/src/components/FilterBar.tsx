@@ -153,14 +153,29 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
       badge: PLATFORM_LABELS[s.platform] || s.platform,
     }));
 
+  // Detect if search input is NLP (natural language) vs exact text search
+  // NLP: 3+ words, contains filter-like words, or is a question
+  const isNlpQuery = useCallback((input: string): boolean => {
+    if (!input || input.length < 8) return false;
+    const words = input.trim().split(/\s+/);
+    if (words.length < 3) return false;
+    // Contains filter intent words
+    const nlpSignals = /\b(show|find|get|list|search|stories|news|breaking|trending|about|from|in|with|last|hour|today|week|high|top|recent|crime|politics|weather|sports|important|viral)\b/i;
+    return nlpSignals.test(input);
+  }, []);
+
   const buildFilters = useCallback((): StoryFilters => {
     const effectiveCats = getEffectiveSelection(selectedCategories);
     const effectiveStatuses = getEffectiveSelection(selectedStatuses);
     const effectiveSources = getEffectiveSelection(selectedSources);
     const effectiveMarkets = getEffectiveSelection(selectedMarkets);
 
+    // Smart routing: NLP query goes to server-side parsing, exact text goes to q param
+    const useNlp = isNlpQuery(searchInput);
+
     return {
-      q: searchInput || undefined,
+      q: !useNlp ? (searchInput || undefined) : undefined,
+      nlp: useNlp ? searchInput : undefined,
       category: effectiveCats ? effectiveCats.join(",") : undefined,
       status: effectiveStatuses ? effectiveStatuses.join(",") : undefined,
       time_range: timeRange || undefined,
@@ -172,6 +187,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     };
   }, [
     searchInput,
+    isNlpQuery,
     selectedCategories,
     selectedStatuses,
     selectedSources,
@@ -243,16 +259,21 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   return (
     <div className="glass-card p-4 space-y-4 relative z-30 overflow-visible">
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search input */}
+        {/* Search input — supports both text search and NLP queries */}
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             type="text"
-            placeholder="Search stories..."
+            placeholder='Search or ask: "breaking crime in Houston last hour"'
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="filter-input w-full pl-9"
+            className={clsx("filter-input w-full pl-9 pr-12", isNlpQuery(searchInput) && "border-accent/40")}
           />
+          {searchInput && isNlpQuery(searchInput) && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-accent font-semibold bg-accent/10 px-1.5 py-0.5 rounded">
+              AI
+            </span>
+          )}
         </div>
 
         {/* Category multi-select */}

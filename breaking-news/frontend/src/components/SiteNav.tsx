@@ -158,8 +158,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/stocks", label: "Market Movers", icon: DollarSign },
-      { href: "/topics", label: "Topics", icon: Network },
-      { href: "/pulses", label: "Smart Pulses", icon: Zap },
       { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
     ],
   },
