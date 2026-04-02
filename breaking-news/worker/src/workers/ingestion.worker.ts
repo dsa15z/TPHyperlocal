@@ -559,11 +559,22 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   const { sourceId, feedUrl } = job.data;
   logger.info({ sourceId, feedUrl }, 'Polling RSS feed');
 
-  // Always use rotating browser UA — prevents fingerprinting and preemptive bot blocks
+  // Load source metadata for conditional fetch headers (ETag, Last-Modified)
+  const sourceMeta = await prisma.source.findUnique({
+    where: { id: sourceId },
+    select: { metadata: true },
+  });
+  const meta = (sourceMeta?.metadata || {}) as Record<string, unknown>;
+
+  // Build headers with rotating UA + conditional fetch (HTTP caching)
+  const headers = buildFetchHeaders();
+  if (meta.lastETag) headers['If-None-Match'] = meta.lastETag as string;
+  if (meta.lastModified) headers['If-Modified-Since'] = meta.lastModified as string;
+
   let response: Response;
   try {
     response = await fetch(feedUrl, {
-      headers: buildFetchHeaders(),
+      headers,
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
@@ -572,8 +583,28 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
     throw err;
   }
 
+  // 304 Not Modified — feed hasn't changed since last poll, skip processing
+  if (response.status === 304) {
+    logger.debug({ sourceId, feedUrl }, 'Feed not modified (304), skipping');
+    await prisma.source.update({
+      where: { id: sourceId },
+      data: { lastPolledAt: new Date() },
+    });
+    return;
+  }
+
+  // 429 Too Many Requests — respect Retry-After header
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After');
+    const delaySec = retryAfter
+      ? (isNaN(+retryAfter) ? Math.max(60, (new Date(retryAfter).getTime() - Date.now()) / 1000) : parseInt(retryAfter))
+      : 300; // default 5 min
+    await trackSourceFailure(sourceId, `Rate limited (429). Retry after ${delaySec}s`);
+    logger.warn({ sourceId, feedUrl, delaySec }, 'Rate limited by server');
+    throw new Error(`Rate limited: retry after ${delaySec}s`);
+  }
+
   if (!response.ok) {
-    // Check if it's a Cloudflare challenge — give more specific error
     let body = '';
     try { body = await response.text(); } catch {}
     const reason = isCloudflareChallenge(response.status, body)
@@ -585,6 +616,18 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
 
   const xml = await response.text();
 
+  // Content-hash skip: if feed body is identical to last poll, skip parsing
+  const { createHash } = await import('crypto');
+  const feedHash = createHash('md5').update(xml).digest('hex');
+  if (meta.lastFeedHash === feedHash) {
+    logger.debug({ sourceId, feedUrl }, 'Feed content unchanged (hash match), skipping');
+    await prisma.source.update({
+      where: { id: sourceId },
+      data: { lastPolledAt: new Date() },
+    });
+    return;
+  }
+
   // Detect HTML served instead of RSS (site doesn't have RSS for this URL)
   if (!xml.includes('<rss') && !xml.includes('<feed') && !xml.includes('<channel') && !xml.includes('<?xml')) {
     if (xml.includes('<!DOCTYPE html') || xml.includes('<html') || xml.includes('<head>')) {
@@ -592,6 +635,17 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
       throw new Error('RSS feed returned HTML instead of XML — needs scraping');
     }
   }
+
+  // Store caching headers + content hash for next poll
+  const cacheUpdate: Record<string, unknown> = { ...meta, lastFeedHash: feedHash };
+  const respETag = response.headers.get('ETag');
+  const respLastMod = response.headers.get('Last-Modified');
+  if (respETag) cacheUpdate.lastETag = respETag;
+  if (respLastMod) cacheUpdate.lastModified = respLastMod;
+  await prisma.source.update({
+    where: { id: sourceId },
+    data: { metadata: cacheUpdate },
+  });
 
   // Reset failure count on success
   await resetSourceFailures(sourceId);
