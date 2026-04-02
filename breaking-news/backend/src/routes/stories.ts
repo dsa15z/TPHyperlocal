@@ -822,25 +822,43 @@ export async function storiesRoutes(
         }
       }
 
-      const stories = await prisma.story.findMany({
+      const storySelect = {
+        id: true,
+        title: true,
+        category: true,
+        status: true,
+        locationName: true,
+        compositeScore: true,
+        breakingScore: true,
+        trendingScore: true,
+        sourceCount: true,
+        firstSeenAt: true,
+        lastUpdatedAt: true,
+        aiSummary: true,
+      };
+
+      let stories = await prisma.story.findMany({
         where,
         orderBy: { lastUpdatedAt: 'desc' },
         take: 10,
-        select: {
-          id: true,
-          title: true,
-          category: true,
-          status: true,
-          locationName: true,
-          compositeScore: true,
-          breakingScore: true,
-          trendingScore: true,
-          sourceCount: true,
-          firstSeenAt: true,
-          lastUpdatedAt: true,
-          aiSummary: true,
-        },
+        select: storySelect,
       });
+
+      // If local market filter returned too few results, backfill with national/any recent stories
+      if (stories.length < 5) {
+        const existingIds = stories.map(s => s.id);
+        const backfill = await prisma.story.findMany({
+          where: {
+            mergedIntoId: null,
+            status: { notIn: ['STALE', 'ARCHIVED'] },
+            id: { notIn: existingIds },
+          },
+          orderBy: { lastUpdatedAt: 'desc' },
+          take: 10 - stories.length,
+          select: storySelect,
+        });
+        stories = [...stories, ...backfill];
+      }
 
       return reply.send({
         stories,

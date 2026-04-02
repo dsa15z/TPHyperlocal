@@ -95,21 +95,24 @@ function getQueues() {
 }
 
 /**
- * Schedule RSS feed polling jobs for all active RSS sources
+ * Schedule RSS feed polling jobs for active RSS sources.
+ * National/global RSS sources poll ALWAYS (even when UI is idle) so free teaser
+ * users always have fresh content. Local-market sources only poll when UI is active.
  */
 async function scheduleRSSPolls(): Promise<void> {
-  // Skip polling when no users are active (saves API costs)
-  if (!(await isUIActive())) {
-    logger.debug('UI idle — skipping RSS polls to save costs');
-    return;
-  }
+  const uiActive = await isUIActive();
 
   const { ingestionQueue } = getQueues();
 
   try {
-    // Only poll sources that are linked to markets with active accounts
-    // This prevents polling Houston TV stations if no account has Houston
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    // Find the National market ID
+    const nationalMarket = await prisma.market.findFirst({
+      where: { name: { contains: 'National', mode: 'insensitive' } },
+      select: { id: true },
+    });
+    const nationalMarketId = nationalMarket?.id;
 
     // Find markets that have at least one active account
     const activeMarketIds = await prisma.market.findMany({
@@ -117,18 +120,35 @@ async function scheduleRSSPolls(): Promise<void> {
       select: { id: true },
     }).then(markets => markets.map(m => m.id));
 
+    // Build source filter — always include national/global, only include local when UI active
+    const sourceConditions: any[] = [
+      // Global sources (legacy flag) — always poll
+      { isGlobal: true },
+      // Sources with no market link (unlinked/legacy) — always poll
+      { marketId: null },
+    ];
+
+    // National market sources — always poll (keeps teaser fresh)
+    if (nationalMarketId) {
+      sourceConditions.push({
+        sourceMarkets: { some: { marketId: nationalMarketId } },
+      });
+    }
+
+    // Local market sources — only when UI is active
+    if (uiActive) {
+      sourceConditions.push({
+        marketId: { in: activeMarketIds },
+      });
+    } else {
+      logger.debug('UI idle — polling national RSS only (local sources paused)');
+    }
+
     const rssSources = await prisma.source.findMany({
       where: {
         platform: 'RSS',
         isActive: true,
-        OR: [
-          // Sources with direct marketId in active markets
-          { marketId: { in: activeMarketIds } },
-          // Global sources
-          { isGlobal: true },
-          // Sources with no market link (unlinked/legacy)
-          { marketId: null },
-        ],
+        OR: sourceConditions,
         AND: [
           {
             OR: [
