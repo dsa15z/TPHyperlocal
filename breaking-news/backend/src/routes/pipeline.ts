@@ -694,6 +694,53 @@ export async function pipelineRoutes(
   // Global sources → National market, city-named sources → their city market
   app.post('/pipeline/fix-source-markets', async (_request, reply) => {
     try {
+      // Ensure SourceMarket + StoryEntity + SystemKnowledge tables exist
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "SourceMarket" (
+          "id" TEXT NOT NULL DEFAULT concat('sm_', gen_random_uuid()),
+          "sourceId" TEXT NOT NULL,
+          "marketId" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SourceMarket_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SourceMarket_sourceId_marketId_key" UNIQUE ("sourceId", "marketId"),
+          CONSTRAINT "SourceMarket_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "Source"("id") ON DELETE CASCADE,
+          CONSTRAINT "SourceMarket_marketId_fkey" FOREIGN KEY ("marketId") REFERENCES "Market"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "SourceMarket_sourceId_idx" ON "SourceMarket"("sourceId")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "SourceMarket_marketId_idx" ON "SourceMarket"("marketId")`;
+
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "StoryEntity" (
+          "id" TEXT NOT NULL DEFAULT concat('se_', gen_random_uuid()),
+          "storyId" TEXT NOT NULL,
+          "name" TEXT NOT NULL,
+          "type" TEXT NOT NULL,
+          "confidence" DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+          "source" TEXT NOT NULL DEFAULT 'llm',
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "StoryEntity_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "StoryEntity_storyId_name_type_key" UNIQUE ("storyId", "name", "type"),
+          CONSTRAINT "StoryEntity_storyId_fkey" FOREIGN KEY ("storyId") REFERENCES "Story"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "StoryEntity_name_type_idx" ON "StoryEntity"("name", "type")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "StoryEntity_storyId_idx" ON "StoryEntity"("storyId")`;
+
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "SystemKnowledge" (
+          "id" TEXT NOT NULL,
+          "key" TEXT NOT NULL,
+          "content" TEXT NOT NULL,
+          "category" TEXT NOT NULL DEFAULT 'general',
+          "updatedBy" TEXT,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "SystemKnowledge_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "SystemKnowledge_key_key" UNIQUE ("key")
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "SystemKnowledge_category_idx" ON "SystemKnowledge"("category")`;
+
       // Get all markets
       const markets = await prisma.market.findMany({
         select: { id: true, name: true, state: true, slug: true },
