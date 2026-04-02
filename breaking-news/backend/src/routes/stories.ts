@@ -135,15 +135,6 @@ export async function storiesRoutes(
             }
           }
         }
-          // Market resolution: look up market ID from city name
-          if (parsed.market && !marketIds) {
-            const market = await prisma.market.findFirst({
-              where: { name: { contains: parsed.market, mode: 'insensitive' }, isActive: true },
-              select: { id: true },
-            });
-            if (market) marketIds = market.id;
-          }
-        }
       } catch {
         // LLM unavailable — heuristic fallback: extract obvious filters from query
         const lower = nlpQuery.toLowerCase();
