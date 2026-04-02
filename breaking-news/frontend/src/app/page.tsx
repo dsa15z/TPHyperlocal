@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search, Zap, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
 import clsx from "clsx";
 import { fetchStories, fetchTeaserStories, type StoryFilters, type TeaserResponse } from "@/lib/api";
 import { useUser } from "@/components/UserProvider";
@@ -59,50 +59,6 @@ function storyFiltersToSaved(filters: StoryFilters): SavedFilters {
     uncoveredOnly: filters.uncovered_only,
     trend: filters.trend,
   };
-}
-
-// ─── Breaking Banner ──────────────────────────────────────────────────────
-
-function BreakingBanner({ stories }: { stories: Array<{ id: string; title: string; status: string; source_count: number }> }) {
-  const breaking = stories.filter(s => s.status === "BREAKING" || s.status === "ALERT");
-  if (breaking.length === 0) return null;
-
-  const alerts = breaking.filter(s => s.status === "ALERT");
-  const isAlert = alerts.length > 0;
-
-  return (
-    <div className={clsx(
-      "rounded-lg px-4 py-3 flex items-center gap-3 animate-in",
-      isAlert
-        ? "bg-red-500/10 border border-red-500/30"
-        : "bg-orange-500/10 border border-orange-500/30"
-    )}>
-      <div className={clsx(
-        "flex items-center gap-2 font-semibold text-sm whitespace-nowrap",
-        isAlert ? "text-red-400" : "text-orange-400"
-      )}>
-        {isAlert ? <AlertTriangle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
-        {breaking.length} {isAlert ? "ALERT" : "BREAKING"}
-      </div>
-      <div className="flex-1 min-w-0 flex items-center gap-3 overflow-x-auto scrollbar-none">
-        {breaking.slice(0, 5).map(s => (
-          <a
-            key={s.id}
-            href={`/stories/${s.id}`}
-            className={clsx(
-              "text-sm truncate max-w-[300px] hover:underline flex-shrink-0",
-              isAlert ? "text-red-300" : "text-orange-300"
-            )}
-          >
-            {s.title}
-          </a>
-        ))}
-        {breaking.length > 5 && (
-          <span className="text-xs text-gray-500 flex-shrink-0">+{breaking.length - 5} more</span>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────
@@ -280,9 +236,6 @@ function DashboardContent() {
   return (
     <div className="min-h-screen">
       <main className="max-w-[1600px] mx-auto px-4 md:px-6 py-6 space-y-4">
-        {/* Breaking stories banner — urgency at a glance */}
-        {!isLoading && stories.length > 0 && <BreakingBanner stories={stories} />}
-
         {/* Pipeline progress */}
         <NewsProgressPanel />
 
