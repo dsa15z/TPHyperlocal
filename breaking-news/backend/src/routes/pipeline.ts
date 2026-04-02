@@ -860,6 +860,86 @@ export async function pipelineRoutes(
     }
   });
 
+  // POST /api/v1/pipeline/consolidate-news-sources — Merge per-market Bing/Google sources into one
+  app.post('/pipeline/consolidate-news-sources', async (_request, reply) => {
+    try {
+      const results: string[] = [];
+
+      // Find all "Bing News Local - {City}" sources and consolidate into one "Bing News" source
+      for (const prefix of ['Bing News Local', 'Google News Local']) {
+        const perMarketSources = await prisma.source.findMany({
+          where: { name: { startsWith: prefix }, platform: 'RSS' },
+          include: { sourceMarkets: { select: { marketId: true } } },
+        });
+
+        if (perMarketSources.length <= 1) {
+          results.push(`${prefix}: only ${perMarketSources.length} sources, no consolidation needed`);
+          continue;
+        }
+
+        // Collect all market IDs from the individual sources
+        const allMarketIds = new Set<string>();
+        for (const s of perMarketSources) {
+          for (const sm of (s as any).sourceMarkets) {
+            allMarketIds.add(sm.marketId);
+          }
+        }
+
+        // Create the consolidated source (or find existing one)
+        const consolidatedName = prefix.replace(' Local', '');
+        let consolidated = await prisma.source.findFirst({
+          where: { name: consolidatedName, platform: 'RSS' },
+        });
+
+        if (!consolidated) {
+          consolidated = await prisma.source.create({
+            data: {
+              name: consolidatedName,
+              platform: 'RSS',
+              sourceType: 'API_PROVIDER',
+              url: prefix.includes('Bing')
+                ? 'https://www.bing.com/news/search?q=news&format=rss'
+                : 'https://news.google.com/rss/search?q=us+news&hl=en-US',
+              trustScore: 0.7,
+              isActive: true,
+              isGlobal: false,
+            },
+          });
+          results.push(`Created consolidated source: ${consolidatedName}`);
+        }
+
+        // Link all markets to the consolidated source
+        let linked = 0;
+        for (const marketId of allMarketIds) {
+          try {
+            await prisma.sourceMarket.create({
+              data: { sourceId: consolidated.id, marketId },
+            });
+            linked++;
+          } catch { /* already linked */ }
+        }
+
+        // Deactivate the per-market sources (don't delete — preserve history)
+        const deactivated = await prisma.source.updateMany({
+          where: {
+            id: { in: perMarketSources.map(s => s.id) },
+            id: { not: consolidated.id },
+          },
+          data: { isActive: false },
+        });
+
+        results.push(`${consolidatedName}: ${perMarketSources.length} sources → 1 consolidated, ${linked} markets linked, ${deactivated.count} deactivated`);
+      }
+
+      return reply.send({
+        message: 'News source consolidation complete',
+        results,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /api/v1/pipeline/fix-source-markets — Link sources to correct markets
   // Global sources → National market, city-named sources → their city market
   app.post('/pipeline/fix-source-markets', async (_request, reply) => {

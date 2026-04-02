@@ -893,12 +893,18 @@ async function scheduleGrokFastPoll(): Promise<void> {
   const { llmIngestionQueue } = getQueues();
 
   try {
+    // Find all active Grok sources with their linked markets (via SourceMarket join table)
     const grokSources = await prisma.source.findMany({
       where: {
         platform: 'LLM_GROK',
         isActive: true,
       },
-      include: { market: true },
+      include: {
+        market: true,
+        sourceMarkets: {
+          include: { market: { select: { id: true, name: true, state: true, keywords: true } } },
+        },
+      },
     });
 
     if (grokSources.length === 0) return;
@@ -906,35 +912,201 @@ async function scheduleGrokFastPoll(): Promise<void> {
     const apiKey = process.env['XAI_API_KEY'];
     if (!apiKey) return;
 
-    for (const source of grokSources) {
-      const marketKeywords = source.market?.keywords as string[] | null;
+    // Consolidate: gather all unique markets across all Grok sources
+    const marketMap = new Map<string, { name: string; state: string | null; keywords: string[] }>();
+    const sourceIds: string[] = [];
 
-      await llmIngestionQueue.add(
-        'llm_poll',
-        {
-          type: 'llm_poll',
-          sourceId: source.id,
-          platform: 'LLM_GROK',
-          marketName: source.market?.name || 'Houston, Texas',
-          marketKeywords: marketKeywords || [
-            'crime', 'shooting', 'accident', 'fire', 'weather', 'flood',
-            'traffic', 'police', 'breaking news', 'Houston',
-          ],
-          apiKey,
-        },
-        {
-          jobId: `grok-fast-${source.id}-${Date.now()}`,
-          attempts: 2,
-          backoff: { type: 'exponential', delay: 10000 },
-          removeOnComplete: { age: 1800 },
-          removeOnFail: { age: 3600 },
+    for (const source of grokSources) {
+      sourceIds.push(source.id);
+      // Markets from SourceMarket join table
+      for (const sm of (source as any).sourceMarkets || []) {
+        if (sm.market && !marketMap.has(sm.market.id)) {
+          marketMap.set(sm.market.id, {
+            name: sm.market.name,
+            state: sm.market.state,
+            keywords: (sm.market.keywords as string[]) || [],
+          });
         }
-      );
+      }
+      // Legacy direct market link
+      if (source.market && !marketMap.has(source.market.id)) {
+        marketMap.set(source.market.id, {
+          name: source.market.name,
+          state: (source.market as any).state,
+          keywords: (source.market.keywords as string[]) || [],
+        });
+      }
     }
 
-    logger.info({ count: grokSources.length }, 'Scheduled Grok fast poll (X/Twitter real-time)');
+    // Build a combined market list for the prompt
+    const markets = Array.from(marketMap.values());
+    const marketNames = markets.map(m => m.state ? `${m.name}, ${m.state}` : m.name);
+    const allKeywords = [...new Set(markets.flatMap(m => m.keywords))].slice(0, 30);
+
+    // Single consolidated API call covering all markets
+    await llmIngestionQueue.add(
+      'llm_poll',
+      {
+        type: 'llm_poll',
+        sourceId: sourceIds[0], // Primary source ID for tracking
+        platform: 'LLM_GROK',
+        marketName: marketNames.length <= 3
+          ? marketNames.join(', ')
+          : `${marketNames.length} US markets: ${marketNames.slice(0, 5).join(', ')} and ${marketNames.length - 5} more`,
+        marketKeywords: allKeywords.length > 0 ? allKeywords : [
+          'crime', 'shooting', 'accident', 'fire', 'weather', 'flood',
+          'traffic', 'police', 'breaking news',
+        ],
+        // Pass all market names so the LLM prompt can reference them
+        allMarkets: marketNames,
+        apiKey,
+      },
+      {
+        jobId: `grok-consolidated-${Date.now()}`,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 10000 },
+        removeOnComplete: { age: 1800 },
+        removeOnFail: { age: 3600 },
+      }
+    );
+
+    logger.info({ marketCount: marketNames.length, sourceCount: grokSources.length }, 'Scheduled consolidated Grok poll');
   } catch (err) {
     logger.error({ err }, 'Failed to schedule Grok fast poll');
+  }
+}
+
+/**
+ * Schedule dynamic Bing/Google News polls for multi-market sources.
+ * A single "Bing News" or "Google News Local" source linked to multiple markets
+ * gets expanded into per-market RSS polls using dynamically generated URLs.
+ *
+ * URL patterns:
+ *   Bing:   https://www.bing.com/news/search?q={city}+{state}+news&format=rss
+ *   Google: https://news.google.com/rss/search?q={city}+{state}+local+news&hl=en-US
+ */
+async function scheduleDynamicNewsPoll(): Promise<void> {
+  const { ingestionQueue } = getQueues();
+
+  try {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    // Find sources that look like multi-market news aggregators
+    // These have "Bing" or "Google News" in their name and are linked to multiple markets
+    const dynamicSources = await prisma.source.findMany({
+      where: {
+        platform: 'RSS',
+        isActive: true,
+        name: {
+          contains: 'Bing',
+          mode: 'insensitive',
+        },
+        OR: [
+          { lastPolledAt: null },
+          { lastPolledAt: { lt: fiveMinAgo } },
+        ],
+      },
+      include: {
+        sourceMarkets: {
+          include: { market: { select: { id: true, name: true, state: true, isActive: true } } },
+        },
+      },
+    });
+
+    // Also find Google News sources
+    const googleSources = await prisma.source.findMany({
+      where: {
+        platform: 'RSS',
+        isActive: true,
+        name: {
+          contains: 'Google News',
+          mode: 'insensitive',
+        },
+        OR: [
+          { lastPolledAt: null },
+          { lastPolledAt: { lt: fiveMinAgo } },
+        ],
+      },
+      include: {
+        sourceMarkets: {
+          include: { market: { select: { id: true, name: true, state: true, isActive: true } } },
+        },
+      },
+    });
+
+    const allSources = [...dynamicSources, ...googleSources];
+
+    let queued = 0;
+    for (const source of allSources) {
+      // Get all active markets this source is linked to
+      const markets = ((source as any).sourceMarkets || [])
+        .map((sm: any) => sm.market)
+        .filter((m: any) => m && m.isActive);
+
+      if (markets.length === 0) {
+        // No markets linked — poll the URL as-is (legacy behavior)
+        if (source.url) {
+          const jobId = `rss-poll-${source.id}`;
+          try {
+            await ingestionQueue.add('rss_poll', {
+              type: 'rss_poll',
+              sourceId: source.id,
+              feedUrl: source.url,
+            }, {
+              jobId,
+              attempts: 2,
+              backoff: { type: 'exponential', delay: 5000 },
+              removeOnComplete: { age: 1800 },
+              removeOnFail: { age: 3600 },
+            });
+            queued++;
+          } catch { /* job exists */ }
+        }
+        continue;
+      }
+
+      // Generate a per-market URL for each linked market
+      const isBing = source.name.toLowerCase().includes('bing');
+      for (const market of markets) {
+        const cityState = market.state
+          ? `${market.name}+${market.state}`
+          : market.name;
+        const encoded = encodeURIComponent(cityState.replace(/\s+/g, '+'));
+
+        const feedUrl = isBing
+          ? `https://www.bing.com/news/search?q=${encoded}+news&format=rss`
+          : `https://news.google.com/rss/search?q=${encoded}+local+news&hl=en-US&gl=US&ceid=US:en`;
+
+        const jobId = `dynamic-rss-${source.id}-${market.id}`;
+        try {
+          await ingestionQueue.add('rss_poll', {
+            type: 'rss_poll',
+            sourceId: source.id,
+            feedUrl,
+            marketHint: market.name, // Tell enrichment which market this came from
+          }, {
+            jobId,
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: { age: 1800 },
+            removeOnFail: { age: 3600 },
+          });
+          queued++;
+        } catch { /* job exists */ }
+      }
+
+      // Update lastPolledAt
+      await prisma.source.update({
+        where: { id: source.id },
+        data: { lastPolledAt: new Date() },
+      });
+    }
+
+    if (queued > 0) {
+      logger.info({ sourceCount: allSources.length, queued }, 'Scheduled dynamic Bing/Google News polls');
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule dynamic news polls');
   }
 }
 
@@ -1147,6 +1319,10 @@ export function startSchedulers(): void {
   const grokFastInterval = setInterval(scheduleGrokFastPoll, 5 * 60 * 1000);
   intervals.push(grokFastInterval);
 
+  // Dynamic Bing/Google News: every 5 minutes (expands one source → N market polls)
+  const dynamicNewsInterval = setInterval(scheduleDynamicNewsPoll, 5 * 60 * 1000);
+  intervals.push(dynamicNewsInterval);
+
   // Article extraction: every 5 minutes
   const articleExtractionInterval = setInterval(scheduleArticleExtractions, 5 * 60 * 1000);
   intervals.push(articleExtractionInterval);
@@ -1208,6 +1384,7 @@ export function startSchedulers(): void {
   void scheduleHyperLocalIntelPolls();
   void scheduleWebScrapePolls();
   void scheduleEventRegistryPolls();
+  void scheduleDynamicNewsPoll();
   void scheduleAccountStorySync();
 
   logger.info('All schedulers started');

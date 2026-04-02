@@ -108,21 +108,32 @@ function buildUserPrompt(marketName: string, keywords: string[]): string {
   return `What are the top breaking news stories happening RIGHT NOW in ${marketName}? Focus on: ${keywords.join(', ')}. Only include events from the last few hours that you have high confidence are real.`;
 }
 
-function buildGrokUserPrompt(marketName: string, keywords: string[]): string {
+function buildGrokUserPrompt(marketName: string, keywords: string[], allMarkets?: string[]): string {
   const beats = keywords.length > 0 ? keywords.join(', ') : 'crime, accidents, weather, traffic, fires, politics, breaking news';
-  return `Search X/Twitter posts from the last 2 hours about ${marketName}. What breaking news events are people talking about RIGHT NOW?
+  const marketList = allMarkets && allMarkets.length > 1
+    ? allMarkets.join(', ')
+    : marketName;
+
+  return `Search X/Twitter posts from the last 2 hours for breaking news across these US markets: ${marketList}
+
+What breaking news events are people talking about RIGHT NOW on X in any of these cities?
 
 Focus areas: ${beats}
 
-Key X accounts to check for ${marketName} area:
-- Police: @housaborlice, @HCSOTexas, @HPDRobbery, @HPDMajorAssaults, @SLPDTx, @PearlandPD
-- Fire: @HoustonFire, @haborisCountyFM
-- Traffic: @Houston_Traffic, @TxDOTHouston, @HoustonTranStar
-- Weather: @NWSHouston, @SpaceCityWX, @TravisHerzog
-- News reporters: Any journalist posting from the field
-- Government: @HoustonTX, @HarborrisCountyTX, @JudgeLina
+For EACH story you find:
+- Specify the exact city/location where it's happening
+- Reference actual X accounts or posts you've seen
+- Set confidence based on how many accounts are discussing it
 
-What is happening RIGHT NOW based on what you see on X? Only report events with actual X posts as evidence.`;
+Key X account types to monitor:
+- City/county police departments
+- Fire departments
+- Traffic/DOT accounts
+- Local NWS weather offices
+- Journalists and reporters posting from the field
+- Government officials
+
+What is happening RIGHT NOW based on what you see on X? Only report events with actual X posts as evidence. Return stories from ANY of the listed markets — scan all of them.`;
 }
 
 async function pollOpenAI(job: LLMPollJob): Promise<LLMResponse> {
@@ -219,7 +230,7 @@ async function pollClaude(job: LLMPollJob): Promise<LLMResponse> {
 async function pollGrok(job: LLMPollJob): Promise<LLMResponse> {
   // Try models in order — xAI updates model names frequently
   const modelsToTry = [job.model, 'grok-3-mini', 'grok-3', 'grok-2'].filter(Boolean) as string[];
-  const userPrompt = buildGrokUserPrompt(job.marketName, job.marketKeywords);
+  const userPrompt = buildGrokUserPrompt(job.marketName, job.marketKeywords, (job as any).allMarkets);
 
   let lastError = '';
   for (const model of modelsToTry) {
