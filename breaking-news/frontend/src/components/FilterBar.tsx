@@ -360,10 +360,10 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           </button>
         </div>
 
-        {/* Clear */}
-        {hasActiveFilters && (
+        {/* Clear — shows when filters are active OR advanced panel is open */}
+        {(hasActiveFilters || showAdvanced) && (
           <button
-            onClick={clearFilters}
+            onClick={() => { clearFilters(); setShowAdvanced(false); }}
             aria-label="Clear all filters"
             className="filter-btn text-gray-400 hover:text-red-400 flex items-center gap-1"
           >

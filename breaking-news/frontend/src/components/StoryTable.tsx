@@ -225,12 +225,13 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
       id: "score",
       header: "Score",
       cell: (info) => {
-        const score = info.getValue();
+        const raw = info.getValue(); // 0-1 scale
+        const score = Math.round(raw * 100); // Convert to 0-100
         const barColor = score >= 60 ? "bg-red-500" : score >= 40 ? "bg-orange-500" : score >= 20 ? "bg-yellow-500" : "bg-gray-500";
         return (
           <div className="flex flex-col gap-1 min-w-[60px]">
             <span className={clsx("text-xs font-bold tabular-nums", score >= 60 ? "text-red-400" : score >= 40 ? "text-orange-400" : score >= 20 ? "text-yellow-400" : "text-gray-400")}>
-              {Math.round(score)}
+              {score}
             </span>
             <div className="score-bar">
               <div className={clsx("score-bar-fill", barColor)} style={{ width: `${Math.min(score, 100)}%` }} />
