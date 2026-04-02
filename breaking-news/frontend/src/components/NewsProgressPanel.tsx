@@ -20,6 +20,7 @@ import {
   fetchPipelineJobs,
   triggerPipelineIngestion,
   clearFailedJobs,
+  clearAllJobs,
   forceRunQueue,
   type QueueStatus,
   type PipelineJob,
@@ -230,6 +231,62 @@ function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
   );
 }
 
+function BulkClearActions({ queues, summary }: { queues: QueueStatus[]; summary: { waiting: number; failed: number } }) {
+  const queryClient = useQueryClient();
+  const [clearing, setClearing] = useState<"pending" | "failed" | null>(null);
+
+  const clearAllPending = async () => {
+    setClearing("pending");
+    try {
+      const withWaiting = queues.filter((q) => q.waiting > 0);
+      for (const q of withWaiting) {
+        await clearAllJobs(q.name);
+      }
+      queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+    } finally {
+      setClearing(null);
+    }
+  };
+
+  const clearAllFailed = async () => {
+    setClearing("failed");
+    try {
+      const withFailed = queues.filter((q) => q.failed > 0);
+      for (const q of withFailed) {
+        await clearFailedJobs(q.name);
+      }
+      queryClient.invalidateQueries({ queryKey: ["pipeline-status"] });
+    } finally {
+      setClearing(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 pt-2 border-t border-surface-300/20">
+      {summary.waiting > 0 && (
+        <button
+          onClick={clearAllPending}
+          disabled={clearing !== null}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/10 transition-colors disabled:opacity-50"
+        >
+          {clearing === "pending" ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+          {clearing === "pending" ? "Clearing..." : `Clear ${summary.waiting.toLocaleString()} Pending`}
+        </button>
+      )}
+      {summary.failed > 0 && (
+        <button
+          onClick={clearAllFailed}
+          disabled={clearing !== null}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+        >
+          {clearing === "failed" ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+          {clearing === "failed" ? "Clearing..." : `Clear ${summary.failed.toLocaleString()} Failed`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function NewsProgressPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedLookback, setSelectedLookback] = useState(1);
@@ -312,6 +369,11 @@ export function NewsProgressPanel() {
           {status?.queues.map((queue) => (
             <ExpandableQueueRow key={queue.name} queue={queue} />
           ))}
+
+          {/* Bulk clear actions */}
+          {summary && (summary.waiting > 0 || summary.failed > 0) && (
+            <BulkClearActions queues={status?.queues || []} summary={summary} />
+          )}
 
           {/* Trigger ingestion */}
           <div className="pt-2 border-t border-surface-300/20">

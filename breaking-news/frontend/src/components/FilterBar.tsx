@@ -240,9 +240,11 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setSelectedMarkets([]);
     setUncoveredOnly(false);
     setTrend("all");
-    setTimeRange("1h");
+    setTimeRange("24h");
     setMinScore(0);
     try { localStorage.removeItem(FILTER_STORAGE_KEY); } catch {}
+    // Clear URL params so NLP filters don't persist
+    router.replace("/", { scroll: false });
   };
 
   const hasActiveFilters =

@@ -35,13 +35,27 @@ When refactoring or renaming:
 
 If results or context seem incomplete, say so explicitly instead of guessing.
 
-### RAG Knowledge Base Maintenance (MANDATORY)
-When changing the Prisma schema, adding/modifying API endpoints, changing scoring logic, or adding new features:
-1. Update `backend/src/lib/knowledge-base.ts` — the `generateSystemKnowledge()` function
-2. Update the Prisma schema field list, API endpoint docs, and user how-to guide
-3. The RAG knowledge base is injected into ALL AI prompts (NLP search, chatbot, content generation)
-4. Stale RAG docs cause the AI to give wrong answers — treat this as a build-breaking issue
-5. After updating, go to AI & Content → Knowledge Base → click "Auto-Generate Schema Docs" to re-populate the database
+### RAG Knowledge Base Maintenance (MANDATORY — EVERY COMMIT)
+The RAG knowledge base is injected into ALL AI prompts (NLP search, chatbot, content generation).
+Stale RAG docs cause the AI to give wrong answers — treat this as a **build-breaking issue**.
+
+The knowledge base consists of four documents:
+- `backend/src/lib/knowledge-base.ts` — Schema & platform reference, API endpoints, Prisma field names
+- `backend/src/lib/knowledge-chatbot-ops.ts` — Chatbot operations guide (how to use tools, interpret scores, handle questions)
+- `backend/src/lib/knowledge-backend-services.ts` — Backend services architecture (workers, queues, pipeline, polling)
+- `backend/src/lib/knowledge-user-help.ts` — End-user help guide (how-to, troubleshooting, UI documentation)
+
+**When to update (check on EVERY commit):**
+1. Prisma schema changes → update `knowledge-base.ts` (schema fields section)
+2. API endpoint added/modified → update `knowledge-base.ts` (API endpoints section)
+3. Scoring logic changes → update `knowledge-base.ts` + `knowledge-chatbot-ops.ts`
+4. New worker or queue added → update `knowledge-backend-services.ts`
+5. Poll interval changes → update `knowledge-backend-services.ts`
+6. UI feature added/changed → update `knowledge-user-help.ts`
+7. New chatbot tool added → update `knowledge-chatbot-ops.ts`
+8. New admin page or setting → update `knowledge-user-help.ts`
+
+**After updating any knowledge file**, remind the user to go to AI & Content → Knowledge Base → click "Auto-Generate Schema Docs" to re-populate the database.
 
 ## Architecture Rules
 

@@ -282,33 +282,26 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
     } catch { return reply.status(404).send({ error: 'Not found' }); }
   });
 
-  // POST /admin/knowledge/generate — auto-generate schema reference docs
+  // POST /admin/knowledge/generate — auto-generate all RAG knowledge documents
   app.post('/admin/knowledge/generate', async (request, reply) => {
     const au = requireAuth(request);
     if (au.role !== 'OWNER' && au.role !== 'ADMIN') return reply.status(403).send({ error: 'Admin required' });
 
     try {
-      const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
-      const fullDoc = generateSystemKnowledge();
-
-      // Split into sections and store each
-      const sections = fullDoc.split(/\n## /).map((s, i) => i === 0 ? s : '## ' + s);
+      const { generateAllKnowledgeDocs } = await import('../lib/knowledge-base.js');
+      const docs = generateAllKnowledgeDocs();
       let saved = 0;
 
-      for (const section of sections) {
-        const titleMatch = section.match(/^(?:##?\s+)?(.+)/);
-        const title = titleMatch ? titleMatch[1].trim().substring(0, 80) : `section_${saved}`;
-        const key = `auto_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 60)}`;
-
+      for (const doc of docs) {
         await prisma.$executeRaw`
           INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
-          VALUES (${`sk_auto_${Date.now()}_${saved}`}, ${key}, ${section.trim()}, 'schema', ${au.userId}, NOW())
-          ON CONFLICT (key) DO UPDATE SET content = ${section.trim()}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
+          VALUES (${`sk_${doc.key}_${Date.now()}`}, ${doc.key}, ${doc.content}, ${doc.category}, ${au.userId}, NOW())
+          ON CONFLICT (key) DO UPDATE SET content = ${doc.content}, category = ${doc.category}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
         `;
         saved++;
       }
 
-      return reply.send({ message: `Generated ${saved} knowledge documents`, saved });
+      return reply.send({ message: `Generated ${saved} knowledge documents (schema, operations, architecture, help)`, saved });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }

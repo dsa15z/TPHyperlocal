@@ -318,12 +318,25 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
 
     const { message, history = [], context } = body.data;
 
-    // Import RAG knowledge base
+    // Load RAG knowledge from SystemKnowledge DB table (populated via /admin/knowledge/generate)
     let knowledgeBase = '';
     try {
-      const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
-      knowledgeBase = generateSystemKnowledge();
+      const docs = await prisma.$queryRaw<Array<{ content: string; category: string }>>`
+        SELECT content, category FROM "SystemKnowledge" WHERE category IN ('operations', 'help', 'schema') ORDER BY category
+      `;
+      if (docs && docs.length > 0) {
+        knowledgeBase = docs.map(d => d.content).join('\n\n---\n\n');
+      }
     } catch {}
+    // Fallback to generated knowledge if DB has no docs yet
+    if (!knowledgeBase) {
+      try {
+        const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
+        const { generateChatbotOpsKnowledge } = await import('../lib/knowledge-chatbot-ops.js');
+        const { generateUserHelpKnowledge } = await import('../lib/knowledge-user-help.js');
+        knowledgeBase = [generateChatbotOpsKnowledge(), generateUserHelpKnowledge(), generateSystemKnowledge()].join('\n\n---\n\n');
+      } catch {}
+    }
 
     // Build context-aware prompt
     let contextInfo = '';
@@ -351,7 +364,7 @@ ${contextInfo}
 When the user says "this story" or "the current story", refer to activeStoryId from context.
 When the user says "these results" or "the current view", refer to activeFilters from context.
 
-${knowledgeBase ? '--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase.substring(0, 4000) + '\n--- END KNOWLEDGE ---\n' : ''}
+${knowledgeBase ? '--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase + '\n--- END KNOWLEDGE ---\n' : ''}
 
 Available tools you can call:
 You help users find stories, manage sources, analyze trends, and perform admin tasks.

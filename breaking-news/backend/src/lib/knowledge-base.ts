@@ -1,11 +1,24 @@
 /**
  * Auto-generated RAG knowledge base for the TopicPulse AI system.
- * This document is injected into LLM system prompts to make the
- * NLP search and chatbot understand the entire platform.
+ * Composed of four documents:
+ *   1. Schema & Platform Reference (this file)
+ *   2. Chatbot Operations Guide (knowledge-chatbot-ops.ts)
+ *   3. Backend Services Architecture (knowledge-backend-services.ts)
+ *   4. End-User Help Guide (knowledge-user-help.ts)
  *
- * Regenerate by calling: generateSystemKnowledge()
+ * All four are stored in the SystemKnowledge table via /admin/knowledge/generate.
+ * The chatbot loads relevant sections from the DB at runtime.
  */
 
+import { generateChatbotOpsKnowledge } from './knowledge-chatbot-ops.js';
+import { generateBackendServicesKnowledge } from './knowledge-backend-services.js';
+import { generateUserHelpKnowledge } from './knowledge-user-help.js';
+
+/**
+ * Generate the schema & platform reference document.
+ * This is the original knowledge base document covering data model, API endpoints,
+ * Prisma schema fields, and basic how-to guide.
+ */
 export function generateSystemKnowledge(): string {
   return `
 # TopicPulse Platform Knowledge Base
@@ -102,6 +115,7 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - POST /api/v1/pipeline/trigger — force ingestion (max 24h lookback)
 - POST /api/v1/pipeline/run-queue — force run a specific queue
 - POST /api/v1/pipeline/clear-failed — clear failed jobs
+- POST /api/v1/pipeline/clear-all — obliterate all jobs from a queue
 - POST /api/v1/pipeline/poll-source/:id — poll single source now
 - POST /api/v1/pipeline/cleanup-sources — deduplicate sources
 
@@ -115,6 +129,12 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - POST /api/v1/moderation/:storyId/approve|reject|flag
 - GET/POST/DELETE /api/v1/moderation/words — blacklist/flag words
 - GET/POST /api/v1/moderation/algorithm — scoring threshold tuning
+
+### Knowledge Base
+- GET /api/v1/admin/knowledge — list all knowledge documents
+- POST /api/v1/admin/knowledge — add or update a document (key, content, category)
+- DELETE /api/v1/admin/knowledge/:id — delete a document
+- POST /api/v1/admin/knowledge/generate — auto-generate all schema docs
 
 ### User Settings
 - PATCH /api/v1/user/settings/profile — update name, phone, timezone
@@ -140,34 +160,6 @@ Sacramento, Pittsburgh, Las Vegas, Austin, Cincinnati, Kansas City, Columbus, In
 Cleveland, San Jose, Nashville, Virginia Beach, Providence, Milwaukee, Jacksonville,
 Oklahoma City, Raleigh, Memphis, Richmond, Louisville, New Orleans, Salt Lake City,
 Hartford, Birmingham, Buffalo
-
-## Source Types
-- RSS Feed: polls RSS/Atom URLs for articles
-- API (News): Event Registry, HyperLocal Intel, Newscatcher
-- Twitter/X: search API v2 for keywords per market
-- Facebook: Graph API page monitoring
-- GDELT: free global event validation
-- AI (OpenAI/Grok/Gemini): LLM-generated news analysis
-- Manual: manually submitted stories
-
-## User Roles
-- OWNER: full access, can modify algorithm, manage all accounts
-- ADMIN: manage sources, markets, users, moderation
-- EDITOR: assign stories, generate content, moderate
-- VIEWER: read-only access to stories matching their markets
-
-## Key Business Rules
-1. Stories are shared globally — all accounts see the same base data
-2. Account actions (edit, assign, AI draft) create private derivatives
-3. Sources only poll when their markets have active accounts
-4. Workers pause when no UI activity for 6 minutes (cost control)
-5. Breaking detection: 3+ sources in 15 min OR breaking score > threshold
-6. Local markets use lower scoring thresholds than national
-7. Social engagement boosts breaking (+15%) and trending (+20%)
-8. Score snapshots stored for growth percentage calculation
-9. NLP search: natural language queries parsed into structured filters
-10. Views can be saved with NLP prompts and subscribed to for email delivery
-
 
 ## Prisma Schema — Exact Field Names
 
@@ -223,65 +215,36 @@ StoryStatus: ALERT, BREAKING, DEVELOPING, TOP_STORY, ONGOING, FOLLOW_UP, STALE, 
 - offset: number (default 0)
 - sort: "compositeScore" | "breakingScore" | "trendingScore" | "firstSeenAt" | "lastUpdatedAt" | "sourceCount"
 - order: "asc" | "desc" (default desc)
-
-### POST /api/v1/admin/sources
-- platform: Platform enum value (required)
-- sourceType: SourceType enum value (required)
-- name: string 1-255 (required)
-- url: string URL (optional)
-- marketId: string (optional, legacy single market)
-- marketIds: string array (optional, M:N via SourceMarket)
-- trustScore: number 0-1 (default 0.5)
-
-### POST /api/v1/admin/markets
-- name: string 1-255 (required)
-- slug: string 2-64 lowercase-hyphenated (required)
-- state: string max 10 (optional)
-- latitude: number -90 to 90
-- longitude: number -180 to 180
-- radiusKm: number 1-500 (default 80)
-- timezone: string (default America/Chicago)
-- keywords: string array (optional)
-- neighborhoods: string array (optional)
-
-## User How-To Guide
-
-### How do I find breaking stories?
-Use the Stories page. Set the status filter to "BREAKING" or type "show me breaking news" in the search bar.
-
-### How do I filter by market?
-Use the "All Markets" dropdown on the Stories page. Select your market (e.g., Houston, TX). Only stories matching that market's location, keywords, and neighborhoods will show. Add "National" to also see national stories.
-
-### How do I save a view?
-Set up your filters (market, category, time range, etc.) and/or type an NLP query. Click the "Save" button next to the view name. Give it a name like "Houston Crime Watch". The view saves all your filter settings including the NLP prompt.
-
-### How do I get email alerts?
-Go to My Profile (click your avatar top-right) → Email Alerts tab. Click "Subscribe", select a saved view, enter your email, choose frequency (hourly/daily/weekly), and set max stories per email.
-
-### How do I add a source?
-Go to Sources & Data → Data Feeds. Click "+ Add Source". Choose the source type (RSS Feed, API, Twitter, etc.), enter the URL, assign to one or more markets, and save. Click the ▶ button to test-poll it immediately.
-
-### How do I create a market?
-Go to Sources & Data → Markets. Click "+ Add Market" or click "Sync All 50 Markets" to import all US MSA markets with pre-configured TV/radio stations.
-
-### How do I assign a story to a reporter?
-Open a story detail page. Use the "Your Workspace" bar at the top to change the status to "ASSIGNED" and set the assignedTo field. Or use the AI chatbot: "assign this story to John".
-
-### How do I generate AI content?
-Open a story detail page. Use the First Draft panel to generate TV scripts, web stories, social posts, or radio scripts. The AI uses your account's voice/tone settings (configurable in AI & Content → AI Config).
-
-### How do I use the AI chatbot?
-Click the blue bot icon (bottom-right) or press Cmd+K. Ask anything: "What's breaking?", "Show me Houston crime", "Clear failed jobs", "How many sources are active?". The chatbot can search stories, manage sources, explain scores, and navigate you to any page.
-
-### How do I change my password?
-Click your profile icon (top-right) → My Profile → Password tab.
-
-### How does scoring work?
-Each story gets 5 scores (0-100): Breaking (source velocity), Trending (growth rate), Confidence (source trust), Locality (market relevance), Social (engagement). The composite score blends these. Local market stories have lower thresholds to surface faster.
-
-### What does each status mean?
-BREAKING: urgent, high-velocity story. DEVELOPING: new, still gathering sources. TOP_STORY: popular, strong growth. ONGOING: established, not growing fast. STALE: no new activity. ARCHIVED: old/removed. ALERT: critical emergency.
 `.trim();
+}
+
+/**
+ * Get all four knowledge documents as an array of { key, content, category } objects.
+ * Used by the /admin/knowledge/generate endpoint to populate the SystemKnowledge table.
+ */
+export function generateAllKnowledgeDocs(): Array<{ key: string; content: string; category: string }> {
+  return [
+    {
+      key: 'schema_platform_reference',
+      content: generateSystemKnowledge(),
+      category: 'schema',
+    },
+    {
+      key: 'chatbot_operations_guide',
+      content: generateChatbotOpsKnowledge(),
+      category: 'operations',
+    },
+    {
+      key: 'backend_services_architecture',
+      content: generateBackendServicesKnowledge(),
+      category: 'architecture',
+    },
+    {
+      key: 'end_user_help_guide',
+      content: generateUserHelpKnowledge(),
+      category: 'help',
+    },
+  ];
 }
 
 /**
