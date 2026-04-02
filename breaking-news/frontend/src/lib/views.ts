@@ -23,16 +23,16 @@ export interface ColumnConfig {
 
 /** All available columns with their defaults */
 export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
-  { id: "rank", label: "#", width: 40, defaultWidth: 40, minWidth: 32 },
-  { id: "famous", label: "", width: 32, defaultWidth: 32, minWidth: 28 },
+  { id: "rank", label: "#", width: 32, defaultWidth: 32, minWidth: 28 },
+  { id: "famous", label: "", width: 28, defaultWidth: 28, minWidth: 24 },
+  { id: "verified", label: "", width: 36, defaultWidth: 36, minWidth: 30 },
   { id: "status", label: "Status", width: 90, defaultWidth: 90, minWidth: 70 },
   { id: "title", label: "Title", width: 500, defaultWidth: 500, minWidth: 300 },
   { id: "category", label: "Category", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "location", label: "Location", width: 120, defaultWidth: 120, minWidth: 70 },
   { id: "score", label: "Score", width: 90, defaultWidth: 90, minWidth: 60 },
-  { id: "verified", label: "Sources", width: 60, defaultWidth: 60, minWidth: 45 },
   { id: "trend", label: "Trend", width: 90, defaultWidth: 90, minWidth: 60 },
-  { id: "coverage", label: "Covered", width: 70, defaultWidth: 70, minWidth: 50 },
+  { id: "coverage", label: "", width: 28, defaultWidth: 28, minWidth: 24 },
   { id: "first_seen", label: "First Seen", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "last_updated", label: "Updated", width: 100, defaultWidth: 100, minWidth: 70 },
   // Power-user columns (hidden by default, available in column customizer)

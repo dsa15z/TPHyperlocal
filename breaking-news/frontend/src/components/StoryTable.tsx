@@ -11,7 +11,7 @@ import {
   type SortingState,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch, Star, BadgeCheck, AlertTriangle } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, GitBranch, Star, BadgeCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import type { Story, SourceSummary } from "@/lib/api";
 import type { ColumnConfig } from "@/lib/views";
@@ -125,7 +125,7 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
     }),
     verified: columnHelper.display({
       id: "verified",
-      header: "Sources",
+      header: () => <BadgeCheck className="w-3.5 h-3.5 text-gray-500 mx-auto" />,
       cell: (info) => {
         const story = info.row.original;
         const count = story.source_count || 0;
@@ -170,7 +170,7 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
           </div>
         );
       },
-      size: 60,
+      size: 36,
     }),
     title: columnHelper.accessor("title", {
       header: "Title",
@@ -393,39 +393,19 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
     }),
     coverage: columnHelper.display({
       id: "coverage",
-      header: "Covered",
+      header: () => <CheckCircle2 className="w-3.5 h-3.5 text-gray-500 mx-auto" />,
       cell: (info) => {
+        const acct = info.row.original.accountStory;
         const coverage = info.row.original.coverage || [];
-        if (coverage.length === 0) {
-          return <span className="text-gray-600 text-xs">-</span>;
-        }
-        const anyCovered = coverage.some((c) => c.isCovered);
+        const isCovered = acct?.coveredAt || coverage.some((c) => c.isCovered);
+        if (!isCovered) return null;
         return (
-          <div className="relative group">
-            <span className={clsx(
-              "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold",
-              anyCovered
-                ? "bg-green-500/15 text-green-400"
-                : "bg-red-500/15 text-red-400"
-            )}>
-              {anyCovered ? "\u2713" : "\u2717"}
-            </span>
-            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-              <div className="bg-surface-100 border border-surface-300 rounded-lg shadow-xl p-2 min-w-[160px]">
-                {coverage.map((c, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs py-0.5">
-                    <span className={c.isCovered ? "text-green-400" : "text-red-400"}>
-                      {c.isCovered ? "\u2713" : "\u2717"}
-                    </span>
-                    <span className="text-gray-300">{c.feedName}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <span className="inline-flex items-center justify-center w-full">
+            <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+          </span>
         );
       },
-      size: 70,
+      size: 28,
     }),
     first_seen: columnHelper.accessor("first_seen", {
       header: "First Seen",
