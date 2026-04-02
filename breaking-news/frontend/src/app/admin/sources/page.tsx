@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -137,7 +137,15 @@ function getSourceHealth(source: Source): { status: "healthy" | "warning" | "fai
   return { status: "healthy", color: "text-green-400 bg-green-500/10", label: "Healthy" };
 }
 
-export default function SourcesPage() {
+export default function SourcesPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Loading...</div>}>
+      <SourcesPage />
+    </Suspense>
+  );
+}
+
+function SourcesPage() {
   const queryClient = useQueryClient();
   const urlParams = useSearchParams();
   const [showForm, setShowForm] = useState(false);
