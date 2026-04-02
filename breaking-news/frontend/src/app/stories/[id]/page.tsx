@@ -126,11 +126,13 @@ function AISummaryPanel({
   aiSummary,
   aiSummaryModel,
   aiSummaryAt,
+  compact,
 }: {
   storyId: string;
   aiSummary: string | null;
   aiSummaryModel: string | null;
   aiSummaryAt: string | null;
+  compact?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -176,6 +178,40 @@ function AISummaryPanel({
 
   const showLoading = isGenerating && !aiSummary;
 
+  // Compact mode: just the regenerate button, no summary text (shown inline above)
+  if (compact && aiSummary) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => generateMutation.mutate()}
+          disabled={generateMutation.isPending || isGenerating}
+          className="filter-btn text-xs flex items-center gap-1.5 text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+        >
+          {generateMutation.isPending || isGenerating ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          Regenerate AI Summary
+        </button>
+      </div>
+    );
+  }
+
+  // Compact mode with no summary yet: show generating state
+  if (compact && !aiSummary) {
+    if (showLoading) {
+      return (
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
+          Generating AI summary...
+        </div>
+      );
+    }
+    return null;
+  }
+
+  // Full mode (legacy — not used when compact=true)
   return (
     <div className="glass-card p-5 space-y-3">
       <div className="flex items-center justify-between">
@@ -858,8 +894,14 @@ export default function StoryDetailPage() {
               </h1>
 
               <p className="text-gray-400 text-lg leading-relaxed">
-                {stripHtml(story.accountStory?.editedSummary || story.summary)}
+                {stripHtml(story.accountStory?.editedSummary || story.ai_summary || story.summary)}
               </p>
+              {story.ai_summary_model && (
+                <div className="text-[10px] text-gray-600">
+                  Generated via {story.ai_summary_model}
+                  {story.ai_summary_at && ` · ${formatRelativeTime(story.ai_summary_at)}`}
+                </div>
+              )}
             </div>
 
             {/* Merge trail — shows which stories were merged into this one */}
@@ -933,12 +975,13 @@ export default function StoryDetailPage() {
               </div>
             )}
 
-            {/* AI consolidated summary of all sources */}
+            {/* AI summary regenerate button (summary shown inline above) */}
             <AISummaryPanel
               storyId={id}
               aiSummary={story.ai_summary}
               aiSummaryModel={story.ai_summary_model}
               aiSummaryAt={story.ai_summary_at}
+              compact
             />
 
             {/* One-click breaking package */}
