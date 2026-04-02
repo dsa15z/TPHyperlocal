@@ -30,13 +30,15 @@ export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
   { id: "title", label: "Title", width: 500, defaultWidth: 500, minWidth: 300 },
   { id: "category", label: "Category", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "location", label: "Location", width: 120, defaultWidth: 120, minWidth: 70 },
-  { id: "breaking_score", label: "Breaking", width: 90, defaultWidth: 90, minWidth: 60 },
-  { id: "trending_score", label: "Trending", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "score", label: "Score", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "trend", label: "Trend", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "source_count", label: "Sources", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "coverage", label: "Covered", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "first_seen", label: "First Seen", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "last_updated", label: "Updated", width: 100, defaultWidth: 100, minWidth: 70 },
+  // Power-user columns (hidden by default, available in column customizer)
+  { id: "breaking_score", label: "Breaking", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "trending_score", label: "Trending", width: 90, defaultWidth: 90, minWidth: 60 },
 ];
 
 // ─── Saved Filter State ────────────────────────────────────────────────────
@@ -114,7 +116,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "breaking-compact",
     name: "Breaking Compact",
     columns: makeColumns(
-      ["rank", "status", "title", "breaking_score", "source_count", "first_seen"],
+      ["rank", "status", "title", "score", "source_count", "first_seen"],
       { title: 400 }
     ),
     filters: {
@@ -128,7 +130,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "coverage-gaps",
     name: "Coverage Gaps",
     columns: makeColumns(
-      ["rank", "title", "category", "coverage", "breaking_score", "source_count", "first_seen"],
+      ["rank", "title", "category", "coverage", "score", "source_count", "first_seen"],
       { title: 360 }
     ),
     filters: {
@@ -142,7 +144,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "trending-focus",
     name: "Trending Focus",
     columns: makeColumns(
-      ["rank", "title", "trending_score", "trend", "source_count", "category", "last_updated"],
+      ["rank", "title", "score", "trend", "source_count", "category", "last_updated"],
       { title: 360 }
     ),
     filters: {

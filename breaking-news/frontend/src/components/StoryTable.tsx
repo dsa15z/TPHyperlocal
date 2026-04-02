@@ -221,6 +221,25 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
       ),
       size: 120,
     }),
+    score: columnHelper.accessor("composite_score", {
+      id: "score",
+      header: "Score",
+      cell: (info) => {
+        const score = info.getValue();
+        const barColor = score >= 60 ? "bg-red-500" : score >= 40 ? "bg-orange-500" : score >= 20 ? "bg-yellow-500" : "bg-gray-500";
+        return (
+          <div className="flex flex-col gap-1 min-w-[60px]">
+            <span className={clsx("text-xs font-bold tabular-nums", score >= 60 ? "text-red-400" : score >= 40 ? "text-orange-400" : score >= 20 ? "text-yellow-400" : "text-gray-400")}>
+              {Math.round(score)}
+            </span>
+            <div className="score-bar">
+              <div className={clsx("score-bar-fill", barColor)} style={{ width: `${Math.min(score, 100)}%` }} />
+            </div>
+          </div>
+        );
+      },
+      size: 90,
+    }),
     breaking_score: columnHelper.accessor("breaking_score", {
       header: "Breaking",
       cell: (info) => (
