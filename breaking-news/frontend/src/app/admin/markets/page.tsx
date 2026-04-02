@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   MapPin,
-  Pencil,
   Trash2,
   Download,
   AlertCircle,
@@ -546,7 +545,13 @@ export default function MarketsPage() {
                         >
                           {isCol("name") && <td className="px-4 py-3 text-white font-medium">
                             <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : market.id); }}
+                                className="hover:text-white transition-colors"
+                                title={isExpanded ? "Collapse sources" : "Expand sources"}
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                              </button>
                               {market.name}
                             </div>
                           </td>}
@@ -580,11 +585,8 @@ export default function MarketsPage() {
                             {totalSrc > 0 && <span className="text-gray-600 text-xs ml-1">({tvStations.length} TV, {radioStations.length} Radio)</span>}
                           </td>}
                           {isCol("actions") && <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => startEdit(market)} className="filter-btn flex items-center gap-1 text-xs" title="Edit market">
-                                <Pencil className="w-3 h-3" /> Edit
-                              </button>
-                              <button onClick={() => { if (confirm(`Delete market "${market.name}"? This cannot be undone.`)) deleteMutation.mutate(market.id); }}
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete market "${market.name}"? This cannot be undone.`)) deleteMutation.mutate(market.id); }}
                                 className="filter-btn text-gray-500 hover:text-red-400" title="Delete market">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>

@@ -93,7 +93,7 @@ export default function PromptsPage() {
         ) : (
           <div className="space-y-4">
             {prompts.map((p: any) => (
-              <div key={p.id} className="glass-card p-5 space-y-3 animate-in">
+              <div key={p.id} className="glass-card p-5 space-y-3 animate-in cursor-pointer" onClick={() => { if (editingId !== p.id) { setEditingId(p.id); setEditTemplate(p.template); } }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="text-white font-mono text-sm">{p.name}</span>
@@ -101,16 +101,14 @@ export default function PromptsPage() {
                     <span className="text-xs text-gray-600">v{p.version}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {editingId === p.id ? (
-                      <button onClick={() => updateMutation.mutate({ id: p.id, template: editTemplate })} className="filter-btn text-xs flex items-center gap-1 text-green-400"><Save className="w-3 h-3" /> Save</button>
-                    ) : (
-                      <button onClick={() => { setEditingId(p.id); setEditTemplate(p.template); }} className="filter-btn text-xs">Edit</button>
+                    {editingId === p.id && (
+                      <button onClick={(e) => { e.stopPropagation(); updateMutation.mutate({ id: p.id, template: editTemplate }); }} className="filter-btn text-xs flex items-center gap-1 text-green-400"><Save className="w-3 h-3" /> Save</button>
                     )}
-                    <button onClick={() => { if (confirm("Delete?")) deleteMutation.mutate(p.id); }} className="filter-btn text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete?")) deleteMutation.mutate(p.id); }} className="filter-btn text-gray-500 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
                 {editingId === p.id ? (
-                  <textarea value={editTemplate} onChange={(e) => setEditTemplate(e.target.value)} className="filter-input w-full h-32 font-mono text-sm resize-y" />
+                  <textarea value={editTemplate} onChange={(e) => setEditTemplate(e.target.value)} onClick={(e) => e.stopPropagation()} className="filter-input w-full h-32 font-mono text-sm resize-y" />
                 ) : (
                   <pre className="text-sm text-gray-400 bg-surface-300/30 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap max-h-24">{p.template}</pre>
                 )}
