@@ -103,8 +103,49 @@ Only include fields that the query clearly implies. Omit fields that aren't ment
           }
         }
       } catch {
-        // LLM unavailable — fall back to text search with the NLP query
-        nlpTextSearch = nlpQuery;
+        // LLM unavailable — heuristic fallback: extract obvious filters from query
+        const lower = nlpQuery.toLowerCase();
+
+        // Category detection
+        const categoryMap: Record<string, string> = {
+          'crime': 'CRIME', 'sports': 'SPORTS', 'politics': 'POLITICS', 'political': 'POLITICS',
+          'weather': 'WEATHER', 'business': 'BUSINESS', 'health': 'HEALTH', 'technology': 'TECHNOLOGY',
+          'tech': 'TECHNOLOGY', 'entertainment': 'ENTERTAINMENT', 'education': 'EDUCATION',
+          'traffic': 'TRAFFIC', 'environment': 'ENVIRONMENT', 'emergency': 'EMERGENCY',
+          'community': 'COMMUNITY',
+        };
+        for (const [word, cat] of Object.entries(categoryMap)) {
+          if (lower.includes(word) && !category) { category = cat; break; }
+        }
+
+        // Status detection
+        if (lower.includes('breaking') && !status) status = 'BREAKING';
+        else if (lower.includes('trending') && !status) status = 'TOP_STORY';
+        else if (lower.includes('developing') && !status) status = 'DEVELOPING';
+
+        // Time detection
+        if (lower.includes('last hour') && !maxAge) maxAge = 1;
+        else if (lower.includes('today') && !maxAge) maxAge = 24;
+        else if (lower.includes('this week') && !maxAge) maxAge = 168;
+
+        // Market detection — check if query mentions a known market name
+        if (!marketIds) {
+          const marketNames = await prisma.market.findMany({ where: { isActive: true }, select: { id: true, name: true } });
+          for (const m of marketNames) {
+            if (lower.includes(m.name.toLowerCase())) { marketIds = m.id; break; }
+          }
+          if (lower.includes('national') && !marketIds) {
+            const natl = marketNames.find(m => m.name.toLowerCase() === 'national');
+            if (natl) marketIds = natl.id;
+          }
+        }
+
+        // Remaining text after removing detected filters → text search
+        let remaining = lower
+          .replace(/\b(breaking|trending|developing|national|local|show|find|get|list|search|stories|news|from|in|the|last|hour|today|this|week|with|high|top|recent|about)\b/gi, '')
+          .replace(/\b(crime|sports|politics|weather|business|health|technology|entertainment|education|traffic|environment|emergency|community)\b/gi, '')
+          .trim().replace(/\s+/g, ' ').trim();
+        if (remaining.length > 2) nlpTextSearch = remaining;
       }
     }
 
