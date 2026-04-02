@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -162,19 +162,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 
-  // ────────────────────────────────────────────────────────────────────────
-  //  MY SETTINGS — Personal preferences
-  // ────────────────────────────────────────────────────────────────────────
-  {
-    id: "settings",
-    label: "My Settings",
-    icon: Settings,
-    section: "main",
-    items: [
-      { href: "/settings", label: "News Profile", icon: Settings },
-      { href: "/settings/notifications", label: "Alert Settings", icon: Bell },
-    ],
-  },
+  // My Settings removed from sidebar — now accessible via profile dropdown in header
 
   // ════════════════════════════════════════════════════════════════════════
   //  ADMIN SECTION — Configuration, sources, integrations
@@ -248,6 +236,62 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+// ─── Profile Dropdown ──────────────────────────────────────────────────────
+
+function ProfileDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-surface-300/30 rounded-lg transition-colors"
+      >
+        <User className="w-4 h-4" />
+        <ChevronDown className={clsx("w-3 h-3 transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-surface-100 border border-surface-300 rounded-lg shadow-xl w-48 py-1 animate-in">
+          <Link href="/settings" onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-surface-200/50 hover:text-white transition-colors">
+            <User className="w-3.5 h-3.5" /> My Profile
+          </Link>
+          <Link href="/settings" onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-surface-200/50 hover:text-white transition-colors">
+            <Bell className="w-3.5 h-3.5" /> Email Alerts
+          </Link>
+          <Link href="/settings" onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-surface-200/50 hover:text-white transition-colors">
+            <Shield className="w-3.5 h-3.5" /> Access & Roles
+          </Link>
+          <div className="border-t border-surface-300/30 my-1" />
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("bn_jwt_token");
+                window.location.href = "/login";
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors w-full text-left"
+          >
+            <LogIn className="w-3.5 h-3.5" /> Sign Out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
@@ -392,19 +436,7 @@ export function SiteNav() {
           <ThemeToggle />
           {isLoggedIn && <NotificationBell />}
           {isLoggedIn ? (
-            <button
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  localStorage.removeItem("bn_jwt_token");
-                  window.location.href = "/login";
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-surface-300/30 rounded-lg transition-colors"
-              title="Sign Out"
-            >
-              <User className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+            <ProfileDropdown />
           ) : (
             <Link
               href="/login"
