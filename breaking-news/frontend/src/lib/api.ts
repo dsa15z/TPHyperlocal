@@ -676,6 +676,20 @@ export async function pollSourceNow(sourceId: string): Promise<{ message: string
   });
 }
 
+export async function healSource(sourceId: string): Promise<{
+  healed: boolean;
+  reactivated: boolean;
+  oldUrl: string;
+  newUrl: string;
+  urlChanged: boolean;
+  log: Array<{ at: string; action: string; result: string }>;
+}> {
+  return apiFetch(`/api/v1/pipeline/heal-source/${sourceId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {

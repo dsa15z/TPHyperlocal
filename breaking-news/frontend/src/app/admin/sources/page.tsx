@@ -28,10 +28,11 @@ import {
   PowerOff,
   MapPin,
   Play,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { Modal } from "@/components/Modal";
-import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, pollSourceNow, fetchMarkets, type TestSourceResult } from "@/lib/api";
+import { apiFetch, fetchSources, createSource, toggleSource, deleteSource, testSource, bulkSourceAction, pollSourceNow, healSource, fetchMarkets, type TestSourceResult } from "@/lib/api";
 import { getAuthHeaders } from "@/lib/auth";
 import { formatRelativeTime } from "@/lib/utils";
 // PageTabBar removed — filters handle the same functionality
@@ -252,6 +253,15 @@ function SourcesPage() {
   const pollMutation = useMutation({
     mutationFn: (id: string) => pollSourceNow(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+    },
+  });
+
+  const [healResult, setHealResult] = useState<any>(null);
+  const healMutation = useMutation({
+    mutationFn: (id: string) => healSource(id),
+    onSuccess: (data) => {
+      setHealResult(data);
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
   });
@@ -693,6 +703,25 @@ function SourcesPage() {
                 </div>
 
                 <div className="flex items-center gap-3 pt-2 flex-wrap">
+                  {/* Self-Heal button (for inactive/failing sources) */}
+                  {editingId && (
+                    <button
+                      onClick={() => { setHealResult(null); healMutation.mutate(editingId); }}
+                      disabled={healMutation.isPending}
+                      className={clsx(
+                        "px-4 py-2 border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 text-sm font-medium rounded-lg transition-colors flex items-center gap-2",
+                        healMutation.isPending && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      {healMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                      {healMutation.isPending ? "Healing..." : "Self-Heal"}
+                    </button>
+                  )}
+
                   {/* Test Feed button */}
                   <button
                     onClick={handleTestFeed}
@@ -786,6 +815,30 @@ function SourcesPage() {
                 )}
 
                 {/* Failure Audit Log */}
+                {/* Heal result */}
+                {healResult && (
+                  <div className={clsx("mt-3 p-3 rounded-lg border text-sm", healResult.healed ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30")}>
+                    <div className={clsx("font-semibold mb-1", healResult.healed ? "text-green-400" : "text-red-400")}>
+                      {healResult.healed ? `✓ Healed${healResult.reactivated ? ' & Reactivated' : ''}` : '✗ Could not heal'}
+                    </div>
+                    {healResult.urlChanged && (
+                      <div className="text-xs text-gray-400">URL changed: {healResult.oldUrl} → {healResult.newUrl}</div>
+                    )}
+                    <div className="mt-2 space-y-0.5 max-h-32 overflow-y-auto">
+                      {(healResult.log || []).map((entry: any, i: number) => (
+                        <div key={i} className={clsx("text-[11px] flex items-start gap-2",
+                          entry.result === 'SUCCESS' ? "text-green-400" :
+                          entry.result === 'FAILED' || entry.result === 'ERROR' ? "text-red-400" :
+                          entry.result === 'BLOCKED' ? "text-orange-400" : "text-gray-400"
+                        )}>
+                          <span className="flex-shrink-0">{entry.result === 'SUCCESS' ? '✓' : entry.result === 'BLOCKED' ? '⚠' : '✗'}</span>
+                          <span>{entry.action}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {editingId && (() => {
                   const source = sources.find((s: Source) => s.id === editingId);
                   const failureLog = ((source?.metadata as any)?.failureLog || []) as Array<{ at: string; reason: string; failure: number }>;

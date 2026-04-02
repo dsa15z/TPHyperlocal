@@ -223,6 +223,139 @@ export async function pipelineRoutes(
     }
   });
 
+  // POST /api/v1/pipeline/heal-source/:id - force self-heal + reactivate a single source
+  app.post('/pipeline/heal-source/:id', async (request, reply) => {
+    const { id: sourceId } = request.params as { id: string };
+    const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+    const source = await prisma.source.findUnique({ where: { id: sourceId } });
+    if (!source) return reply.status(404).send({ error: 'Source not found' });
+    if (!source.url) return reply.status(400).send({ error: 'Source has no URL' });
+
+    const meta = (source.metadata || {}) as Record<string, unknown>;
+    const log: Array<{ at: string; action: string; result: string }> = [];
+    let healed = false;
+    let newUrl = source.url;
+
+    // Strategy 1: Try original URL with browser UA
+    try {
+      log.push({ at: new Date().toISOString(), action: 'Testing original URL with browser UA', result: 'pending' });
+      const resp = await fetch(source.url, {
+        headers: { 'User-Agent': BROWSER_UA, 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+          log.push({ at: new Date().toISOString(), action: 'Original URL works with browser UA', result: 'SUCCESS' });
+          healed = true;
+        } else if (text.includes('cloudflare') || text.includes('Just a moment')) {
+          log.push({ at: new Date().toISOString(), action: 'Cloudflare challenge detected', result: 'BLOCKED' });
+        } else if (text.includes('<html')) {
+          log.push({ at: new Date().toISOString(), action: 'HTML returned instead of RSS', result: 'WRONG_FORMAT' });
+        }
+      } else {
+        log.push({ at: new Date().toISOString(), action: `HTTP ${resp.status}`, result: 'FAILED' });
+      }
+    } catch (err: any) {
+      log.push({ at: new Date().toISOString(), action: `Fetch error: ${err.message}`, result: 'ERROR' });
+    }
+
+    // Strategy 2: Try proxy-to-direct mapping (rsshub → apnews)
+    if (!healed && source.url.includes('rsshub.app/apnews')) {
+      const apMatch = source.url.match(/rsshub\.app\/apnews\/topics\/(.+)/);
+      if (apMatch) {
+        const directUrl = `https://apnews.com/hub/${apMatch[1].replace('apf-', '').replace(/\/$/, '')}?format=rss`;
+        log.push({ at: new Date().toISOString(), action: `Trying direct AP URL: ${directUrl}`, result: 'pending' });
+        try {
+          const resp = await fetch(directUrl, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(10000) });
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text.includes('<rss') || text.includes('<feed')) {
+              log.push({ at: new Date().toISOString(), action: 'Direct AP URL works!', result: 'SUCCESS' });
+              newUrl = directUrl;
+              healed = true;
+            } else {
+              log.push({ at: new Date().toISOString(), action: 'Direct AP URL returns HTML not RSS', result: 'WRONG_FORMAT' });
+            }
+          } else {
+            log.push({ at: new Date().toISOString(), action: `Direct AP URL HTTP ${resp.status}`, result: 'FAILED' });
+          }
+        } catch (err: any) {
+          log.push({ at: new Date().toISOString(), action: `Direct AP error: ${err.message}`, result: 'ERROR' });
+        }
+      }
+    }
+
+    // Strategy 3: Try common RSS URL variants
+    if (!healed) {
+      const variants = ['/feed', '/rss', '/rss.xml', '/atom.xml', '/index.xml'];
+      const origin = new URL(source.url).origin;
+      for (const variant of variants) {
+        const altUrl = origin + variant;
+        try {
+          const resp = await fetch(altUrl, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(8000) });
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text.includes('<rss') || text.includes('<feed')) {
+              log.push({ at: new Date().toISOString(), action: `Found working RSS at ${altUrl}`, result: 'SUCCESS' });
+              newUrl = altUrl;
+              healed = true;
+              break;
+            }
+          }
+        } catch {}
+      }
+      if (!healed) {
+        log.push({ at: new Date().toISOString(), action: 'All RSS URL variants failed', result: 'FAILED' });
+      }
+    }
+
+    // Apply healing
+    if (healed) {
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: {
+          isActive: true,
+          url: newUrl,
+          metadata: {
+            ...meta,
+            consecutiveFailures: 0,
+            healResult: newUrl !== source.url ? 'url-changed' : 'ua-fix',
+            previousUrl: newUrl !== source.url ? source.url : undefined,
+            useBrowserUA: true,
+            healedAt: new Date().toISOString(),
+            failureLog: [...((meta.failureLog || []) as any[]).slice(-10), ...log],
+          },
+        },
+      });
+    } else {
+      // Log the attempt even if it failed
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: {
+          metadata: {
+            ...meta,
+            failureLog: [...((meta.failureLog || []) as any[]).slice(-10), ...log],
+            lastHealAttemptAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
+
+    return reply.send({
+      sourceId,
+      name: source.name,
+      healed,
+      reactivated: healed && !source.isActive,
+      oldUrl: source.url,
+      newUrl: healed ? newUrl : source.url,
+      urlChanged: newUrl !== source.url,
+      log,
+    });
+  });
+
   // POST /api/v1/pipeline/poll-source/:id - force poll a single source now
   app.post('/pipeline/poll-source/:id', async (request, reply) => {
     const { id: sourceId } = request.params as { id: string };
