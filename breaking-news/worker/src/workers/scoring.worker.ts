@@ -547,26 +547,21 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
 
   // Update verification fields via raw SQL (Prisma client not yet regenerated with these columns)
   try {
+    const detailsJson = JSON.stringify(verificationDetails);
     if (verificationStatus === 'VERIFIED') {
-      await prisma.$executeRaw`
-        UPDATE "Story"
-        SET "verificationStatus" = ${verificationStatus},
-            "verificationScore" = ${verificationScore},
-            "verificationDetails" = ${JSON.stringify(verificationDetails)}::jsonb,
-            "verifiedAt" = NOW()
-        WHERE id = ${storyId}
-      `;
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Story" SET "verificationStatus" = $1, "verificationScore" = $2, "verificationDetails" = $3::jsonb, "verifiedAt" = NOW() WHERE id = $4`,
+        verificationStatus, verificationScore, detailsJson, storyId
+      );
     } else {
-      await prisma.$executeRaw`
-        UPDATE "Story"
-        SET "verificationStatus" = ${verificationStatus},
-            "verificationScore" = ${verificationScore},
-            "verificationDetails" = ${JSON.stringify(verificationDetails)}::jsonb
-        WHERE id = ${storyId}
-      `;
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Story" SET "verificationStatus" = $1, "verificationScore" = $2, "verificationDetails" = $3::jsonb WHERE id = $4`,
+        verificationStatus, verificationScore, detailsJson, storyId
+      );
     }
   } catch (verifyErr) {
-    logger.warn({ storyId, err: (verifyErr as Error).message }, 'Failed to update verification fields (columns may not exist)');
+    // Non-fatal: log and continue — scoring still works without verification
+    logger.debug({ storyId, err: (verifyErr as Error).message }, 'Verification update skipped');
   }
   });
 
