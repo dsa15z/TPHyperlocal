@@ -28,7 +28,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
-import { apiFetch, type SourcePost, updateAccountStory, type AccountStoryOverlay } from "@/lib/api";
+import { apiFetch, type SourcePost, updateAccountStory, activateAccountStory, type AccountStoryOverlay } from "@/lib/api";
 import { getAuthHeaders, isAuthenticated } from "@/lib/auth";
 import { FirstDraftPanel } from "@/components/FirstDraftPanel";
 import { StoryResearchPanel } from "@/components/StoryResearchPanel";
@@ -39,6 +39,7 @@ import { FactCheckPanel } from "@/components/FactCheckPanel";
 import { CollaborativeEditor } from "@/components/CollaborativeEditor";
 import { TranslationPanel } from "@/components/TranslationPanel";
 import { BreakingPackagePanel } from "@/components/BreakingPackagePanel";
+import { WorkflowPanel } from "@/components/WorkflowPanel";
 import { fetchStory } from "@/lib/api";
 import {
   formatRelativeTime,
@@ -544,6 +545,32 @@ function RelatedStories({ storyId }: { storyId: string }) {
   );
 }
 
+// ─── Accept as Lead Button ────────────────────────────────────────────────
+
+function AcceptAsLeadButton({ storyId }: { storyId: string }) {
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => activateAccountStory(storyId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["story", storyId] }),
+  });
+
+  return (
+    <button
+      onClick={() => mutation.mutate()}
+      disabled={mutation.isPending}
+      className="w-full px-4 py-3 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-colors"
+    >
+      {mutation.isPending ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <Sparkles className="w-4 h-4" />
+      )}
+      Accept as Lead
+    </button>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function StoryDetailPage() {
@@ -783,6 +810,17 @@ export default function StoryDetailPage() {
                 storyId={id}
               />
             )}
+
+            {/* Editorial workflow panel */}
+            {story.accountStory ? (
+              <WorkflowPanel
+                accountStoryId={story.accountStory.id}
+                currentStage={story.accountStory.accountStatus || "lead"}
+                storyTitle={story.title}
+              />
+            ) : isAuthenticated() ? (
+              <AcceptAsLeadButton storyId={id} />
+            ) : null}
 
             {/* Story header — shows account edits if present */}
             <div className="space-y-4">
