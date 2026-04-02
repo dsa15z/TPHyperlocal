@@ -167,6 +167,120 @@ Hartford, Birmingham, Buffalo
 8. Score snapshots stored for growth percentage calculation
 9. NLP search: natural language queries parsed into structured filters
 10. Views can be saved with NLP prompts and subscribed to for email delivery
+
+
+## Prisma Schema — Exact Field Names
+
+### Story Fields
+id (String cuid), marketId (String?), title (String), summary (String? Text), aiSummary (String? Text),
+aiSummaryModel (String?), aiSummaryAt (DateTime?), category (String?), locationName (String?),
+latitude (Float?), longitude (Float?), neighborhood (String?), geocodedAt (DateTime?),
+breakingScore (Float default 0), trendingScore (Float default 0), confidenceScore (Float default 0),
+localityScore (Float default 0), compositeScore (Float default 0), sentimentScore (Float?),
+sentimentLabel (String?), credibilityScore (Float?), editedTitle (String?), editedSummary (String? Text),
+editedBy (String?), editedAt (DateTime?), reviewStatus (String? default UNREVIEWED),
+topicId (Int?), topicLabel (String?), status (StoryStatus default DEVELOPING),
+editorialOverride (Boolean default false), statusChangedAt (DateTime), horizon (String default BREAKING),
+parentStoryId (String?), sourceCount (Int default 0), firstSeenAt (DateTime), lastUpdatedAt (DateTime),
+mergedIntoId (String?), pastScores (Json?), peakBreakingScore (Float default 0), peakStatus (String?).
+
+### Source Fields
+id (String cuid), platform (Platform enum), sourceType (SourceType enum), name (String), url (String?),
+platformId (String?), trustScore (Float default 0.5), isActive (Boolean default true),
+isGlobal (Boolean default false — DEPRECATED), marketId (String?), metadata (Json?),
+lastPolledAt (DateTime?).
+
+### Market Fields
+id (String cuid), accountId (String), name (String), slug (String), state (String?),
+latitude (Float), longitude (Float), radiusKm (Float default 80), timezone (String),
+isActive (Boolean default true), keywords (Json — string array), neighborhoods (Json — string array).
+
+### AccountStory Fields
+id (String cuid), accountId (String), baseStoryId (String), editedTitle (String?),
+editedSummary (String? Text), notes (String? Text), editedBy (String?), editedAt (DateTime?),
+accountStatus (String default INBOX), assignedTo (String?), assignedAt (DateTime?),
+coveredAt (DateTime?), coverageFeedId (String?), aiDrafts (Json?), aiScripts (Json?),
+aiVideos (Json?), research (Json?), tags (Json?), lastSyncedAt (DateTime), baseSnapshotAt (DateTime?).
+
+### Enums
+Platform: FACEBOOK, TWITTER, RSS, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
+SourceType: NEWS_ORG, GOV_AGENCY, PUBLIC_PAGE, RSS_FEED, API_PROVIDER, LLM_PROVIDER
+StoryStatus: ALERT, BREAKING, DEVELOPING, TOP_STORY, ONGOING, FOLLOW_UP, STALE, ARCHIVED
+
+## API Parameter Schemas (Zod Validation)
+
+### GET /api/v1/stories
+- status: string (comma-separated StoryStatus values)
+- category: string (comma-separated category names)
+- sourceIds: string (comma-separated source IDs)
+- marketIds: string (comma-separated market IDs, use __national__ for National)
+- nlp: string (natural language query, parsed by AI into structured filters)
+- uncoveredOnly: boolean
+- trend: "rising" | "declining" | "all"
+- minScore: number 0-1
+- maxAge: number (hours, supports decimals: 0.25 = 15min)
+- limit: number 1-200 (default 50)
+- offset: number (default 0)
+- sort: "compositeScore" | "breakingScore" | "trendingScore" | "firstSeenAt" | "lastUpdatedAt" | "sourceCount"
+- order: "asc" | "desc" (default desc)
+
+### POST /api/v1/admin/sources
+- platform: Platform enum value (required)
+- sourceType: SourceType enum value (required)
+- name: string 1-255 (required)
+- url: string URL (optional)
+- marketId: string (optional, legacy single market)
+- marketIds: string array (optional, M:N via SourceMarket)
+- trustScore: number 0-1 (default 0.5)
+
+### POST /api/v1/admin/markets
+- name: string 1-255 (required)
+- slug: string 2-64 lowercase-hyphenated (required)
+- state: string max 10 (optional)
+- latitude: number -90 to 90
+- longitude: number -180 to 180
+- radiusKm: number 1-500 (default 80)
+- timezone: string (default America/Chicago)
+- keywords: string array (optional)
+- neighborhoods: string array (optional)
+
+## User How-To Guide
+
+### How do I find breaking stories?
+Use the Stories page. Set the status filter to "BREAKING" or type "show me breaking news" in the search bar.
+
+### How do I filter by market?
+Use the "All Markets" dropdown on the Stories page. Select your market (e.g., Houston, TX). Only stories matching that market's location, keywords, and neighborhoods will show. Add "National" to also see national stories.
+
+### How do I save a view?
+Set up your filters (market, category, time range, etc.) and/or type an NLP query. Click the "Save" button next to the view name. Give it a name like "Houston Crime Watch". The view saves all your filter settings including the NLP prompt.
+
+### How do I get email alerts?
+Go to My Profile (click your avatar top-right) → Email Alerts tab. Click "Subscribe", select a saved view, enter your email, choose frequency (hourly/daily/weekly), and set max stories per email.
+
+### How do I add a source?
+Go to Sources & Data → Data Feeds. Click "+ Add Source". Choose the source type (RSS Feed, API, Twitter, etc.), enter the URL, assign to one or more markets, and save. Click the ▶ button to test-poll it immediately.
+
+### How do I create a market?
+Go to Sources & Data → Markets. Click "+ Add Market" or click "Sync All 50 Markets" to import all US MSA markets with pre-configured TV/radio stations.
+
+### How do I assign a story to a reporter?
+Open a story detail page. Use the "Your Workspace" bar at the top to change the status to "ASSIGNED" and set the assignedTo field. Or use the AI chatbot: "assign this story to John".
+
+### How do I generate AI content?
+Open a story detail page. Use the First Draft panel to generate TV scripts, web stories, social posts, or radio scripts. The AI uses your account's voice/tone settings (configurable in AI & Content → AI Config).
+
+### How do I use the AI chatbot?
+Click the blue bot icon (bottom-right) or press Cmd+K. Ask anything: "What's breaking?", "Show me Houston crime", "Clear failed jobs", "How many sources are active?". The chatbot can search stories, manage sources, explain scores, and navigate you to any page.
+
+### How do I change my password?
+Click your profile icon (top-right) → My Profile → Password tab.
+
+### How does scoring work?
+Each story gets 5 scores (0-100): Breaking (source velocity), Trending (growth rate), Confidence (source trust), Locality (market relevance), Social (engagement). The composite score blends these. Local market stories have lower thresholds to surface faster.
+
+### What does each status mean?
+BREAKING: urgent, high-velocity story. DEVELOPING: new, still gathering sources. TOP_STORY: popular, strong growth. ONGOING: established, not growing fast. STALE: no new activity. ARCHIVED: old/removed. ALERT: critical emergency.
 `.trim();
 }
 
