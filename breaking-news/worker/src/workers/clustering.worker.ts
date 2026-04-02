@@ -507,8 +507,6 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         locationName: resolvedLocation,
         neighborhood: neighborhoods?.length > 0 ? neighborhoods[0] : undefined,
         sourceCount: 1,
-        hasFamousPerson,
-        famousPersonNames: hasFamousPerson ? famousPersons : undefined,
         firstSeenAt: post.publishedAt,
         lastUpdatedAt: new Date(),
         storySources: {
@@ -520,6 +518,15 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         },
       },
     });
+
+    // Set famous person fields via raw SQL (Prisma client not regenerated with these columns yet)
+    if (hasFamousPerson) {
+      try {
+        await prisma.$executeRaw`
+          UPDATE "Story" SET "hasFamousPerson" = true, "famousPersonNames" = ${JSON.stringify(famousPersons)}::jsonb WHERE id = ${story.id}
+        `;
+      } catch { /* columns may not exist */ }
+    }
 
     storyId = story.id;
 

@@ -530,7 +530,7 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     ],
   };
 
-  // Update story with all scores + verification
+  // Update story with all scores
   await prisma.story.update({
     where: { id: storyId },
     data: {
@@ -541,12 +541,33 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       compositeScore,
       sentimentScore: socialScore,
       pastScores,
-      verificationStatus,
-      verificationScore,
-      ...(verificationStatus === 'VERIFIED' ? { verifiedAt: new Date() } : {}),
-      verificationDetails,
       status: newStatus as 'ALERT' | 'BREAKING' | 'DEVELOPING' | 'TOP_STORY' | 'ONGOING' | 'FOLLOW_UP' | 'STALE' | 'ARCHIVED',
     },
+  });
+
+  // Update verification fields via raw SQL (Prisma client not yet regenerated with these columns)
+  try {
+    if (verificationStatus === 'VERIFIED') {
+      await prisma.$executeRaw`
+        UPDATE "Story"
+        SET "verificationStatus" = ${verificationStatus},
+            "verificationScore" = ${verificationScore},
+            "verificationDetails" = ${JSON.stringify(verificationDetails)}::jsonb,
+            "verifiedAt" = NOW()
+        WHERE id = ${storyId}
+      `;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "Story"
+        SET "verificationStatus" = ${verificationStatus},
+            "verificationScore" = ${verificationScore},
+            "verificationDetails" = ${JSON.stringify(verificationDetails)}::jsonb
+        WHERE id = ${storyId}
+      `;
+    }
+  } catch (verifyErr) {
+    logger.warn({ storyId, err: (verifyErr as Error).message }, 'Failed to update verification fields (columns may not exist)');
+  }
   });
 
   // Create score snapshot with all scores (TopicPulse stored at 5/15/30/45/60/90/120 min)

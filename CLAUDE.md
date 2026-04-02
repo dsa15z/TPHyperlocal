@@ -57,6 +57,20 @@ The knowledge base consists of four documents:
 
 **After updating any knowledge file**, remind the user to go to AI & Content → Knowledge Base → click "Auto-Generate Schema Docs" to re-populate the database.
 
+### Data Operations (MANDATORY — RUN AUTOMATICALLY)
+Never expect the user to run data operations, migrations, or consolidation scripts manually.
+When you create an endpoint that fixes/migrates/consolidates data, **trigger it yourself** immediately after deploying.
+
+Standard operations to run after relevant changes:
+1. `POST /pipeline/fix-source-markets` — after Prisma schema changes (creates missing tables + links sources to markets)
+2. `POST /pipeline/heal-sources` — after self-healing code changes (tests + reactivates failing sources)
+3. `POST /pipeline/consolidate-news-sources` — after adding multi-market source support
+4. `POST /pipeline/backfill-famous` — after famous person detection changes (scans existing stories)
+5. `POST /pipeline/run-queue` with `{"queue":"scoring"}` — after scoring logic changes (re-scores stories)
+
+Wait for Railway deploy to complete before triggering. Check deploy status via Railway API.
+If an endpoint returns 404, the deploy hasn't finished — retry after 60 seconds.
+
 ## Architecture Rules
 
 ### Monorepo Structure

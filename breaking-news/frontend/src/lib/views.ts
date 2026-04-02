@@ -39,6 +39,8 @@ export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
   // Power-user columns (hidden by default, available in column customizer)
   { id: "breaking_score", label: "Breaking", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "trending_score", label: "Trending", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "confidence_score", label: "Confidence", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "locality_score", label: "Locality", width: 90, defaultWidth: 90, minWidth: 60 },
 ];
 
 // ─── Saved Filter State ────────────────────────────────────────────────────
