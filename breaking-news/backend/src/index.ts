@@ -298,6 +298,8 @@ async function ensureTables() {
       // View Email Subscriptions
       `CREATE TABLE IF NOT EXISTS "ViewSubscription" (id TEXT PRIMARY KEY, "userId" TEXT NOT NULL, "viewId" TEXT NOT NULL, email TEXT NOT NULL, frequency TEXT NOT NULL DEFAULT 'DAILY', "maxStories" INTEGER DEFAULT 20, timezone TEXT DEFAULT 'America/Chicago', "isActive" BOOLEAN DEFAULT true, "lastSentAt" TIMESTAMPTZ, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("userId", "viewId"))`,
       `CREATE INDEX IF NOT EXISTS "ViewSubscription_userId_idx" ON "ViewSubscription"("userId")`,
+      // System Knowledge (RAG for AI)
+      `CREATE TABLE IF NOT EXISTS "SystemKnowledge" (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, content TEXT NOT NULL, category TEXT DEFAULT 'general', "updatedBy" TEXT, "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
     ];
 
     let created = 0;

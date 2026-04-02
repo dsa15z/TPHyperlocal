@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Bot, X, Send, Loader2, ChevronRight, Sparkles } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
@@ -117,6 +117,24 @@ export function AIAssistant() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Build context from current page state
+  const getContext = useCallback(() => {
+    const ctx: Record<string, any> = { currentPage: pathname };
+    // Extract story ID from URL
+    const storyMatch = pathname.match(/\/stories\/([a-zA-Z0-9]+)/);
+    if (storyMatch) ctx.activeStoryId = storyMatch[1];
+    // Get search params for filter context
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const filters: Record<string, string> = {};
+      for (const [k, v] of params.entries()) filters[k] = v;
+      if (Object.keys(filters).length > 0) ctx.activeFilters = filters;
+      if (filters.markets) ctx.activeMarket = filters.markets;
+    }
+    return ctx;
+  }, [pathname]);
 
   // Load history on mount
   useEffect(() => {
@@ -173,6 +191,7 @@ export function AIAssistant() {
         body: JSON.stringify({
           message: userMessage.content,
           history: updatedMessages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+          context: getContext(),
         }),
       });
 
@@ -204,7 +223,7 @@ export function AIAssistant() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, messages, isLoading, router]);
+  }, [input, messages, isLoading, router, getContext]);
 
   const clearHistory = () => {
     setMessages([]);

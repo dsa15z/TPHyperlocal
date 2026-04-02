@@ -55,45 +55,86 @@ export async function storiesRoutes(
       parseResult.data;
     const nlpQuery = parseResult.data.nlp;
 
-    // ── NLP Query Parsing ────────────────────────────────────────────────
-    // If an NLP query is provided, parse it into structured filters via LLM
-    // These MERGE with (override) any existing dropdown selections
+    // ── NLP Query Parsing (OpenAI Function Calling + RAG) ─────────────────
+    // Uses structured function calling for guaranteed valid output.
+    // RAG knowledge base injected as system prompt context.
     let nlpTextSearch: string | undefined;
 
     if (nlpQuery && nlpQuery.length > 3) {
       try {
         const { generateWithFallback } = await import('../lib/llm-factory.js');
+        const { getCompactKnowledge } = await import('../lib/knowledge-base.js');
+
+        // Define the filter function schema for guaranteed structured output
+        const filterFunction = {
+          name: 'apply_story_filters',
+          description: 'Parse a natural language query into structured story filters',
+          parameters: {
+            type: 'object' as const,
+            properties: {
+              textSearch: { type: 'string', description: 'Keywords to search in story title/summary. Only set if the query mentions specific topics, people, or events.' },
+              category: { type: 'string', enum: ['CRIME', 'POLITICS', 'WEATHER', 'TRAFFIC', 'BUSINESS', 'HEALTH', 'SPORTS', 'ENTERTAINMENT', 'TECHNOLOGY', 'EDUCATION', 'COMMUNITY', 'ENVIRONMENT', 'EMERGENCY'], description: 'News category filter' },
+              status: { type: 'string', enum: ['BREAKING', 'DEVELOPING', 'TOP_STORY', 'ONGOING', 'STALE'], description: 'Story status filter' },
+              market: { type: 'string', description: 'City/market name (e.g., Houston, New York, National)' },
+              minScore: { type: 'number', description: 'Minimum composite score 0-1. Use 0.3 for "notable", 0.5 for "important/high", 0.7 for "viral/top"' },
+              maxAge: { type: 'number', description: 'Maximum age in hours. 0.25=15min, 0.5=30min, 1=1hr, 6=6hr, 24=today, 168=week' },
+              sort: { type: 'string', enum: ['compositeScore', 'breakingScore', 'trendingScore', 'firstSeenAt'], description: 'Sort field' },
+              order: { type: 'string', enum: ['asc', 'desc'], description: 'Sort order' },
+              trend: { type: 'string', enum: ['rising', 'declining'], description: 'Trend direction filter' },
+            },
+          },
+        };
+
         const nlpResult = await generateWithFallback(
-          `Parse this newsroom search query into structured filters. Return ONLY valid JSON, no explanation.
-
-Query: "${nlpQuery}"
-
-Return JSON with these optional fields:
-- textSearch: string (keywords to search in title/summary, only if the query mentions specific topics)
-- category: string (one of: CRIME, POLITICS, WEATHER, TRAFFIC, BUSINESS, HEALTH, SPORTS, ENTERTAINMENT, TECHNOLOGY, EDUCATION, COMMUNITY, ENVIRONMENT, EMERGENCY)
-- status: string (one of: BREAKING, DEVELOPING, TOP_STORY, ONGOING, STALE)
-- market: string (city name if a location is mentioned)
-- minScore: number 0-1 (if they say "high scoring" or "important" use 0.5, "viral" use 0.7)
-- maxAge: number in hours (if they say "last hour" use 1, "today" use 24, "this week" use 168)
-- sort: string (one of: compositeScore, breakingScore, trendingScore, firstSeenAt)
-- trend: string (one of: rising, declining)
-
-Only include fields that the query clearly implies. Omit fields that aren't mentioned.`,
-          { maxTokens: 200, temperature: 0.1 }
+          `Parse this newsroom search query: "${nlpQuery}"`,
+          {
+            systemPrompt: getCompactKnowledge(),
+            maxTokens: 200,
+            temperature: 0.1,
+            functions: [filterFunction],
+            functionCall: { name: 'apply_story_filters' },
+          }
         );
 
-        const jsonMatch = nlpResult.content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          // Merge NLP results into filter params (NLP overrides dropdowns)
+        // Function calling returns guaranteed structured output
+        const parsed = nlpResult.functionCall?.arguments;
+        if (parsed) {
           if (parsed.textSearch) nlpTextSearch = parsed.textSearch;
-          // NLP values OVERRIDE dropdown selections (NLP is more specific)
           if (parsed.category) category = parsed.category;
           if (parsed.status) status = parsed.status;
           if (parsed.minScore) minScore = parsed.minScore;
           if (parsed.maxAge) maxAge = parsed.maxAge;
           if (parsed.sort) sort = parsed.sort;
+          if (parsed.order) order = parsed.order;
           if (parsed.trend) trend = parsed.trend;
+          if (parsed.market) {
+            const market = await prisma.market.findFirst({
+              where: { name: { contains: parsed.market, mode: 'insensitive' }, isActive: true },
+              select: { id: true },
+            });
+            if (market) marketIds = market.id;
+          }
+        } else {
+          // Fallback: try to parse JSON from text response
+          const jsonMatch = nlpResult.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const p = JSON.parse(jsonMatch[0]);
+            if (p.textSearch) nlpTextSearch = p.textSearch;
+            if (p.category) category = p.category;
+            if (p.status) status = p.status;
+            if (p.minScore) minScore = p.minScore;
+            if (p.maxAge) maxAge = p.maxAge;
+            if (p.sort) sort = p.sort;
+            if (p.trend) trend = p.trend;
+            if (p.market) {
+              const market = await prisma.market.findFirst({
+                where: { name: { contains: p.market, mode: 'insensitive' }, isActive: true },
+                select: { id: true },
+              });
+              if (market) marketIds = market.id;
+            }
+          }
+        }
           // Market resolution: look up market ID from city name
           if (parsed.market && !marketIds) {
             const market = await prisma.market.findFirst({

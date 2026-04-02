@@ -291,16 +291,55 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
         role: z.enum(['user', 'assistant']),
         content: z.string(),
       })).optional(),
+      // Context from the frontend — what the user is currently looking at
+      context: z.object({
+        currentPage: z.string().optional(), // e.g., "/", "/stories/abc123", "/admin/sources"
+        activeStoryId: z.string().optional(), // if viewing a story detail
+        activeFilters: z.any().optional(), // current filter state
+        activeMarket: z.string().optional(), // selected market name
+      }).optional(),
     }).safeParse(request.body);
 
     if (!body.success) return reply.status(400).send({ error: 'Message required' });
 
-    const { message, history = [] } = body.data;
+    const { message, history = [], context } = body.data;
 
-    // Build the system prompt with available tools
+    // Import RAG knowledge base
+    let knowledgeBase = '';
+    try {
+      const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
+      knowledgeBase = generateSystemKnowledge();
+    } catch {}
+
+    // Build context-aware prompt
+    let contextInfo = '';
+    if (context) {
+      const parts: string[] = [];
+      if (context.currentPage) parts.push(`User is on page: ${context.currentPage}`);
+      if (context.activeStoryId) parts.push(`User is viewing story ID: ${context.activeStoryId}`);
+      if (context.activeMarket) parts.push(`User has market filter set to: ${context.activeMarket}`);
+      if (context.activeFilters) {
+        const f = context.activeFilters;
+        if (f.category) parts.push(`Category filter: ${f.category}`);
+        if (f.status) parts.push(`Status filter: ${f.status}`);
+        if (f.time_range) parts.push(`Time range: ${f.time_range}`);
+      }
+      if (parts.length > 0) contextInfo = `\n\nCurrent context:\n${parts.join('\n')}`;
+    }
+
+    // Build the system prompt with RAG knowledge + tools + context
     const toolList = TOOLS.map(t => `- ${t.name}(${t.params}): ${t.description}`).join('\n');
 
-    const systemPrompt = `You are TopicPulse AI Assistant, embedded in a broadcast newsroom intelligence platform.
+    const systemPrompt = `You are TopicPulse AI Assistant, an expert on broadcast newsroom intelligence.
+You have deep knowledge of the TopicPulse platform and can help with any task.
+${contextInfo}
+
+When the user says "this story" or "the current story", refer to activeStoryId from context.
+When the user says "these results" or "the current view", refer to activeFilters from context.
+
+${knowledgeBase ? '--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase.substring(0, 4000) + '\n--- END KNOWLEDGE ---\n' : ''}
+
+Available tools you can call:
 You help users find stories, manage sources, analyze trends, and perform admin tasks.
 
 Available tools you can call:
