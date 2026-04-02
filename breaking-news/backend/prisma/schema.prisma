@@ -1242,3 +1242,14 @@ model CoverageMatch {
   @@index([accountId, isCovered])
   @@index([storyId])
 }
+
+model SystemKnowledge {
+  id        String   @id
+  key       String   @unique
+  content   String   @db.Text
+  category  String   @default("general")
+  updatedBy String?
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([category])
+}
