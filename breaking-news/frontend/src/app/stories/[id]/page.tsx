@@ -579,19 +579,42 @@ export default function StoryDetailPage() {
     );
   }
 
+  const bVal = Math.round(story.breaking_score * 100);
+  const tVal = Math.round(story.trending_score * 100);
+  const cVal = Math.round(story.confidence_score * 100);
+  const lVal = Math.round(story.locality_score * 100);
+  const srcCount = story.source_count;
+
   const scores: {
     label: string;
     value: number;
     type: "breaking" | "trending" | "confidence" | "locality";
+    tooltip: string;
   }[] = [
-    { label: "Breaking Score", value: story.breaking_score, type: "breaking" },
-    { label: "Trending Score", value: story.trending_score, type: "trending" },
+    {
+      label: "Breaking Score",
+      value: story.breaking_score,
+      type: "breaking",
+      tooltip: `Breaking: ${bVal}\nMeasures source velocity \u2014 how fast\nnew sources pick up the story\nSources in 15min window / recency decay`,
+    },
+    {
+      label: "Trending Score",
+      value: story.trending_score,
+      type: "trending",
+      tooltip: `Trending: ${tVal}\nMeasures growth rate \u2014 is the\nstory accelerating?\nCurrent sources vs past sources / growth %`,
+    },
     {
       label: "Confidence Score",
       value: story.confidence_score,
       type: "confidence",
+      tooltip: `Confidence: ${cVal}\nMeasures source diversity and trust\n${srcCount} source${srcCount !== 1 ? "s" : ""} \u00d7 avg trust score ${srcCount > 0 ? (cVal / Math.max(srcCount, 1)).toFixed(0) : "0"}`,
     },
-    { label: "Locality Score", value: story.locality_score, type: "locality" },
+    {
+      label: "Locality Score",
+      value: story.locality_score,
+      type: "locality",
+      tooltip: `Locality: ${lVal}\nMeasures relevance to local markets\nBased on location specificity\nand market keywords`,
+    },
   ];
 
   return (
@@ -620,10 +643,11 @@ export default function StoryDetailPage() {
               <div className="grid grid-cols-2 gap-3">
                 {scores.map((score) => {
                   const colors = getScoreTypeColor(score.type);
+                  const groupClass = `group/${score.type}`;
                   return (
                     <div
                       key={score.type}
-                      className={clsx("glass-card p-3 space-y-2", colors.bg)}
+                      className={clsx("glass-card p-3 space-y-2 relative", colors.bg, groupClass)}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-medium text-gray-400">
@@ -646,13 +670,22 @@ export default function StoryDetailPage() {
                           }}
                         />
                       </div>
+                      <span className={clsx(
+                        "absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 transition-opacity pointer-events-none z-50 font-mono leading-relaxed",
+                        score.type === "breaking" && "group-hover/breaking:opacity-100",
+                        score.type === "trending" && "group-hover/trending:opacity-100",
+                        score.type === "confidence" && "group-hover/confidence:opacity-100",
+                        score.type === "locality" && "group-hover/locality:opacity-100",
+                      )}>
+                        {score.tooltip}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
               {/* Composite score */}
-              <div className="glass-card p-4">
+              <div className="glass-card p-4 group/composite relative">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-gray-300">
                     Composite Score
@@ -669,6 +702,9 @@ export default function StoryDetailPage() {
                     }}
                   />
                 </div>
+                <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/composite:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+                  {`Score: ${Math.round(story.composite_score * 100)}\n= Breaking (${bVal}) \u00d7 25% = ${(bVal * 0.25).toFixed(1)}\n+ Trending (${tVal}) \u00d7 20% = ${(tVal * 0.20).toFixed(1)}\n+ Confidence (${cVal}) \u00d7 15% = ${(cVal * 0.15).toFixed(1)}\n+ Locality (${lVal}) \u00d7 15% = ${(lVal * 0.15).toFixed(1)}`}
+                </span>
               </div>
 
               {/* Verification status card */}

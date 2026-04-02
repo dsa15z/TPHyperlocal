@@ -254,16 +254,64 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
     }),
     breaking_score: columnHelper.accessor("breaking_score", {
       header: "Breaking",
-      cell: (info) => (
-        <ScoreBadge score={info.getValue()} />
-      ),
+      cell: (info) => {
+        const val = Math.round(info.getValue() * 100);
+        return (
+          <div className="group/breaking relative">
+            <ScoreBadge score={info.getValue()} />
+            <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/breaking:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+              {`Breaking: ${val}\nMeasures source velocity \u2014 how fast\nnew sources pick up the story\nSources in 15min window / recency decay`}
+            </span>
+          </div>
+        );
+      },
       size: 90,
     }),
     trending_score: columnHelper.accessor("trending_score", {
       header: "Trending",
-      cell: (info) => (
-        <ScoreBadge score={info.getValue()} />
-      ),
+      cell: (info) => {
+        const val = Math.round(info.getValue() * 100);
+        return (
+          <div className="group/trending relative">
+            <ScoreBadge score={info.getValue()} />
+            <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/trending:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+              {`Trending: ${val}\nMeasures growth rate \u2014 is the\nstory accelerating?\nCurrent sources vs past sources / growth %`}
+            </span>
+          </div>
+        );
+      },
+      size: 90,
+    }),
+    confidence_score: columnHelper.accessor("confidence_score", {
+      header: "Confidence",
+      cell: (info) => {
+        const story = info.row.original;
+        const val = Math.round(info.getValue() * 100);
+        const srcCount = story.source_count;
+        return (
+          <div className="group/confidence relative">
+            <ScoreBadge score={info.getValue()} />
+            <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/confidence:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+              {`Confidence: ${val}\nMeasures source diversity and trust\n${srcCount} source${srcCount !== 1 ? "s" : ""} \u00d7 avg trust score ${srcCount > 0 ? (val / Math.max(srcCount, 1)).toFixed(0) : "0"}`}
+            </span>
+          </div>
+        );
+      },
+      size: 90,
+    }),
+    locality_score: columnHelper.accessor("locality_score", {
+      header: "Locality",
+      cell: (info) => {
+        const val = Math.round(info.getValue() * 100);
+        return (
+          <div className="group/locality relative">
+            <ScoreBadge score={info.getValue()} />
+            <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/locality:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+              {`Locality: ${val}\nMeasures relevance to local markets\nBased on location specificity\nand market keywords`}
+            </span>
+          </div>
+        );
+      },
       size: 90,
     }),
     trend: columnHelper.display({
