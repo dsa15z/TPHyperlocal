@@ -130,7 +130,8 @@ const NAV_GROUPS: NavGroup[] = [
     section: "main",
     items: [
       { href: "/show-prep", label: "Show Production", icon: Mic2 },
-      { href: "/radio", label: "RadioGPT", icon: Radio },
+      { href: "/radio", label: "Audio Studio", icon: Radio },
+      { href: "/video", label: "Video Studio", icon: MonitorPlay },
     ],
   },
 
