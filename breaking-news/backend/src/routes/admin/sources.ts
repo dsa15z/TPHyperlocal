@@ -249,21 +249,9 @@ export async function sourceRoutes(
       return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
     }
 
-    // Verify the source is accessible to this account (global or belongs to account's market)
-    const accountMarkets = await prisma.market.findMany({
-      where: { accountId: au.accountId },
-      select: { id: true },
-    });
-    const marketIds = accountMarkets.map((m) => m.id);
-
-    const existing = await prisma.source.findFirst({
-      where: {
-        id,
-        OR: [
-          { isGlobal: true },
-          { marketId: { in: marketIds } },
-        ],
-      },
+    // Find the source — admins can edit any source (global, local, or linked via SourceMarket)
+    const existing = await prisma.source.findUnique({
+      where: { id },
     });
     if (!existing) {
       return reply.status(404).send({ error: 'Source not found' });

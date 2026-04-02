@@ -9,8 +9,11 @@ import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
 
 const logger = createChildLogger('ingestion');
 
-const MAX_CONSECUTIVE_FAILURES = 5; // Auto-deactivate after this many failures
+const MAX_CONSECUTIVE_FAILURES = 10; // Auto-deactivate after this many failures
 const HEAL_AT_FAILURE = 3; // Attempt self-healing at this failure count
+
+// Realistic browser User-Agent to avoid 403 blocks from news sites
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // Common RSS URL variants to try when the original URL fails
 const RSS_URL_VARIANTS = [
@@ -45,17 +48,54 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
   const meta = (source.metadata || {}) as Record<string, unknown>;
   const healAttempts = ((meta.healAttempts as number) || 0) + 1;
 
-  // Only try self-healing once
-  if (healAttempts > 1) {
-    await prisma.source.update({
-      where: { id: source.id },
-      data: { metadata: { ...meta, healAttempts, healResult: 'skipped-already-attempted' } },
-    });
-    return false;
+  // Allow re-healing after 24 hours (in case URL comes back or site changes)
+  const lastHealAt = meta.healedAt || meta.healFailedAt;
+  if (healAttempts > 1 && lastHealAt) {
+    const hoursSinceLastHeal = (Date.now() - new Date(lastHealAt as string).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceLastHeal < 24) {
+      await prisma.source.update({
+        where: { id: source.id },
+        data: { metadata: { ...meta, healAttempts, healResult: 'skipped-too-recent' } },
+      });
+      return false;
+    }
   }
 
   const originalUrl = source.url || '';
   logger.info({ sourceId: source.id, name: source.name, originalUrl }, 'Attempting self-heal for failing source');
+
+  // Strategy 0: Try original URL with browser User-Agent (many 403s are UA blocks)
+  if (source.platform === 'RSS' && originalUrl) {
+    try {
+      const resp = await fetch(originalUrl, {
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+          // Original URL works with browser UA! Update metadata to use browser UA
+          await prisma.source.update({
+            where: { id: source.id },
+            data: {
+              metadata: {
+                ...meta,
+                consecutiveFailures: 0,
+                healAttempts,
+                healResult: 'ua-fix',
+                useBrowserUA: true,
+                healedAt: new Date().toISOString(),
+              },
+            },
+          });
+          logger.info({ sourceId: source.id, name: source.name }, 'Self-healed: original URL works with browser User-Agent');
+          return true;
+        }
+      }
+    } catch {
+      // Try next strategy
+    }
+  }
 
   // Strategy 1: Try alternate RSS URLs (for RSS sources)
   if (source.platform === 'RSS' && originalUrl) {
@@ -65,7 +105,7 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
 
       try {
         const resp = await fetch(altUrl, {
-          headers: { 'User-Agent': 'BreakingNewsBot/1.0' },
+          headers: { 'User-Agent': BROWSER_UA },
           signal: AbortSignal.timeout(10000),
         });
         if (!resp.ok) continue;
@@ -369,10 +409,15 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   const { sourceId, feedUrl } = job.data;
   logger.info({ sourceId, feedUrl }, 'Polling RSS feed');
 
+  // Check if source needs browser UA (set by self-healing)
+  const sourceMeta = await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } });
+  const useBrowserUA = (sourceMeta?.metadata as any)?.useBrowserUA === true;
+  const userAgent = useBrowserUA ? BROWSER_UA : 'BreakingNewsBot/1.0';
+
   let response: Response;
   try {
     response = await fetch(feedUrl, {
-      headers: { 'User-Agent': 'BreakingNewsBot/1.0' },
+      headers: { 'User-Agent': userAgent },
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
