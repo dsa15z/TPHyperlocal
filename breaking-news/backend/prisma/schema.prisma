@@ -382,6 +382,7 @@ model Story {
   assignments        Assignment[]
   breakingPackages   BreakingPackage[]
   accountStories     AccountStory[]
+  storyEntities      StoryEntity[]
 
   @@index([marketId])
   @@index([compositeScore(sort: Desc)])
@@ -1240,6 +1241,25 @@ model CoverageMatch {
 
   @@unique([coverageFeedId, storyId])
   @@index([accountId, isCovered])
+  @@index([storyId])
+}
+
+// ─── Story Entities (NER) ──────────────────────────────────────────────────
+// Named entities extracted from stories for relationship discovery.
+// Used to find "Related Stories" that share people, organizations, or locations.
+
+model StoryEntity {
+  id         String   @id @default(cuid())
+  storyId    String
+  story      Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  name       String   // normalized entity name (e.g. "Donald Trump", "FBI", "Houston")
+  type       String   // PERSON, ORGANIZATION, LOCATION, EVENT
+  confidence Float    @default(0.5) // 0-1, how confident the extraction is
+  source     String   @default("llm") // "llm", "regex", "manual"
+  createdAt  DateTime @default(now())
+
+  @@unique([storyId, name, type])
+  @@index([name, type])
   @@index([storyId])
 }
 

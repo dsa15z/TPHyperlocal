@@ -872,6 +872,78 @@ export async function storiesRoutes(
     }
   });
 
+  // GET /api/v1/stories/:id/related - find stories sharing 2+ entities
+  app.get('/stories/:id/related', async (request, reply) => {
+    const parseResult = StoryIdParamsSchema.safeParse(request.params);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: 'Invalid story ID' });
+    }
+
+    const { id } = parseResult.data;
+
+    // Verify story exists
+    const story = await prisma.story.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!story) {
+      return reply.status(404).send({ error: 'Story not found' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          title: string;
+          status: string;
+          category: string | null;
+          locationName: string | null;
+          compositeScore: number;
+          sharedCount: bigint;
+          sharedEntities: string[];
+        }>
+      >`
+        SELECT s.id, s.title, s.status, s.category, s."locationName", s."compositeScore",
+               COUNT(*) as "sharedCount",
+               array_agg(se2.name || '::' || se2.type) as "sharedEntities"
+        FROM "StoryEntity" se1
+        JOIN "StoryEntity" se2 ON se1.name = se2.name AND se1.type = se2.type AND se1."storyId" != se2."storyId"
+        JOIN "Story" s ON s.id = se2."storyId"
+        WHERE se1."storyId" = ${id}
+          AND s."mergedIntoId" IS NULL
+          AND s.status NOT IN ('ARCHIVED', 'STALE')
+        GROUP BY s.id
+        HAVING COUNT(*) >= 2
+        ORDER BY COUNT(*) DESC, s."compositeScore" DESC
+        LIMIT 10
+      `;
+
+      const related = rows.map((row) => {
+        // Parse "name::type" pairs into objects and deduplicate
+        const entityPairs = (row.sharedEntities || []).map((e) => {
+          const [name, type] = e.split('::');
+          return { name, type };
+        });
+        return {
+          id: row.id,
+          title: row.title,
+          status: row.status,
+          category: row.category,
+          locationName: row.locationName,
+          compositeScore: row.compositeScore,
+          sharedEntities: entityPairs,
+          sharedCount: Number(row.sharedCount),
+        };
+      });
+
+      return reply.send({ related });
+    } catch (err: any) {
+      request.log.error(err, 'Failed to fetch related stories');
+      return reply.status(500).send({ error: 'Failed to fetch related stories' });
+    }
+  });
+
   // GET /api/v1/stories/:id - get a single story with source posts
   app.get('/stories/:id', async (request, reply) => {
     const parseResult = StoryIdParamsSchema.safeParse(request.params);

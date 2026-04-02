@@ -21,6 +21,7 @@ import {
   GitMerge,
   GitBranch,
   ArrowUpRight,
+  Link2,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, type SourcePost, updateAccountStory, type AccountStoryOverlay } from "@/lib/api";
@@ -455,6 +456,85 @@ function AccountWorkspaceBar({ accountStory, storyId }: { accountStory: AccountS
   );
 }
 
+// ─── Related Stories ──────────────────────────────────────────────────────
+
+interface RelatedStory {
+  id: string;
+  title: string;
+  status: string;
+  category: string | null;
+  locationName: string | null;
+  compositeScore: number;
+  sharedEntities: { name: string; type: string }[];
+  sharedCount: number;
+}
+
+function RelatedStories({ storyId }: { storyId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["related-stories", storyId],
+    queryFn: () =>
+      apiFetch<{ related: RelatedStory[] }>(
+        `/api/v1/stories/${storyId}/related`
+      ),
+    enabled: !!storyId,
+    refetchInterval: 60_000,
+  });
+
+  const related = data?.related;
+
+  if (isLoading || !related || related.length === 0) return null;
+
+  return (
+    <section className="glass-card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Link2 className="w-5 h-5 text-cyan-400" />
+        <h2 className="text-lg font-semibold text-white">
+          Related Stories ({related.length})
+        </h2>
+      </div>
+
+      <div className="space-y-3">
+        {related.map((story) => (
+          <div
+            key={story.id}
+            className="flex items-start justify-between gap-4 p-3 rounded-lg bg-surface-200/40 hover:bg-surface-200/60 transition-colors"
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Link
+                href={`/stories/${story.id}`}
+                className="text-sm font-medium text-gray-200 hover:text-accent transition-colors line-clamp-2"
+              >
+                {story.title}
+              </Link>
+              <div className="flex flex-wrap gap-1.5">
+                {story.sharedEntities.slice(0, 5).map((entity, i) => (
+                  <span
+                    key={`${entity.name}-${entity.type}-${i}`}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                  >
+                    {entity.name}
+                  </span>
+                ))}
+                {story.sharedEntities.length > 5 && (
+                  <span className="text-[10px] text-gray-500">
+                    +{story.sharedEntities.length - 5} more
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+              <StatusBadge status={story.status} />
+              <span className="text-xs text-gray-400 tabular-nums">
+                {formatScore(story.compositeScore)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function StoryDetailPage() {
@@ -758,6 +838,9 @@ export default function StoryDetailPage() {
                 </div>
               </section>
             )}
+
+            {/* Related Stories */}
+            <RelatedStories storyId={id} />
 
             {/* Timeline */}
             {story.sources && story.sources.length > 0 && (

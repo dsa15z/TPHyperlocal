@@ -114,13 +114,17 @@ async function processEmbeddings(job: Job<EmbeddingsJob>): Promise<void> {
     return;
   }
 
-  // Update record with embedding using raw SQL (Prisma doesn't natively support pgvector)
-  const vectorString = `[${embedding.join(',')}]`;
-
+  // Store embedding as JSON array (works without pgvector extension)
   if (sourcePostId) {
-    await prisma.$executeRaw`UPDATE "SourcePost" SET embedding = ${vectorString}::vector WHERE id = ${sourcePostId}`;
+    await prisma.sourcePost.update({
+      where: { id: sourcePostId },
+      data: { embeddingJson: embedding },
+    });
   } else {
-    await prisma.$executeRaw`UPDATE "Story" SET embedding = ${vectorString}::vector WHERE id = ${storyId!}`;
+    await prisma.story.update({
+      where: { id: storyId! },
+      data: { embeddingJson: embedding },
+    });
   }
 
   logger.info({ recordType, recordId, dimensions: embedding.length }, 'Embeddings complete');

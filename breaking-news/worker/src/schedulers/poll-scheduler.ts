@@ -581,11 +581,12 @@ async function scheduleEmbeddingJobs(): Promise<void> {
   try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    // Find source posts from the last hour with non-empty content
+    // Find source posts from the last hour that don't have embeddings yet
     const posts = await prisma.sourcePost.findMany({
       where: {
         createdAt: { gte: oneHourAgo },
         content: { not: '' },
+        embeddingJson: null,
       },
       select: { id: true },
     });

@@ -37,6 +37,7 @@ interface ClusteringJob {
     organizations: string[];
     people: string[];
   };
+  structuredEntities?: { name: string; type: string; confidence: number }[];
 }
 
 const JACCARD_PREFILTER_THRESHOLD = 0.25;
@@ -544,6 +545,33 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     }
   }
 
+  // Write structured entities to StoryEntity table
+  const structuredEntities = job.data.structuredEntities || [];
+  if (structuredEntities.length > 0) {
+    try {
+      for (const entity of structuredEntities) {
+        await prisma.storyEntity.upsert({
+          where: {
+            storyId_name_type: { storyId, name: entity.name, type: entity.type },
+          },
+          create: {
+            storyId,
+            name: entity.name,
+            type: entity.type,
+            confidence: entity.confidence,
+            source: 'llm',
+          },
+          update: {
+            confidence: { increment: 0.1 }, // boost confidence when seen again
+          },
+        });
+      }
+      logger.info({ storyId, entityCount: structuredEntities.length }, 'Wrote story entities');
+    } catch (err) {
+      logger.warn({ storyId, err: (err as Error).message }, 'Failed to write story entities (non-fatal)');
+    }
+  }
+
   // Enqueue to scoring queue
   const scoringQueue = new Queue('scoring', {
     connection: getSharedConnection(),
@@ -556,7 +584,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
 
   await scoringQueue.close();
 
-  logger.info({ sourcePostId, storyId, mergeReason: mergeReason || 'new story' }, 'Clustering complete');
+  logger.info({ sourcePostId, storyId, mergeReason: mergeReason || 'new story', entities: structuredEntities.length }, 'Clustering complete');
 }
 
 export function createClusteringWorker(): Worker {

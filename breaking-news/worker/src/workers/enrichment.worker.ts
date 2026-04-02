@@ -194,43 +194,67 @@ function extractEntities(text: string): {
  * Use LLM to extract category and location when keyword matching fails.
  * Only called when heuristic returns OTHER or no location.
  */
-async function llmEnrich(title: string, content: string): Promise<{
+interface LLMEnrichResult {
   category: string;
   location: string;
-}> {
+  entities: { name: string; type: string; confidence: number }[];
+}
+
+async function llmEnrich(title: string, content: string): Promise<LLMEnrichResult> {
   try {
     const prompt = `Analyze this news article and extract:
 1. CATEGORY: Choose exactly one from: CRIME, WEATHER, TRAFFIC, POLITICS, BUSINESS, SPORTS, COMMUNITY, EMERGENCY, HEALTH, EDUCATION, TECHNOLOGY, ENTERTAINMENT, ENVIRONMENT, FINANCE
-2. LOCATION: The MOST SPECIFIC location mentioned. Prefer neighborhood/district names over city names, and street intersections over neighborhoods. Examples: "Montrose" not "Houston", "Times Square" not "New York", "I-45 at Beltway 8" not "Houston". If national/international news with no specific area, respond "National".
+2. LOCATION: The MOST SPECIFIC location mentioned. Prefer neighborhood/district names over city names. If national/international news, respond "National".
+3. ENTITIES: Extract named entities. List each as TYPE:NAME (one per line). Types: PERSON, ORGANIZATION, LOCATION, EVENT.
 
 Article title: ${title}
-Article content: ${content.substring(0, 1000)}
+Article content: ${content.substring(0, 1500)}
 
-Respond in exactly this format (no other text):
+Respond in exactly this format:
 CATEGORY: <category>
-LOCATION: <location>`;
+LOCATION: <location>
+ENTITIES:
+PERSON: <name>
+ORGANIZATION: <name>
+LOCATION: <name>`;
 
     const result = await generate(prompt, {
-      maxTokens: 50,
+      maxTokens: 200,
       temperature: 0.1,
-      systemPrompt: 'You extract structured data from news articles. Be precise and concise.',
+      systemPrompt: 'You extract structured data from news articles. Be precise. Only list real named entities, not generic terms.',
     });
 
     const lines = result.text.split('\n');
     let category = 'OTHER';
     let location = 'National';
+    const entities: { name: string; type: string; confidence: number }[] = [];
+    let inEntities = false;
 
     for (const line of lines) {
-      const catMatch = line.match(/CATEGORY:\s*(.+)/i);
-      if (catMatch) category = catMatch[1].trim().toUpperCase();
-      const locMatch = line.match(/LOCATION:\s*(.+)/i);
-      if (locMatch) location = locMatch[1].trim();
+      const catMatch = line.match(/^CATEGORY:\s*(.+)/i);
+      if (catMatch) { category = catMatch[1].trim().toUpperCase(); continue; }
+      const locMatch = line.match(/^LOCATION:\s*(.+)/i);
+      if (locMatch && !inEntities) { location = locMatch[1].trim(); continue; }
+      if (/^ENTITIES:/i.test(line)) { inEntities = true; continue; }
+      if (inEntities) {
+        const entityMatch = line.match(/^(PERSON|ORGANIZATION|LOCATION|EVENT):\s*(.+)/i);
+        if (entityMatch) {
+          const name = entityMatch[2].trim();
+          if (name && name.length > 1 && name !== 'N/A' && name !== 'None') {
+            entities.push({
+              name,
+              type: entityMatch[1].toUpperCase(),
+              confidence: 0.8,
+            });
+          }
+        }
+      }
     }
 
-    return { category, location };
+    return { category, location, entities };
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'LLM enrichment failed, using heuristic');
-    return { category: 'OTHER', location: '' };
+    return { category: 'OTHER', location: '', entities: [] };
   }
 }
 
@@ -270,8 +294,16 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     ? neighborhoods[0]
     : (entityLocation || extractedLocation || undefined);
 
+  // Build structured entity list from regex extraction
+  let structuredEntities: { name: string; type: string; confidence: number }[] = [
+    ...entities.people.map(n => ({ name: n, type: 'PERSON', confidence: 0.5 })),
+    ...entities.organizations.map(n => ({ name: n, type: 'ORGANIZATION', confidence: 0.5 })),
+    ...entities.locations.map(n => ({ name: n, type: 'LOCATION', confidence: 0.5 })),
+  ];
+
   // Step 4: If keyword categorization returned OTHER or no location, use LLM
-  if (category === 'OTHER' || !locationName) {
+  // Also use LLM for entity extraction (always, to get better NER than regex)
+  if (category === 'OTHER' || !locationName || structuredEntities.length < 2) {
     const llmResult = await llmEnrich(post.title || '', post.content);
     if (category === 'OTHER' && llmResult.category !== 'OTHER') {
       category = llmResult.category;
@@ -280,6 +312,20 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     if (!locationName && llmResult.location) {
       locationName = llmResult.location;
       logger.info({ sourcePostId, location: locationName }, 'LLM assigned location');
+    }
+    // Merge LLM entities with regex entities (LLM takes priority on overlap)
+    if (llmResult.entities.length > 0) {
+      const existingNames = new Set(structuredEntities.map(e => e.name.toLowerCase()));
+      for (const e of llmResult.entities) {
+        if (!existingNames.has(e.name.toLowerCase())) {
+          structuredEntities.push(e);
+          existingNames.add(e.name.toLowerCase());
+        } else {
+          // Boost confidence for entities found by both regex and LLM
+          const existing = structuredEntities.find(x => x.name.toLowerCase() === e.name.toLowerCase());
+          if (existing) existing.confidence = Math.min(1, existing.confidence + 0.3);
+        }
+      }
     }
   }
 
@@ -317,6 +363,7 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     locationName,
     neighborhoods,
     entities,
+    structuredEntities,
   }, {
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },
