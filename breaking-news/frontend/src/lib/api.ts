@@ -40,6 +40,12 @@ export interface Story {
   merged_from?: Array<{ id: string; title: string; compositeScore: number }>;
   parentStory?: { id: string; title: string; status: string; compositeScore: number; firstSeenAt: string } | null;
   followUps?: Array<{ id: string; title: string; status: string; compositeScore: number; firstSeenAt: string }>;
+  // Famous person detection
+  hasFamousPerson?: boolean;
+  famousPersonNames?: string[];
+  // Verification status
+  verificationStatus?: string;
+  verificationScore?: number;
   // Account derivative overlay (present when authenticated)
   accountStory?: AccountStoryOverlay | null;
 }
@@ -255,6 +261,10 @@ function transformStory(raw: any): Story {
       title: m.title,
       compositeScore: m.compositeScore ?? 0,
     })),
+    hasFamousPerson: raw.hasFamousPerson || false,
+    famousPersonNames: raw.famousPersonNames || null,
+    verificationStatus: raw.verificationStatus || 'UNVERIFIED',
+    verificationScore: raw.verificationScore || 0,
     parentStory: raw.parentStory || null,
     followUps: (raw.followUps || []).map((f: any) => ({
       id: f.id,

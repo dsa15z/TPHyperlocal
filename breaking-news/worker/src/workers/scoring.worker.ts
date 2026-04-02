@@ -497,7 +497,40 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     if (Number(ts) < twoHoursAgo) delete pastScores[ts];
   }
 
-  // Update story with all scores (including social from TopicPulse model)
+  // ── Story Verification ───────────────────────────────────────────────────
+  // Determine verification status based on source diversity and confidence
+  const sourceCount = story.sourceCount || 0;
+  const uniqueSources = await prisma.storySource.count({
+    where: { storyId },
+  });
+
+  let verificationStatus = 'UNVERIFIED';
+  let verificationScore = 0;
+
+  if (uniqueSources >= 3 && confidenceScore >= 0.5) {
+    // 3+ independent sources with decent confidence → VERIFIED
+    verificationStatus = 'VERIFIED';
+    verificationScore = Math.min(1, 0.5 + (uniqueSources * 0.1) + (confidenceScore * 0.3));
+  } else if (uniqueSources >= 2) {
+    // 2 sources → partially verified
+    verificationStatus = 'UNVERIFIED';
+    verificationScore = 0.3 + (confidenceScore * 0.2);
+  } else if (uniqueSources <= 1) {
+    // Single source → flag it
+    verificationStatus = 'SINGLE_SOURCE';
+    verificationScore = Math.max(0.1, confidenceScore * 0.3);
+  }
+
+  const verificationDetails = {
+    sourceCount: uniqueSources,
+    confidenceScore,
+    reasons: [
+      uniqueSources >= 3 ? `Corroborated by ${uniqueSources} independent sources` : `Only ${uniqueSources} source(s)`,
+      confidenceScore >= 0.5 ? 'High source trust' : 'Low source trust',
+    ],
+  };
+
+  // Update story with all scores + verification
   await prisma.story.update({
     where: { id: storyId },
     data: {
@@ -506,8 +539,12 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       confidenceScore,
       localityScore,
       compositeScore,
-      sentimentScore: socialScore, // Reuse sentimentScore field for social engagement
-      pastScores, // Historical snapshots for growth % calculation
+      sentimentScore: socialScore,
+      pastScores,
+      verificationStatus,
+      verificationScore,
+      ...(verificationStatus === 'VERIFIED' ? { verifiedAt: new Date() } : {}),
+      verificationDetails,
       status: newStatus as 'ALERT' | 'BREAKING' | 'DEVELOPING' | 'TOP_STORY' | 'ONGOING' | 'FOLLOW_UP' | 'STALE' | 'ARCHIVED',
     },
   });

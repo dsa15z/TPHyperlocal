@@ -872,6 +872,183 @@ export async function storiesRoutes(
     }
   });
 
+  // POST /api/v1/stories/:id/verify — LLM-powered story verification
+  // Sends the story to 2 different LLMs and asks them to independently confirm/deny
+  app.post('/stories/:id/verify', async (request, reply) => {
+    const parseResult = StoryIdParamsSchema.safeParse(request.params);
+    if (!parseResult.success) return reply.status(400).send({ error: 'Invalid story ID' });
+
+    const { id } = parseResult.data;
+    const story = await prisma.story.findUnique({
+      where: { id },
+      include: {
+        storySources: {
+          include: { sourcePost: { select: { title: true, content: true, url: true, source: { select: { name: true } } } } },
+          take: 5,
+        },
+      },
+    });
+    if (!story) return reply.status(404).send({ error: 'Story not found' });
+
+    try {
+      const { generateWithFallback } = await import('../lib/llm-factory.js');
+
+      const storyContext = `Title: ${story.title}\nSummary: ${story.aiSummary || story.summary || ''}\nCategory: ${story.category || 'Unknown'}\nLocation: ${story.locationName || 'Unknown'}\nSources: ${story.storySources.map(ss => `${ss.sourcePost?.source?.name}: ${ss.sourcePost?.title}`).join('; ')}`;
+
+      const verifyPrompt = `You are a fact-checking AI. Analyze this news story and determine if it appears to be a real, verifiable news event. Consider:
+1. Is this a plausible news story based on known events?
+2. Do the sources and details seem credible?
+3. Are there any red flags (satire, misinformation patterns, implausible claims)?
+
+Story:
+${storyContext}
+
+Respond in exactly this format:
+VERDICT: CONFIRMED or UNCONFIRMED or SUSPICIOUS
+CONFIDENCE: <number 0-100>
+REASON: <one sentence explanation>`;
+
+      // Query two different LLMs independently
+      const [result1, result2] = await Promise.allSettled([
+        generateWithFallback(verifyPrompt, {
+          systemPrompt: 'You are a careful fact-checker. Only mark as CONFIRMED if the story describes a real, verifiable event.',
+          maxTokens: 150,
+          temperature: 0.1,
+          preferredProvider: 'openai',
+        }),
+        generateWithFallback(verifyPrompt, {
+          systemPrompt: 'You are a careful fact-checker. Only mark as CONFIRMED if the story describes a real, verifiable event.',
+          maxTokens: 150,
+          temperature: 0.1,
+          preferredProvider: 'xai', // Grok — has real-time X/Twitter access
+        }),
+      ]);
+
+      const verdicts: Array<{ provider: string; verdict: string; confidence: number; reason: string }> = [];
+
+      for (const [idx, result] of [result1, result2].entries()) {
+        if (result.status === 'fulfilled') {
+          const text = result.value.text || '';
+          const verdictMatch = text.match(/VERDICT:\s*(CONFIRMED|UNCONFIRMED|SUSPICIOUS)/i);
+          const confMatch = text.match(/CONFIDENCE:\s*(\d+)/);
+          const reasonMatch = text.match(/REASON:\s*(.+)/i);
+          verdicts.push({
+            provider: idx === 0 ? 'openai' : 'xai',
+            verdict: verdictMatch ? verdictMatch[1].toUpperCase() : 'UNKNOWN',
+            confidence: confMatch ? parseInt(confMatch[1]) / 100 : 0.5,
+            reason: reasonMatch ? reasonMatch[1].trim() : 'No reason provided',
+          });
+        }
+      }
+
+      // Determine overall verification
+      const confirmedCount = verdicts.filter(v => v.verdict === 'CONFIRMED').length;
+      const suspiciousCount = verdicts.filter(v => v.verdict === 'SUSPICIOUS').length;
+      const avgConfidence = verdicts.length > 0
+        ? verdicts.reduce((sum, v) => sum + v.confidence, 0) / verdicts.length
+        : 0;
+
+      let verificationStatus = 'UNVERIFIED';
+      if (confirmedCount >= 2) verificationStatus = 'VERIFIED';
+      else if (confirmedCount === 1 && verdicts.length >= 2) verificationStatus = 'UNVERIFIED';
+      else if (suspiciousCount >= 1) verificationStatus = 'DISPUTED';
+
+      // Factor in source count
+      const sourceCount = story.storySources.length;
+      const verificationScore = Math.min(1, (avgConfidence * 0.6) + (Math.min(sourceCount, 5) * 0.08));
+
+      // For each CONFIRMED verdict, create a SourcePost from that LLM as a new source
+      const llmPlatformMap: Record<string, string> = { openai: 'LLM_OPENAI', xai: 'LLM_GROK', google: 'LLM_GEMINI', anthropic: 'LLM_CLAUDE' };
+      for (const v of verdicts) {
+        if (v.verdict === 'CONFIRMED') {
+          try {
+            const platform = llmPlatformMap[v.provider] || 'LLM_OPENAI';
+            // Find or create the LLM source
+            let llmSource = await prisma.source.findFirst({
+              where: { platform: platform as any, name: { contains: 'Verification' } },
+            });
+            if (!llmSource) {
+              llmSource = await prisma.source.create({
+                data: {
+                  name: `AI Verification (${v.provider})`,
+                  platform: platform as any,
+                  sourceType: 'LLM_PROVIDER' as any,
+                  trustScore: 0.6,
+                  isActive: true,
+                },
+              });
+            }
+
+            // Create a SourcePost with the LLM's verification response
+            const platformPostId = `llm-verify::${v.provider}::${id}::${Date.now()}`;
+            const existing = await prisma.sourcePost.findUnique({ where: { platformPostId } });
+            if (!existing) {
+              const verifyPost = await prisma.sourcePost.create({
+                data: {
+                  sourceId: llmSource.id,
+                  platformPostId,
+                  title: `[Verified] ${story.title}`,
+                  content: `${v.reason} (${v.provider} AI verification, ${Math.round(v.confidence * 100)}% confidence)`,
+                  url: '',
+                  category: story.category || undefined,
+                  locationName: story.locationName || undefined,
+                  publishedAt: new Date(),
+                  contentHash: platformPostId,
+                },
+              });
+
+              // Link to the story
+              await prisma.storySource.create({
+                data: {
+                  storyId: id,
+                  sourcePostId: verifyPost.id,
+                  similarityScore: 1.0,
+                  isPrimary: false,
+                },
+              }).catch(() => {}); // Ignore if already linked
+
+              // Increment source count
+              await prisma.story.update({
+                where: { id },
+                data: { sourceCount: { increment: 1 } },
+              });
+            }
+          } catch (err) {
+            request.log.warn({ provider: v.provider, err }, 'Failed to create verification source post');
+          }
+        }
+      }
+
+      // Update story with verification results
+      await prisma.story.update({
+        where: { id },
+        data: {
+          verificationStatus,
+          verificationScore,
+          ...(verificationStatus === 'VERIFIED' ? { verifiedAt: new Date() } : {}),
+          verificationDetails: {
+            llmVerdicts: verdicts,
+            sourceCount,
+            avgConfidence,
+            verifiedBy: 'llm-dual-check',
+            verifiedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+      return reply.send({
+        storyId: id,
+        verificationStatus,
+        verificationScore,
+        verdicts,
+        sourceCount,
+      });
+    } catch (err: any) {
+      request.log.error(err, 'Story verification failed');
+      return reply.status(500).send({ error: 'Verification failed' });
+    }
+  });
+
   // GET /api/v1/stories/:id/related - find stories sharing 2+ entities
   app.get('/stories/:id/related', async (request, reply) => {
     const parseResult = StoryIdParamsSchema.safeParse(request.params);

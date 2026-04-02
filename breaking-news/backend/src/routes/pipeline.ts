@@ -741,6 +741,14 @@ export async function pipelineRoutes(
       `;
       await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "SystemKnowledge_category_idx" ON "SystemKnowledge"("category")`;
 
+      // Add new Story columns if they don't exist
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "hasFamousPerson" BOOLEAN DEFAULT false`;
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "famousPersonNames" JSONB`;
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verificationStatus" TEXT DEFAULT 'UNVERIFIED'`;
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verificationScore" DOUBLE PRECISION DEFAULT 0`;
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3)`;
+      await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verificationDetails" JSONB`;
+
       // Get all markets
       const markets = await prisma.market.findMany({
         select: { id: true, name: true, state: true, slug: true },

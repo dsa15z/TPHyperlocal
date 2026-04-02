@@ -198,6 +198,7 @@ interface LLMEnrichResult {
   category: string;
   location: string;
   entities: { name: string; type: string; confidence: number }[];
+  famousPersons: string[]; // notable/famous people mentioned
 }
 
 async function llmEnrich(title: string, content: string): Promise<LLMEnrichResult> {
@@ -206,6 +207,7 @@ async function llmEnrich(title: string, content: string): Promise<LLMEnrichResul
 1. CATEGORY: Choose exactly one from: CRIME, WEATHER, TRAFFIC, POLITICS, BUSINESS, SPORTS, COMMUNITY, EMERGENCY, HEALTH, EDUCATION, TECHNOLOGY, ENTERTAINMENT, ENVIRONMENT, FINANCE
 2. LOCATION: The MOST SPECIFIC location mentioned. Prefer neighborhood/district names over city names. If national/international news, respond "National".
 3. ENTITIES: Extract named entities. List each as TYPE:NAME (one per line). Types: PERSON, ORGANIZATION, LOCATION, EVENT.
+4. FAMOUS: List any famous/notable people mentioned (politicians, celebrities, athletes, CEOs, public figures). One per line. Write NONE if no famous people.
 
 Article title: ${title}
 Article content: ${content.substring(0, 1500)}
@@ -216,45 +218,53 @@ LOCATION: <location>
 ENTITIES:
 PERSON: <name>
 ORGANIZATION: <name>
-LOCATION: <name>`;
+LOCATION: <name>
+FAMOUS:
+<name or NONE>`;
 
     const result = await generate(prompt, {
-      maxTokens: 200,
+      maxTokens: 300,
       temperature: 0.1,
-      systemPrompt: 'You extract structured data from news articles. Be precise. Only list real named entities, not generic terms.',
+      systemPrompt: 'You extract structured data from news articles. Be precise. Only list real named entities, not generic terms. For FAMOUS, only list truly well-known public figures (presidents, governors, celebrities, pro athletes, Fortune 500 CEOs). Do not list local officials or unknown people.',
     });
 
     const lines = result.text.split('\n');
     let category = 'OTHER';
     let location = 'National';
     const entities: { name: string; type: string; confidence: number }[] = [];
-    let inEntities = false;
+    const famousPersons: string[] = [];
+    let section = 'main'; // 'main', 'entities', 'famous'
 
     for (const line of lines) {
       const catMatch = line.match(/^CATEGORY:\s*(.+)/i);
-      if (catMatch) { category = catMatch[1].trim().toUpperCase(); continue; }
+      if (catMatch) { category = catMatch[1].trim().toUpperCase(); section = 'main'; continue; }
       const locMatch = line.match(/^LOCATION:\s*(.+)/i);
-      if (locMatch && !inEntities) { location = locMatch[1].trim(); continue; }
-      if (/^ENTITIES:/i.test(line)) { inEntities = true; continue; }
-      if (inEntities) {
+      if (locMatch && section === 'main') { location = locMatch[1].trim(); continue; }
+      if (/^ENTITIES:/i.test(line)) { section = 'entities'; continue; }
+      if (/^FAMOUS:/i.test(line)) { section = 'famous'; continue; }
+
+      if (section === 'entities') {
         const entityMatch = line.match(/^(PERSON|ORGANIZATION|LOCATION|EVENT):\s*(.+)/i);
         if (entityMatch) {
           const name = entityMatch[2].trim();
           if (name && name.length > 1 && name !== 'N/A' && name !== 'None') {
-            entities.push({
-              name,
-              type: entityMatch[1].toUpperCase(),
-              confidence: 0.8,
-            });
+            entities.push({ name, type: entityMatch[1].toUpperCase(), confidence: 0.8 });
           }
+        }
+      }
+
+      if (section === 'famous') {
+        const name = line.trim().replace(/^[-•*]\s*/, '');
+        if (name && name.length > 2 && name !== 'NONE' && name !== 'None' && name !== 'N/A') {
+          famousPersons.push(name);
         }
       }
     }
 
-    return { category, location, entities };
+    return { category, location, entities, famousPersons };
   } catch (err) {
     logger.warn({ err: (err as Error).message }, 'LLM enrichment failed, using heuristic');
-    return { category: 'OTHER', location: '', entities: [] };
+    return { category: 'OTHER', location: '', entities: [], famousPersons: [] };
   }
 }
 
@@ -303,8 +313,9 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
 
   // Step 4: If keyword categorization returned OTHER or no location, use LLM
   // Also use LLM for entity extraction (always, to get better NER than regex)
+  let llmResult: LLMEnrichResult | null = null;
   if (category === 'OTHER' || !locationName || structuredEntities.length < 2) {
-    const llmResult = await llmEnrich(post.title || '', post.content);
+    llmResult = await llmEnrich(post.title || '', post.content);
     if (category === 'OTHER' && llmResult.category !== 'OTHER') {
       category = llmResult.category;
       logger.info({ sourcePostId, category }, 'LLM assigned category');
@@ -357,6 +368,9 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     connection: getSharedConnection(),
   });
 
+  // Collect famous persons from LLM (if enrichment ran)
+  const famousPersons: string[] = llmResult?.famousPersons || [];
+
   await clusteringQueue.add('cluster', {
     sourcePostId: post.id,
     category,
@@ -364,6 +378,7 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     neighborhoods,
     entities,
     structuredEntities,
+    famousPersons,
   }, {
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },

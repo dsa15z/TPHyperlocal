@@ -357,6 +357,14 @@ model Story {
   sustainedActivityScore  Float?  // how consistently new sources arrive
   peakBreakingScore       Float   @default(0)
   peakStatus              String?
+  // Famous person detection
+  hasFamousPerson         Boolean @default(false)
+  famousPersonNames       Json?   // ["Donald Trump", "Taylor Swift"] — notable people in this story
+  // Story verification
+  verificationStatus      String  @default("UNVERIFIED") // UNVERIFIED, VERIFIED, DISPUTED, SINGLE_SOURCE
+  verificationScore       Float   @default(0) // 0-1, confidence in story accuracy
+  verifiedAt              DateTime?
+  verificationDetails     Json?   // { sourceCount, crossSourceMatch, llmValidation, reasons[] }
   pastScores              Json?   // cached score snapshots at N-minutes-ago
   sourceCount     Int         @default(0)
   firstSeenAt     DateTime    @default(now())

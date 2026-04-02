@@ -22,6 +22,10 @@ import {
   GitBranch,
   ArrowUpRight,
   Link2,
+  Star,
+  BadgeCheck,
+  AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
 import { apiFetch, type SourcePost, updateAccountStory, type AccountStoryOverlay } from "@/lib/api";
@@ -662,6 +666,48 @@ export default function StoryDetailPage() {
                 </div>
               </div>
 
+              {/* Verification status card */}
+              {story.verificationStatus && story.verificationStatus !== 'UNVERIFIED' && (
+                <div className="glass-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-gray-400" />
+                    <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Verification</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Status</span>
+                    <span className={clsx(
+                      "px-2 py-0.5 rounded text-xs font-semibold",
+                      story.verificationStatus === 'VERIFIED' ? "text-blue-400 bg-blue-500/10" :
+                      story.verificationStatus === 'SINGLE_SOURCE' ? "text-orange-400 bg-orange-500/10" :
+                      story.verificationStatus === 'DISPUTED' ? "text-red-400 bg-red-500/10" :
+                      "text-gray-400 bg-gray-500/10"
+                    )}>
+                      {story.verificationStatus === 'SINGLE_SOURCE' ? 'Single Source' : story.verificationStatus.charAt(0) + story.verificationStatus.slice(1).toLowerCase()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Sources</span>
+                    <span className="text-xs text-gray-300 font-medium">{story.source_count}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Confidence</span>
+                    <span className="text-xs text-gray-300 font-medium">{Math.round((story.verificationScore || 0) * 100)}%</span>
+                  </div>
+                  <div className="score-bar h-2">
+                    <div
+                      className={clsx(
+                        "score-bar-fill",
+                        story.verificationStatus === 'VERIFIED' ? "bg-blue-500" :
+                        story.verificationStatus === 'SINGLE_SOURCE' ? "bg-orange-500" :
+                        story.verificationStatus === 'DISPUTED' ? "bg-red-500" :
+                        "bg-gray-500"
+                      )}
+                      style={{ width: `${Math.min((story.verificationScore || 0) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Source count + timestamps */}
               <div className="glass-card p-4 space-y-2 text-xs text-gray-500">
                 <div className="flex items-center justify-between">
@@ -699,10 +745,36 @@ export default function StoryDetailPage() {
 
             {/* Story header — shows account edits if present */}
             <div className="space-y-4">
-              <h1 className="text-3xl font-bold text-white leading-tight">
-                {story.accountStory?.editedTitle || story.title}
-                {story.accountStory?.editedTitle && (
-                  <span className="ml-2 text-xs text-accent font-normal">(edited)</span>
+              <h1 className="text-3xl font-bold text-white leading-tight inline-flex items-start flex-wrap gap-1">
+                {story.hasFamousPerson && story.famousPersonNames && story.famousPersonNames.length > 0 && (
+                  <span className="inline-flex items-center group/famous relative mt-1">
+                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                    <span className="absolute bottom-full left-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/famous:opacity-100 transition-opacity pointer-events-none z-50 font-normal">
+                      {story.famousPersonNames.join(', ')}
+                    </span>
+                  </span>
+                )}
+                <span>
+                  {story.accountStory?.editedTitle || story.title}
+                  {story.accountStory?.editedTitle && (
+                    <span className="ml-2 text-xs text-accent font-normal">(edited)</span>
+                  )}
+                </span>
+                {story.verificationStatus === 'VERIFIED' && (
+                  <span className="inline-flex items-center group/verified relative mt-1">
+                    <BadgeCheck className="w-5 h-5 text-blue-400" />
+                    <span className="absolute bottom-full right-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/verified:opacity-100 transition-opacity pointer-events-none z-50 font-normal">
+                      Verified ({Math.round((story.verificationScore || 0) * 100)}% confidence)
+                    </span>
+                  </span>
+                )}
+                {story.verificationStatus === 'SINGLE_SOURCE' && (
+                  <span className="inline-flex items-center group/single relative mt-1">
+                    <AlertTriangle className="w-5 h-5 text-orange-400" />
+                    <span className="absolute bottom-full right-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/single:opacity-100 transition-opacity pointer-events-none z-50 font-normal">
+                      Single source — not yet corroborated
+                    </span>
+                  </span>
                 )}
               </h1>
 

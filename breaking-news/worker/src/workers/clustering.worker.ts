@@ -38,6 +38,7 @@ interface ClusteringJob {
     people: string[];
   };
   structuredEntities?: { name: string; type: string; confidence: number }[];
+  famousPersons?: string[];
 }
 
 const JACCARD_PREFILTER_THRESHOLD = 0.25;
@@ -496,6 +497,9 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     const fullText = `${post.title || ''} ${post.content}`;
     const resolvedLocation = enrichedLocation || extractLocation(fullText) || undefined;
 
+    const famousPersons = job.data.famousPersons || [];
+    const hasFamousPerson = famousPersons.length > 0;
+
     const story = await prisma.story.create({
       data: {
         title: normalizeTitle(post.title || post.content.substring(0, 100)),
@@ -503,6 +507,8 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         locationName: resolvedLocation,
         neighborhood: neighborhoods?.length > 0 ? neighborhoods[0] : undefined,
         sourceCount: 1,
+        hasFamousPerson,
+        famousPersonNames: hasFamousPerson ? famousPersons : undefined,
         firstSeenAt: post.publishedAt,
         lastUpdatedAt: new Date(),
         storySources: {
