@@ -344,8 +344,8 @@ function SourcesPage() {
     setFormPlatform(source.platform);
     setFormSourceType(source.sourceType);
     setFormUrl(source.url || "");
-    // Load market IDs from sourceMarkets or fallback to legacy marketId
-    const mktIds = (source as any).sourceMarkets?.map((sm: any) => sm.marketId) || [];
+    // Load market IDs from API response (marketIds from SourceMarket join table, or legacy marketId)
+    const mktIds = (source as any).marketIds || [];
     setFormMarketIds(mktIds.length > 0 ? mktIds : source.marketId ? [source.marketId] : []);
     setFormTrustScore(Math.round(source.trustScore * 100));
     setShowForm(true);
@@ -1080,9 +1080,15 @@ function SourcesPage() {
                           </span>
                         </td>}
                         {isColVisible("market") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("market") }}>
-                          {source.market?.name || (
-                            <span className="text-gray-600">Global</span>
-                          )}
+                          {(() => {
+                            const mkts = (source as any).markets || [];
+                            if (mkts.length > 0) {
+                              return mkts.length === 1
+                                ? mkts[0].name
+                                : `${mkts[0].name} +${mkts.length - 1}`;
+                            }
+                            return source.market?.name || <span className="text-gray-600">Global</span>;
+                          })()}
                         </td>}
                         {isColVisible("health") && (() => {
                           const h = getSourceHealth(source);
