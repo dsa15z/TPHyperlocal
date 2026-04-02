@@ -146,16 +146,19 @@ function AISummaryPanel({
     },
   });
 
-  // Auto-trigger: generate summary on first render if none exists
+  // Auto-poll: backend auto-generates AI summary on first view (fire-and-forget).
+  // We just need to poll until it appears.
   const hasTriggered = useRef(false);
   useEffect(() => {
     if (!aiSummary && !hasTriggered.current) {
       hasTriggered.current = true;
+      setIsGenerating(true);
+      // Also trigger via the queue endpoint as a backup
       generateMutation.mutate();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll for the summary while generating (worker runs async, may take 5-15s)
+  // Poll every 3s while waiting for summary (backend generates on GET, takes 5-15s)
   useEffect(() => {
     if (!isGenerating) return;
     if (aiSummary) {
@@ -164,8 +167,10 @@ function AISummaryPanel({
     }
     const interval = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ["story", storyId] });
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 3000);
+    // Stop polling after 30s (give up)
+    const timeout = setTimeout(() => setIsGenerating(false), 30000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
   }, [isGenerating, aiSummary, storyId, queryClient]);
 
   const showLoading = isGenerating && !aiSummary;

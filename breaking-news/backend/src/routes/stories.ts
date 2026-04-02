@@ -1170,6 +1170,80 @@ REASON: <one sentence explanation>`;
       return reply.status(404).send({ error: 'Story not found' });
     }
 
+    // Auto-generate AI summary if missing and story has 2+ sources
+    const sourceCount = story._count.storySources || 0;
+    if (!story.aiSummary && sourceCount >= 2) {
+      // Fire-and-forget: don't block the response
+      (async () => {
+        try {
+          const { generateWithFallback } = await import('../lib/llm-factory.js');
+
+          // Build context from all source posts
+          const sourceTitles = story.storySources
+            .map((ss: any) => ss.sourcePost?.title)
+            .filter(Boolean)
+            .slice(0, 10);
+          const sourceContents = story.storySources
+            .map((ss: any) => ss.sourcePost?.content?.substring(0, 300))
+            .filter(Boolean)
+            .slice(0, 5);
+          const sourceNames = story.storySources
+            .map((ss: any) => ss.sourcePost?.source?.name)
+            .filter(Boolean);
+          const uniqueSourceNames = [...new Set(sourceNames)];
+
+          const prompt = `You are a senior newsroom editor. Write a concise, professional news summary (2-3 sentences) that synthesizes information from multiple sources. Also suggest the best headline title.
+
+Story title: ${story.title}
+Category: ${story.category || 'General'}
+Location: ${story.locationName || 'Unknown'}
+Source count: ${sourceCount} sources (${uniqueSourceNames.join(', ')})
+
+Source headlines:
+${sourceTitles.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n')}
+
+Source excerpts:
+${sourceContents.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')}
+
+Respond in exactly this format:
+TITLE: <best headline, max 120 chars, factual, no clickbait>
+SUMMARY: <2-3 sentence synthesis of the story from all sources>`;
+
+          const result = await generateWithFallback(prompt, {
+            maxTokens: 300,
+            temperature: 0.3,
+            systemPrompt: 'You are a broadcast news editor writing for a TV newsroom. Be factual, concise, and professional.',
+          });
+
+          const text = result.content || result.text || '';
+          const titleMatch = text.match(/TITLE:\s*(.+)/i);
+          const summaryMatch = text.match(/SUMMARY:\s*([\s\S]+)/i);
+
+          const newTitle = titleMatch ? titleMatch[1].trim() : null;
+          const newSummary = summaryMatch ? summaryMatch[1].trim() : null;
+
+          if (newSummary) {
+            const updateData: any = {
+              aiSummary: newSummary,
+              aiSummaryModel: result.model || 'unknown',
+              aiSummaryAt: new Date(),
+            };
+            // Update title if the AI-generated one is better (longer, more descriptive)
+            if (newTitle && newTitle.length > story.title.length && newTitle.length <= 150) {
+              updateData.title = newTitle;
+            }
+            await prisma.story.update({
+              where: { id },
+              data: updateData,
+            });
+            request.log.info({ storyId: id, model: result.model }, 'Auto-generated AI summary on story view');
+          }
+        } catch (err) {
+          request.log.warn({ storyId: id, err }, 'Failed to auto-generate AI summary');
+        }
+      })();
+    }
+
     return reply.send({ data: story });
   });
 
