@@ -782,6 +782,78 @@ export async function storiesRoutes(
     return reply.send({ data: stories });
   });
 
+  // ─── Public Teaser ──────────────────────────────────────────────────────────
+  // GET /stories/teaser — 10 most recent stories for the visitor's market (no auth required)
+  // MUST be registered BEFORE /stories/:id parametric route.
+  app.get('/stories/teaser', async (request, reply) => {
+    try {
+      const { resolveMarketFromIP } = await import('../lib/ip-to-market.js');
+      const clientIP = request.headers['x-forwarded-for']
+        ? String(request.headers['x-forwarded-for']).split(',')[0].trim()
+        : request.ip;
+
+      const marketInfo = await resolveMarketFromIP(clientIP);
+
+      const where: any = {
+        mergedIntoId: null,
+        status: { notIn: ['STALE', 'ARCHIVED'] },
+      };
+
+      if (marketInfo) {
+        const market = await prisma.market.findUnique({
+          where: { id: marketInfo.marketId },
+          select: { name: true, state: true, keywords: true, neighborhoods: true },
+        });
+
+        if (market) {
+          const locationConditions: any[] = [];
+          const marketName = market.name.toLowerCase();
+          locationConditions.push({ locationName: { contains: marketName, mode: 'insensitive' } });
+          if (market.state) {
+            locationConditions.push({ locationName: { contains: market.state, mode: 'insensitive' } });
+          }
+          const keywords = (market.keywords as string[]) || [];
+          for (const kw of keywords) {
+            if (kw.length >= 6) {
+              locationConditions.push({ locationName: { contains: kw, mode: 'insensitive' } });
+            }
+          }
+          where.OR = locationConditions;
+        }
+      }
+
+      const stories = await prisma.story.findMany({
+        where,
+        orderBy: { lastUpdatedAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          status: true,
+          locationName: true,
+          compositeScore: true,
+          breakingScore: true,
+          trendingScore: true,
+          sourceCount: true,
+          firstSeenAt: true,
+          lastUpdatedAt: true,
+          aiSummary: true,
+        },
+      });
+
+      return reply.send({
+        stories,
+        market: marketInfo ? { name: marketInfo.marketName, city: marketInfo.city, state: marketInfo.state } : null,
+        total: stories.length,
+        isTeaser: true,
+      });
+    } catch (err: any) {
+      request.log.error(err, 'Teaser endpoint error');
+      return reply.status(500).send({ error: 'Failed to load stories' });
+    }
+  });
+
   // GET /api/v1/stories/:id - get a single story with source posts
   app.get('/stories/:id', async (request, reply) => {
     const parseResult = StoryIdParamsSchema.safeParse(request.params);
@@ -870,4 +942,5 @@ export async function storiesRoutes(
       sourceCount: story._count.storySources,
     });
   });
+
 }

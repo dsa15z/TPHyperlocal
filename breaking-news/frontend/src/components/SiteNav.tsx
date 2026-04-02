@@ -330,13 +330,37 @@ export function SiteNav() {
   const mainGroups = NAV_GROUPS.filter((g) => g.section === "main");
   const adminGroups = NAV_GROUPS.filter((g) => g.section === "admin");
 
-  const renderGroup = (group: NavGroup) => {
-    const active = isGroupActive(group);
-    const expanded = expandedGroups.has(group.id);
+  const renderGroup = (group: NavGroup, { disabled }: { disabled?: boolean } = {}) => {
+    const active = !disabled && isGroupActive(group);
+    const expanded = !disabled && expandedGroups.has(group.id);
     const Icon = group.icon;
 
     // Direct link (no submenu) — e.g., "Stories"
     if (group.directLink) {
+      const linkContent = (
+        <>
+          <Icon className={clsx("w-4 h-4 flex-shrink-0", active && (group.accent || "text-accent"), disabled && "text-gray-700")} />
+          {!collapsed && <span className="truncate">{group.label}</span>}
+        </>
+      );
+
+      if (disabled) {
+        return (
+          <div key={group.id}>
+            <div
+              title={collapsed ? group.label : "Sign in to access"}
+              className={clsx(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium",
+                collapsed && "justify-center px-2",
+                "text-gray-600 cursor-not-allowed border-l-2 border-transparent"
+              )}
+            >
+              {linkContent}
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div key={group.id}>
           <Link
@@ -351,8 +375,7 @@ export function SiteNav() {
                 : "text-gray-300 hover:text-white hover:bg-surface-300/30 border-l-2 border-transparent"
             )}
           >
-            <Icon className={clsx("w-4 h-4 flex-shrink-0", active && (group.accent || "text-accent"))} />
-            {!collapsed && <span className="truncate">{group.label}</span>}
+            {linkContent}
           </Link>
         </div>
       );
@@ -362,32 +385,36 @@ export function SiteNav() {
     return (
       <div key={group.id}>
         <button
-          onClick={() => toggleGroup(group.id)}
-          title={collapsed ? group.label : undefined}
+          onClick={() => !disabled && toggleGroup(group.id)}
+          title={collapsed ? group.label : disabled ? "Sign in to access" : undefined}
           className={clsx(
             "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
             collapsed && "justify-center px-2",
-            active
-              ? "text-white"
-              : "text-gray-400 hover:text-white hover:bg-surface-300/30"
+            disabled
+              ? "text-gray-600 cursor-not-allowed"
+              : active
+                ? "text-white"
+                : "text-gray-400 hover:text-white hover:bg-surface-300/30"
           )}
         >
-          <Icon className={clsx("w-4 h-4 flex-shrink-0", active && (group.accent || "text-accent"))} />
+          <Icon className={clsx("w-4 h-4 flex-shrink-0", active && !disabled && (group.accent || "text-accent"), disabled && "text-gray-700")} />
           {!collapsed && (
             <>
               <span className="truncate flex-1 text-left">{group.label}</span>
-              <ChevronDown
-                className={clsx(
-                  "w-3 h-3 flex-shrink-0 text-gray-600 transition-transform",
-                  expanded && "rotate-180"
-                )}
-              />
+              {!disabled && (
+                <ChevronDown
+                  className={clsx(
+                    "w-3 h-3 flex-shrink-0 text-gray-600 transition-transform",
+                    expanded && "rotate-180"
+                  )}
+                />
+              )}
             </>
           )}
         </button>
 
         {/* Submenu items */}
-        {expanded && !collapsed && (
+        {expanded && !collapsed && !disabled && (
           <div className="mt-0.5 ml-4 pl-3 border-l border-surface-300/30 space-y-0.5">
             {group.items.map((item) => {
               const ItemIcon = item.icon;
@@ -469,7 +496,9 @@ export function SiteNav() {
         )}
       >
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {mainGroups.map(renderGroup)}
+          {mainGroups.map((group) =>
+            renderGroup(group, { disabled: !isLoggedIn && group.id !== "stories" })
+          )}
 
           {isLoggedIn && (
             <>
@@ -479,7 +508,7 @@ export function SiteNav() {
                   Admin
                 </div>
               )}
-              {adminGroups.map(renderGroup)}
+              {adminGroups.map((group) => renderGroup(group))}
             </>
           )}
         </nav>

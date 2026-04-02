@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
 import clsx from "clsx";
-import { fetchStories, type StoryFilters } from "@/lib/api";
+import { fetchStories, fetchTeaserStories, type StoryFilters, type TeaserResponse } from "@/lib/api";
+import { useUser } from "@/components/UserProvider";
 import {
   type DashboardView,
   type ColumnConfig,
@@ -407,7 +408,116 @@ function DashboardContent() {
   );
 }
 
+// ─── Teaser Dashboard (unauthenticated users) ───────────────────────────────
+
+function TeaserDashboard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["teaser-stories"],
+    queryFn: fetchTeaserStories,
+    refetchInterval: 60_000, // slower refresh for teaser
+  });
+
+  const stories = data?.stories || [];
+  const market = data?.market;
+
+  return (
+    <div className="min-h-screen">
+      <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-6">
+        {/* Teaser header */}
+        <div className="glass-card p-6 text-center space-y-3">
+          <h1 className="text-2xl font-bold text-white">
+            {market ? `${market.name} News Intelligence` : "News Intelligence"}
+          </h1>
+          <p className="text-gray-400 text-sm max-w-lg mx-auto">
+            Real-time breaking news from {market ? market.name : "your area"} — powered by 700+ sources.
+            Sign in to unlock filters, saved views, AI assistant, and full coverage.
+          </p>
+          <a
+            href="/auth/login"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-dim text-white font-medium rounded-lg transition-colors"
+          >
+            Sign In for Full Access
+          </a>
+        </div>
+
+        {/* Story list — simple table, no customization */}
+        {isLoading && (
+          <div className="glass-card p-12 text-center text-gray-500">Loading latest stories...</div>
+        )}
+
+        {!isLoading && stories.length === 0 && (
+          <div className="glass-card p-12 text-center">
+            <Search className="w-8 h-8 mx-auto mb-3 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories available</h3>
+            <p className="text-gray-500 text-sm">Check back shortly — stories update continuously.</p>
+          </div>
+        )}
+
+        {!isLoading && stories.length > 0 && (
+          <div className="glass-card overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-surface-300/30">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Story</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Category</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-24">Sources</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-36">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stories.map((story) => (
+                  <tr
+                    key={story.id}
+                    className="border-b border-surface-300/10 hover:bg-surface-200/30 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-white line-clamp-2">{story.title}</div>
+                      {story.location && (
+                        <div className="text-xs text-gray-500 mt-0.5">{story.location}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={clsx(
+                        "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
+                        story.status === "BREAKING" && "bg-orange-500/10 text-orange-400",
+                        story.status === "ALERT" && "bg-red-500/10 text-red-400",
+                        story.status === "DEVELOPING" && "bg-blue-500/10 text-blue-400",
+                        story.status === "TOP_STORY" && "bg-purple-500/10 text-purple-400",
+                        story.status === "ONGOING" && "bg-gray-500/10 text-gray-400",
+                      )}>
+                        {story.status?.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{story.category || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 tabular-nums">{story.source_count}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {new Date(story.last_updated).toLocaleString(undefined, {
+                        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Teaser footer */}
+        <div className="text-center text-xs text-gray-600">
+          Showing {stories.length} most recent stories{market ? ` for ${market.name}` : ""}.
+          Sign in for unlimited access with filters, AI analysis, and real-time alerts.
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── Page Router ─────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
+  const { isLoggedIn, isLoading: authLoading } = useUser();
+
   return (
     <Suspense
       fallback={
@@ -416,7 +526,15 @@ export default function DashboardPage() {
         </div>
       }
     >
-      <DashboardContent />
+      {authLoading ? (
+        <div className="min-h-screen flex items-center justify-center text-gray-500">
+          Loading...
+        </div>
+      ) : isLoggedIn ? (
+        <DashboardContent />
+      ) : (
+        <TeaserDashboard />
+      )}
     </Suspense>
   );
 }

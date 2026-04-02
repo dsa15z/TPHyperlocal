@@ -397,6 +397,24 @@ export async function fetchBreakingStories(): Promise<StoriesResponse> {
   };
 }
 
+export interface TeaserResponse {
+  stories: Story[];
+  market: { name: string; city: string; state: string } | null;
+  total: number;
+  isTeaser: true;
+}
+
+export async function fetchTeaserStories(): Promise<TeaserResponse> {
+  const raw = await apiFetch<any>("/api/v1/stories/teaser");
+  const stories = (raw.stories || []).map(transformStory);
+  return {
+    stories,
+    market: raw.market || null,
+    total: raw.total || stories.length,
+    isTeaser: true,
+  };
+}
+
 export async function fetchTrendingStories(): Promise<StoriesResponse> {
   const raw = await apiFetch<any>("/api/v1/stories/trending");
   const stories = (raw.data || []).map(transformStory);
