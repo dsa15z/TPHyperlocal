@@ -137,7 +137,7 @@ export async function marketRoutes(
       prisma.market.findMany({
         where,
         include: {
-          _count: { select: { sources: true, stories: true } },
+          _count: { select: { sources: true, stories: true, sourceMarkets: true } },
           account: { select: { name: true } },
           sources: {
             select: {
@@ -175,7 +175,7 @@ export async function marketRoutes(
         neighborhoods: m.neighborhoods,
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,
-        sourceCount: m._count.sources,
+        sourceCount: Math.max(m._count.sources, (m._count as any).sourceMarkets || 0),
         storyCount: m._count.stories,
         // Deduplicate sources by name (Event Registry scheduler created dupes)
         sources: [...new Map(m.sources.map(s => [s.name, s])).values()].map((s) => {

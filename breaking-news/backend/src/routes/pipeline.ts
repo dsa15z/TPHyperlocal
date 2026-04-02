@@ -866,9 +866,9 @@ export async function pipelineRoutes(
       const results: string[] = [];
 
       // Find all "Bing News Local - {City}" sources and consolidate into one "Bing News" source
-      for (const prefix of ['Bing News Local', 'Google News Local']) {
+      for (const prefix of ['Bing News Local', 'Google News Local', 'Event Registry', 'HyperLocal Intel']) {
         const perMarketSources = await prisma.source.findMany({
-          where: { name: { startsWith: prefix }, platform: 'RSS' },
+          where: { name: { startsWith: prefix, mode: 'insensitive' } },
           include: { sourceMarkets: { select: { marketId: true } } },
         });
 
@@ -877,35 +877,48 @@ export async function pipelineRoutes(
           continue;
         }
 
-        // Collect all market IDs from the individual sources
+        // Collect all market IDs from the individual sources + from legacy marketId
         const allMarketIds = new Set<string>();
         for (const s of perMarketSources) {
-          for (const sm of (s as any).sourceMarkets) {
+          if ((s as any).marketId) allMarketIds.add((s as any).marketId);
+          for (const sm of (s as any).sourceMarkets || []) {
             allMarketIds.add(sm.marketId);
           }
         }
 
+        // Determine the right platform and URL for the consolidated source
+        const firstSource = perMarketSources[0];
+        const consolPlatform = (firstSource as any).platform || 'RSS';
+        const consolSourceType = (firstSource as any).sourceType || 'API_PROVIDER';
+        const consolUrl = prefix.includes('Bing')
+          ? 'https://www.bing.com/news/search?q=news&format=rss'
+          : prefix.includes('Google')
+          ? 'https://news.google.com/rss/search?q=us+news&hl=en-US'
+          : prefix.includes('Event Registry')
+          ? 'https://eventregistry.org'
+          : prefix.includes('HyperLocal')
+          ? 'https://futurilabs.com/hyperlocalhyperrecent'
+          : (firstSource as any).url || '';
+
         // Create the consolidated source (or find existing one)
-        const consolidatedName = prefix.replace(' Local', '');
+        const consolidatedName = prefix.replace(' Local', '').replace(/ - .*$/, '');
         let consolidated = await prisma.source.findFirst({
-          where: { name: consolidatedName, platform: 'RSS' },
+          where: { name: consolidatedName },
         });
 
         if (!consolidated) {
           consolidated = await prisma.source.create({
             data: {
               name: consolidatedName,
-              platform: 'RSS',
-              sourceType: 'API_PROVIDER',
-              url: prefix.includes('Bing')
-                ? 'https://www.bing.com/news/search?q=news&format=rss'
-                : 'https://news.google.com/rss/search?q=us+news&hl=en-US',
-              trustScore: 0.7,
+              platform: consolPlatform as any,
+              sourceType: consolSourceType as any,
+              url: consolUrl,
+              trustScore: 0.85,
               isActive: true,
               isGlobal: false,
             },
           });
-          results.push(`Created consolidated source: ${consolidatedName}`);
+          results.push(`Created consolidated source: ${consolidatedName} (${consolPlatform})`);
         }
 
         // Link all markets to the consolidated source
@@ -920,11 +933,9 @@ export async function pipelineRoutes(
         }
 
         // Deactivate the per-market sources (don't delete — preserve history)
+        const idsToDeactivate = perMarketSources.map(s => s.id).filter(id => id !== consolidated.id);
         const deactivated = await prisma.source.updateMany({
-          where: {
-            id: { in: perMarketSources.map(s => s.id) },
-            id: { not: consolidated.id },
-          },
+          where: { id: { in: idsToDeactivate } },
           data: { isActive: false },
         });
 

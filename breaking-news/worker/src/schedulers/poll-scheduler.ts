@@ -1212,50 +1212,51 @@ async function scheduleWebScrapePolls(): Promise<void> {
 async function scheduleEventRegistryPolls(): Promise<void> {
   if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleEventRegistryPolls'); return; }
   const apiKey = process.env['EVENT_REGISTRY_KEY'] || process.env['EVENT_REGISTRY_API_KEY'];
-  if (!apiKey) return; // No key, skip silently
+  if (!apiKey) return;
 
   try {
     const connection = getSharedConnection();
     const erQueue = new Queue('event-registry', { connection });
 
-    // Find sources with metadata.type = 'event-registry' or with platform containing event
-    const markets = await prisma.market.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, state: true, keywords: true },
+    // Find the consolidated Event Registry source (or any active ER source)
+    const erSource = await prisma.source.findFirst({
+      where: {
+        platform: 'NEWSAPI',
+        isActive: true,
+        name: { contains: 'Event Registry', mode: 'insensitive' },
+      },
+      include: {
+        sourceMarkets: {
+          include: { market: { select: { id: true, name: true, state: true, keywords: true, isActive: true } } },
+        },
+      },
     });
 
-    if (markets.length === 0) {
+    if (!erSource) {
       await erQueue.close();
       return;
     }
 
+    // Get markets from SourceMarket links, or fall back to all active markets
+    let markets = ((erSource as any).sourceMarkets || [])
+      .map((sm: any) => sm.market)
+      .filter((m: any) => m && m.isActive);
+
+    if (markets.length === 0) {
+      // No SourceMarket links — use all active markets
+      markets = await prisma.market.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, state: true, keywords: true },
+      });
+    }
+
+    // One job per market using the single consolidated source
     for (const market of markets) {
       const keywords = (market.keywords || []) as string[];
       const query = keywords.slice(0, 5).join(' ') || market.name;
 
-      // Find an Event Registry source for this market (exact name match to prevent duplicates)
-      const exactName = `Event Registry - ${market.name}`;
-      let source = await prisma.source.findFirst({
-        where: { name: exactName },
-      });
-
-      if (!source) {
-        source = await prisma.source.create({
-          data: {
-            platform: 'NEWSAPI' as any,
-            sourceType: 'API_PROVIDER' as any,
-            name: exactName,
-            url: 'https://eventregistry.org',
-            marketId: market.id,
-            trustScore: 0.85,
-            isGlobal: false,
-            metadata: { type: 'event-registry', query },
-          },
-        });
-      }
-
       await erQueue.add('event-registry-poll', {
-        sourceId: source.id,
+        sourceId: erSource.id,
         query,
         market: market.name,
       }, {
@@ -1268,7 +1269,7 @@ async function scheduleEventRegistryPolls(): Promise<void> {
     }
 
     await erQueue.close();
-    logger.info({ markets: markets.length }, 'Scheduled Event Registry polls');
+    logger.info({ sourceId: erSource.id, markets: markets.length }, 'Scheduled Event Registry polls (consolidated)');
   } catch (err) {
     logger.error({ err }, 'Failed to schedule Event Registry polls');
   }

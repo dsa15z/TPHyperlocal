@@ -117,7 +117,7 @@ const STATUS_OPTIONS = [
 const SOURCE_COLUMNS = [
   { id: "name", label: "Name", width: 280, defaultWidth: 280, minWidth: 150 },
   { id: "platform", label: "Source Type", width: 110, defaultWidth: 110, minWidth: 70 },
-  { id: "market", label: "Market", width: 100, defaultWidth: 100, minWidth: 70 },
+  { id: "market", label: "Markets", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "health", label: "Health", width: 80, defaultWidth: 80, minWidth: 60 },
   { id: "trust", label: "Trust", width: 90, defaultWidth: 90, minWidth: 60 },
   { id: "stories", label: "Stories", width: 90, defaultWidth: 90, minWidth: 60 },
