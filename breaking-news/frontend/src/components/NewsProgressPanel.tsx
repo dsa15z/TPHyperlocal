@@ -194,6 +194,7 @@ function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
                 <button
                   onClick={() => clearMutation.mutate()}
                   disabled={clearMutation.isPending}
+                  aria-label={`Clear ${queue.failed} failed jobs from ${info.label}`}
                   className="px-2 py-0.5 text-[11px] rounded text-red-400 hover:bg-red-500/10 transition-colors"
                 >
                   {clearMutation.isPending ? "Clearing..." : `Clear ${queue.failed} failed`}
@@ -202,6 +203,7 @@ function ExpandableQueueRow({ queue }: { queue: QueueStatus }) {
               <button
                 onClick={() => runMutation.mutate()}
                 disabled={runMutation.isPending}
+                aria-label={`Run ${info.label} queue now`}
                 className="px-2 py-0.5 text-[11px] rounded text-accent hover:bg-accent/10 transition-colors flex items-center gap-1"
               >
                 <Play className="w-2.5 h-2.5" />

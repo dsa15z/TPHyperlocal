@@ -267,6 +267,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           <input
             type="text"
             placeholder='Search or ask: "breaking crime in Houston last hour"'
+            aria-label="Search stories"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className={clsx("filter-input w-full pl-9 pr-12", isNlpQuery(searchInput) && "border-accent/40")}
@@ -351,6 +352,8 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
         {/* Uncovered only toggle */}
         <button
           onClick={() => setUncoveredOnly(!uncoveredOnly)}
+          aria-label="Toggle gaps only filter"
+          aria-pressed={uncoveredOnly}
           className={clsx(
             "filter-btn flex items-center gap-1.5 text-sm",
             uncoveredOnly && "filter-btn-active border-red-500/50 text-red-400"
@@ -367,6 +370,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
+            aria-label="Clear all filters"
             className="filter-btn text-gray-400 hover:text-red-400 flex items-center gap-1"
           >
             <X className="w-3 h-3" />

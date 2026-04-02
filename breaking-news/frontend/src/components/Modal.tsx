@@ -49,6 +49,9 @@ export function Modal({ isOpen, onClose, title, children, width = "max-w-2xl" }:
 
       {/* Modal panel */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
         className={clsx(
           "relative bg-surface-100 border border-surface-300 rounded-xl shadow-2xl w-full animate-in mb-8",
           width
@@ -56,9 +59,10 @@ export function Modal({ isOpen, onClose, title, children, width = "max-w-2xl" }:
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-300/50">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <h2 id="modal-title" className="text-lg font-semibold text-white">{title}</h2>
           <button
             onClick={onClose}
+            aria-label="Close dialog"
             className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-surface-300/30"
           >
             <X className="w-5 h-5" />

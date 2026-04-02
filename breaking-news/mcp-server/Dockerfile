@@ -26,4 +26,8 @@ COPY --from=builder /app/prisma ./prisma
 
 ENV NODE_ENV=production
 
+USER node
+
+HEALTHCHECK --interval=60s --timeout=5s --retries=3 CMD node -e "process.exit(0)" || exit 1
+
 CMD ["node", "dist/index.js"]

@@ -367,6 +367,7 @@ export function SiteNav() {
             href={group.directLink}
             onClick={() => setMobileOpen(false)}
             title={collapsed ? group.label : undefined}
+            aria-current={active ? "page" : undefined}
             className={clsx(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
               collapsed && "justify-center px-2",
@@ -424,6 +425,7 @@ export function SiteNav() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
+                  aria-current={itemActive ? "page" : undefined}
                   className={clsx(
                     "flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[13px] transition-all",
                     itemActive
@@ -449,6 +451,7 @@ export function SiteNav() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
             className="lg:hidden text-gray-400 hover:text-white"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -495,7 +498,7 @@ export function SiteNav() {
           mobileOpen && "!flex w-64"
         )}
       >
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        <nav aria-label="Main navigation" className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           {mainGroups.map((group) =>
             renderGroup(group, { disabled: !isLoggedIn && group.id !== "stories" })
           )}
@@ -516,6 +519,7 @@ export function SiteNav() {
         <div className="hidden lg:flex border-t border-surface-300/30 p-2">
           <button
             onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-white hover:bg-surface-300/30 rounded-lg transition-colors"
           >
             {collapsed ? (

@@ -10,6 +10,17 @@ export const HOUSTON_CENTER = {
 
 export const DEFAULT_RADIUS_KM = 80;
 
+// ── Composite Score Weights ──────────────────────────────────────────────────
+// compositeScore = breaking*W + trending*W + confidence*W + locality*W + social*W
+
+export const COMPOSITE_WEIGHTS = {
+  breaking: 0.25,
+  trending: 0.20,
+  confidence: 0.15,
+  locality: 0.15,
+  social: 0.25,
+} as const;
+
 // ── Score Thresholds ─────────────────────────────────────────────────────────
 
 export const SCORE_THRESHOLDS = {
@@ -22,6 +33,33 @@ export const SCORE_THRESHOLDS = {
     medium: 0.5,
     low: 0.25,
   },
+} as const;
+
+// ── Status Determination Thresholds ─────────────────────────────────────────
+// Local markets use lower thresholds to surface stories faster
+
+export const STATUS_THRESHOLDS = {
+  breakingNational: 0.6,
+  breakingLocal: 0.35,
+  sourcesForBreaking: 3, // 3+ sources in 15 min → BREAKING
+  sourceWindowMinutes: 15,
+  staleAfterHours: 48,
+  archiveAfterHours: 72,
+  socialBreakingBoost: 0.15,
+  socialTrendingBoost: 0.20,
+} as const;
+
+// ── Pipeline Defaults ───────────────────────────────────────────────────────
+
+export const PIPELINE_DEFAULTS = {
+  maxJobRetries: 3,
+  jobBackoffMs: 5000,
+  idleThresholdMs: 6 * 60 * 1000, // 6 minutes
+  scoreDecayIntervalMs: 10 * 60 * 1000, // 10 minutes
+  cleanupIntervalMs: 60 * 60 * 1000, // 1 hour
+  pastScoresRetentionMs: 2 * 60 * 60 * 1000, // 2 hours
+  defaultPageSize: 25,
+  maxPageSize: 200,
 } as const;
 
 // ── Status Transitions ───────────────────────────────────────────────────────

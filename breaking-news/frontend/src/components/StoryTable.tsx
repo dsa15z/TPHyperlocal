@@ -368,7 +368,7 @@ export function StoryTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
+      <table className="w-full" role="grid">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-surface-300/50">
@@ -383,6 +383,11 @@ export function StoryTable({
                     className={clsx("table-header relative group/th", canSort && "cursor-pointer")}
                     style={{ width: header.getSize() }}
                     onClick={header.column.getToggleSortingHandler()}
+                    aria-sort={
+                      sorted === "asc" ? "ascending" :
+                      sorted === "desc" ? "descending" :
+                      canSort ? "none" : undefined
+                    }
                   >
                     <div className="flex items-center gap-1">
                       {flexRender(

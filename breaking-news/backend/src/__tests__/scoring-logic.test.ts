@@ -8,19 +8,20 @@ import { describe, it, expect } from 'vitest';
 // ─── Score Range Tests ─────────────────────────────────────────────────────
 
 describe('Score Calculations', () => {
-  // Composite score formula: 0.35*breaking + 0.25*trending + 0.20*confidence + 0.20*locality
-  function computeComposite(breaking: number, trending: number, confidence: number, locality: number): number {
-    return 0.35 * breaking + 0.25 * trending + 0.20 * confidence + 0.20 * locality;
+  // Composite score formula: 0.25*breaking + 0.20*trending + 0.15*confidence + 0.15*locality + 0.25*social
+  function computeComposite(breaking: number, trending: number, confidence: number, locality: number, social: number): number {
+    return 0.25 * breaking + 0.20 * trending + 0.15 * confidence + 0.15 * locality + 0.25 * social;
   }
 
   it('composite score is weighted sum of component scores', () => {
-    expect(computeComposite(1.0, 1.0, 1.0, 1.0)).toBeCloseTo(1.0, 2);
-    expect(computeComposite(0.0, 0.0, 0.0, 0.0)).toBeCloseTo(0.0, 2);
-    expect(computeComposite(0.5, 0.5, 0.5, 0.5)).toBeCloseTo(0.5, 2);
-    expect(computeComposite(1.0, 0.0, 0.0, 0.0)).toBeCloseTo(0.35, 2);
-    expect(computeComposite(0.0, 1.0, 0.0, 0.0)).toBeCloseTo(0.25, 2);
-    expect(computeComposite(0.0, 0.0, 1.0, 0.0)).toBeCloseTo(0.20, 2);
-    expect(computeComposite(0.0, 0.0, 0.0, 1.0)).toBeCloseTo(0.20, 2);
+    expect(computeComposite(1.0, 1.0, 1.0, 1.0, 1.0)).toBeCloseTo(1.0, 2);
+    expect(computeComposite(0.0, 0.0, 0.0, 0.0, 0.0)).toBeCloseTo(0.0, 2);
+    expect(computeComposite(0.5, 0.5, 0.5, 0.5, 0.5)).toBeCloseTo(0.5, 2);
+    expect(computeComposite(1.0, 0.0, 0.0, 0.0, 0.0)).toBeCloseTo(0.25, 2);
+    expect(computeComposite(0.0, 1.0, 0.0, 0.0, 0.0)).toBeCloseTo(0.20, 2);
+    expect(computeComposite(0.0, 0.0, 1.0, 0.0, 0.0)).toBeCloseTo(0.15, 2);
+    expect(computeComposite(0.0, 0.0, 0.0, 1.0, 0.0)).toBeCloseTo(0.15, 2);
+    expect(computeComposite(0.0, 0.0, 0.0, 0.0, 1.0)).toBeCloseTo(0.25, 2);
   });
 
   it('all component scores must be in 0-1 range', () => {
@@ -28,22 +29,24 @@ describe('Score Calculations', () => {
       const val = i / 10;
       expect(val).toBeGreaterThanOrEqual(0);
       expect(val).toBeLessThanOrEqual(1);
-      const composite = computeComposite(val, val, val, val);
+      const composite = computeComposite(val, val, val, val, val);
       expect(composite).toBeGreaterThanOrEqual(0);
       expect(composite).toBeLessThanOrEqual(1);
     }
   });
 
   it('composite never exceeds 1.0 even with max inputs', () => {
-    expect(computeComposite(1.0, 1.0, 1.0, 1.0)).toBeLessThanOrEqual(1.0);
+    expect(computeComposite(1.0, 1.0, 1.0, 1.0, 1.0)).toBeLessThanOrEqual(1.0);
   });
 
-  it('breaking score has highest weight (0.35)', () => {
-    const allBreaking = computeComposite(1.0, 0.0, 0.0, 0.0);
-    const allTrending = computeComposite(0.0, 1.0, 0.0, 0.0);
-    const allConfidence = computeComposite(0.0, 0.0, 1.0, 0.0);
-    const allLocality = computeComposite(0.0, 0.0, 0.0, 1.0);
+  it('breaking and social have equal highest weight (0.25)', () => {
+    const allBreaking = computeComposite(1.0, 0.0, 0.0, 0.0, 0.0);
+    const allSocial = computeComposite(0.0, 0.0, 0.0, 0.0, 1.0);
+    const allTrending = computeComposite(0.0, 1.0, 0.0, 0.0, 0.0);
+    const allConfidence = computeComposite(0.0, 0.0, 1.0, 0.0, 0.0);
+    const allLocality = computeComposite(0.0, 0.0, 0.0, 1.0, 0.0);
 
+    expect(allBreaking).toEqual(allSocial);
     expect(allBreaking).toBeGreaterThan(allTrending);
     expect(allTrending).toBeGreaterThan(allConfidence);
     expect(allConfidence).toEqual(allLocality);

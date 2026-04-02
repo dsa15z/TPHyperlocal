@@ -36,4 +36,6 @@ COPY --from=builder /app/package.json ./package.json
 
 USER worker
 
+HEALTHCHECK --interval=60s --timeout=10s --retries=3 CMD node -e "process.exit(0)" || exit 1
+
 CMD ["node", "dist/index.js"]
