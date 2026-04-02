@@ -16,10 +16,11 @@ export function BreakingTicker() {
     queryFn: () =>
       fetchStories({
         status: "ALERT,BREAKING",
+        time_range: "24h",
         page_size: 20,
-        sort_by: "breakingScore",
+        sort_by: "breaking_score",
         sort_order: "desc",
-      }),
+      }).catch(() => ({ stories: [], total: 0, page: 1, page_size: 20, total_pages: 1 })),
     refetchInterval: 15_000,
     retry: false,
   });
