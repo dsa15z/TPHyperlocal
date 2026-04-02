@@ -689,4 +689,138 @@ export async function pipelineRoutes(
       cleanedFailedJobs: cleaned.length,
     });
   });
+
+  // POST /api/v1/pipeline/fix-source-markets — Link sources to correct markets
+  // Global sources → National market, city-named sources → their city market
+  app.post('/pipeline/fix-source-markets', async (_request, reply) => {
+    try {
+      // Get all markets
+      const markets = await prisma.market.findMany({
+        select: { id: true, name: true, state: true, slug: true },
+      });
+
+      // Find or create National market
+      let nationalMarket = markets.find(m => m.name.toLowerCase() === 'national');
+      if (!nationalMarket) {
+        const created = await prisma.market.create({
+          data: {
+            name: 'National',
+            slug: 'national',
+            latitude: 39.8283,
+            longitude: -98.5795,
+            radiusKm: 5000,
+            timezone: 'America/Chicago',
+            accountId: 'system',
+            keywords: [],
+            neighborhoods: [],
+          },
+        });
+        nationalMarket = { id: created.id, name: 'National', state: null, slug: 'national' };
+      }
+
+      // Build city name → market ID lookup (lowercased)
+      const cityToMarket: Record<string, string> = {};
+      for (const m of markets) {
+        cityToMarket[m.name.toLowerCase()] = m.id;
+        // Also try "city, ST" format
+        if (m.state) {
+          cityToMarket[`${m.name.toLowerCase()}, ${m.state.toLowerCase()}`] = m.id;
+        }
+      }
+
+      // Get all sources with their current SourceMarket links
+      const sources = await prisma.source.findMany({
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          isGlobal: true,
+          marketId: true,
+          sourceMarkets: { select: { marketId: true } },
+        },
+      });
+
+      let linked = 0;
+      let nationalLinked = 0;
+      let alreadyLinked = 0;
+      const fixes: string[] = [];
+
+      for (const source of sources) {
+        const existingMarketIds = new Set(source.sourceMarkets.map(sm => sm.marketId));
+
+        // Determine target market(s) for this source
+        const targetMarketIds: string[] = [];
+
+        // Check if source name contains a city name (e.g., "Bing News Local - Memphis")
+        const nameLower = source.name.toLowerCase();
+        let matchedCity = false;
+
+        for (const [city, marketId] of Object.entries(cityToMarket)) {
+          if (city === 'national') continue;
+          if (nameLower.includes(city)) {
+            targetMarketIds.push(marketId);
+            matchedCity = true;
+            break; // Take first match
+          }
+        }
+
+        // Also check URL for city names (e.g., ?q=Memphis%20news)
+        if (!matchedCity && source.url) {
+          const urlDecoded = decodeURIComponent(source.url).toLowerCase();
+          for (const [city, marketId] of Object.entries(cityToMarket)) {
+            if (city === 'national' || city.length < 4) continue;
+            if (urlDecoded.includes(city)) {
+              targetMarketIds.push(marketId);
+              matchedCity = true;
+              break;
+            }
+          }
+        }
+
+        // If no city matched AND source is global/no market → link to National
+        if (!matchedCity) {
+          if (source.isGlobal || (!source.marketId && existingMarketIds.size === 0)) {
+            targetMarketIds.push(nationalMarket.id);
+          }
+        }
+
+        // Create missing SourceMarket links
+        for (const marketId of targetMarketIds) {
+          if (existingMarketIds.has(marketId)) {
+            alreadyLinked++;
+            continue;
+          }
+
+          try {
+            await prisma.sourceMarket.create({
+              data: { sourceId: source.id, marketId },
+            });
+
+            if (marketId === nationalMarket.id) {
+              nationalLinked++;
+              fixes.push(`${source.name} → National`);
+            } else {
+              linked++;
+              const market = markets.find(m => m.id === marketId);
+              fixes.push(`${source.name} → ${market?.name || marketId}`);
+            }
+          } catch {
+            // Unique constraint — already linked
+            alreadyLinked++;
+          }
+        }
+      }
+
+      return reply.send({
+        message: `Fixed source-market links`,
+        totalSources: sources.length,
+        newCityLinks: linked,
+        newNationalLinks: nationalLinked,
+        alreadyLinked,
+        fixes: fixes.slice(0, 100), // Show first 100 fixes
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
 }
