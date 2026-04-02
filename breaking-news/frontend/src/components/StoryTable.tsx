@@ -257,20 +257,17 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
         const tooltip = `Score: ${score}\n= Breaking (${b}) \u00d7 25% = ${(b * 0.25).toFixed(1)}\n+ Trending (${t}) \u00d7 20% = ${(t * 0.20).toFixed(1)}\n+ Confidence (${c}) \u00d7 15% = ${(c * 0.15).toFixed(1)}\n+ Locality (${l}) \u00d7 15% = ${(l * 0.15).toFixed(1)}`;
 
         return (
-          <div className="group/score relative flex flex-col gap-1 min-w-[60px]">
-            <span className={clsx("text-xs font-bold tabular-nums", score >= 60 ? "text-red-400" : score >= 40 ? "text-orange-400" : score >= 20 ? "text-yellow-400" : "text-gray-400")}>
+          <div className="group/score relative text-center">
+            <span className={clsx("text-sm font-bold tabular-nums", score >= 60 ? "text-red-400" : score >= 40 ? "text-orange-400" : score >= 20 ? "text-yellow-400" : "text-gray-400")}>
               {score}
             </span>
-            <div className="score-bar">
-              <div className={clsx("score-bar-fill", barColor)} style={{ width: `${Math.min(score, 100)}%` }} />
-            </div>
-            <span className="absolute bottom-full left-0 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/score:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-3 py-2 text-xs bg-gray-900 text-gray-200 rounded shadow-lg whitespace-pre opacity-0 group-hover/score:opacity-100 transition-opacity pointer-events-none z-50 font-mono leading-relaxed">
               {tooltip}
             </span>
           </div>
         );
       },
-      size: 90,
+      size: 42,
     }),
     breaking_score: columnHelper.accessor("breaking_score", {
       header: "Breaking",
