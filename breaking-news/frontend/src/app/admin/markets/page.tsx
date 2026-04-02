@@ -8,12 +8,8 @@ import {
   Trash2,
   Download,
   AlertCircle,
-  X,
-  Check,
   Sparkles,
   Loader2,
-  ChevronDown,
-  ChevronUp,
   Radio,
   Tv,
   Globe,
@@ -21,7 +17,6 @@ import {
 import clsx from "clsx";
 import {
   apiFetch,
-  fetchMarkets,
   createMarket,
   updateMarket,
   deleteMarket,
@@ -30,6 +25,7 @@ import { getAuthHeaders } from "@/lib/auth";
 import { TablePagination } from "@/components/TablePagination";
 import { ColumnCustomizer } from "@/components/ColumnCustomizer";
 import { useTableColumns } from "@/hooks/useTableColumns";
+import { Modal } from "@/components/Modal";
 
 const MARKET_COLUMNS = [
   { id: "name", label: "Name", width: 150, defaultWidth: 150, minWidth: 100 },
@@ -73,9 +69,11 @@ interface Market {
 
 export default function MarketsPage() {
   const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Modal state: null = closed, Market object = edit mode, "create" = create mode
+  const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
+  const [isCreateMode, setIsCreateMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<"details" | "sources">("details");
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -128,8 +126,7 @@ export default function MarketsPage() {
     mutationFn: createMarket,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
-      resetForm();
-      setShowForm(false);
+      closeModal();
     },
   });
 
@@ -138,9 +135,7 @@ export default function MarketsPage() {
       updateMarket(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
-      resetForm();
-      setEditingId(null);
-      setShowForm(false);
+      closeModal();
     },
   });
 
@@ -195,8 +190,16 @@ export default function MarketsPage() {
     setFormNeighborhoods("");
   };
 
+  const openCreate = () => {
+    resetForm();
+    setSelectedMarket(null);
+    setIsCreateMode(true);
+    setActiveTab("details");
+  };
+
   const startEdit = (market: Market) => {
-    setEditingId(market.id);
+    setSelectedMarket(market);
+    setIsCreateMode(false);
     setFormName(market.name);
     setFormSlug(market.slug);
     setFormState(market.state);
@@ -206,8 +209,16 @@ export default function MarketsPage() {
     setFormTimezone(market.timezone);
     setFormKeywords(market.keywords?.join(", ") || "");
     setFormNeighborhoods(market.neighborhoods?.join(", ") || "");
-    setShowForm(true);
+    setActiveTab("details");
   };
+
+  const closeModal = () => {
+    setSelectedMarket(null);
+    setIsCreateMode(false);
+    resetForm();
+  };
+
+  const isModalOpen = isCreateMode || selectedMarket !== null;
 
   const buildPayload = () => ({
     name: formName.trim(),
@@ -231,8 +242,8 @@ export default function MarketsPage() {
     if (!formName.trim() || !formSlug.trim() || !formState.trim()) return;
     const payload = buildPayload();
 
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, data: payload });
+    if (selectedMarket) {
+      updateMutation.mutate({ id: selectedMarket.id, data: payload });
     } else {
       createMutation.mutate(payload);
     }
@@ -240,6 +251,13 @@ export default function MarketsPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const isFormError = createMutation.isError || updateMutation.isError;
+
+  // Source helpers for modal
+  const tvStations = (selectedMarket?.sources || []).filter((s) => s.type === "tv");
+  const radioStations = (selectedMarket?.sources || []).filter((s) => s.type === "radio");
+  const hlSources = (selectedMarket?.sources || []).filter((s) => s.type === "hyperlocal-intel");
+  const otherSources = (selectedMarket?.sources || []).filter((s) => !["tv", "radio", "hyperlocal-intel"].includes(s.type));
+  const modalSourceCount = selectedMarket?.sourceCount ?? (selectedMarket?.sources?.length || 0);
 
   return (
     <div className="min-h-screen">
@@ -264,13 +282,7 @@ export default function MarketsPage() {
               {seedMutation.isPending ? "Seeding..." : "Sync All 50 Markets"}
             </button>
             <button
-              onClick={() => {
-                if (editingId) {
-                  setEditingId(null);
-                  resetForm();
-                }
-                setShowForm(!showForm);
-              }}
+              onClick={openCreate}
               className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -278,215 +290,6 @@ export default function MarketsPage() {
             </button>
           </div>
         </div>
-        {/* Form */}
-        {showForm && (
-          <div className="glass-card-strong p-6 space-y-4 animate-in">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                {editingId ? "Edit Market" : "Add New Market"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingId(null);
-                  resetForm();
-                }}
-                className="text-gray-500 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => {
-                    setFormName(e.target.value);
-                    // Auto-generate slug from name
-                    if (!editingId) {
-                      setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
-                    }
-                  }}
-                  placeholder="e.g., Houston"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Slug *
-                </label>
-                <input
-                  type="text"
-                  value={formSlug}
-                  onChange={(e) => setFormSlug(e.target.value)}
-                  placeholder="e.g., houston"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  State *
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={formState}
-                    onChange={(e) => setFormState(e.target.value)}
-                    onBlur={() => {
-                      // Auto-fill when both name and state are set
-                      if (formName.trim() && formState.trim() && !formLat && !editingId) {
-                        handleAutofill();
-                      }
-                    }}
-                    placeholder="e.g., TX"
-                    className="filter-input flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAutofill}
-                    disabled={!formName.trim() || !formState.trim() || autofillMutation.isPending}
-                    className={clsx(
-                      "filter-btn flex items-center gap-1 text-xs whitespace-nowrap",
-                      autofillMutation.isPending
-                        ? "text-purple-400 border-purple-500/30"
-                        : "text-purple-400 border-purple-500/30 hover:bg-purple-500/10",
-                      (!formName.trim() || !formState.trim()) && "opacity-40 cursor-not-allowed"
-                    )}
-                    title="Auto-fill lat/long, keywords, neighborhoods using AI"
-                  >
-                    {autofillMutation.isPending ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3 h-3" />
-                    )}
-                    Auto-fill
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Latitude
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  value={formLat}
-                  onChange={(e) => setFormLat(e.target.value)}
-                  placeholder="29.7604"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Longitude
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  value={formLon}
-                  onChange={(e) => setFormLon(e.target.value)}
-                  placeholder="-95.3698"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Radius (km)
-                </label>
-                <input
-                  type="number"
-                  value={formRadius}
-                  onChange={(e) => setFormRadius(e.target.value)}
-                  placeholder="50"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Timezone
-                </label>
-                <input
-                  type="text"
-                  value={formTimezone}
-                  onChange={(e) => setFormTimezone(e.target.value)}
-                  placeholder="America/Chicago"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Keywords (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={formKeywords}
-                  onChange={(e) => setFormKeywords(e.target.value)}
-                  placeholder="houston, htx, h-town"
-                  className="filter-input w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Neighborhoods (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={formNeighborhoods}
-                  onChange={(e) => setFormNeighborhoods(e.target.value)}
-                  placeholder="Montrose, Heights, Midtown"
-                  className="filter-input w-full"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={handleSubmit}
-                disabled={
-                  !formName.trim() ||
-                  !formSlug.trim() ||
-                  !formState.trim() ||
-                  isPending
-                }
-                className={clsx(
-                  "px-5 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors",
-                  (!formName.trim() ||
-                    !formSlug.trim() ||
-                    !formState.trim() ||
-                    isPending) &&
-                    "opacity-50 cursor-not-allowed"
-                )}
-              >
-                {isPending
-                  ? "Saving..."
-                  : editingId
-                  ? "Update Market"
-                  : "Add Market"}
-              </button>
-              {isFormError && (
-                <span className="text-red-400 text-sm flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {(createMutation.error as Error)?.message ||
-                    (updateMutation.error as Error)?.message ||
-                    "Failed to save market"}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Table */}
         {isLoading ? (
@@ -529,36 +332,26 @@ export default function MarketsPage() {
                 </thead>
                 <tbody>
                   {markets.map((market: Market) => {
-                    const isExpanded = expandedId === market.id;
-                    const tvStations = (market.sources || []).filter((s) => s.type === "tv");
-                    const radioStations = (market.sources || []).filter((s) => s.type === "radio");
-                    const hlSources = (market.sources || []).filter((s) => s.type === "hyperlocal-intel");
-                    const otherSources = (market.sources || []).filter((s) => !["tv", "radio", "hyperlocal-intel"].includes(s.type));
+                    const tvCount = (market.sources || []).filter((s) => s.type === "tv").length;
+                    const radioCount = (market.sources || []).filter((s) => s.type === "radio").length;
                     const totalSrc = market.sourceCount ?? (market.sources?.length || 0);
-                    const colCount = visibleColumns.length;
 
                     return (
-                      <React.Fragment key={market.id}>
-                        <tr
-                          className={clsx("border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer", isExpanded && "bg-surface-300/10")}
-                          onClick={() => startEdit(market)}
-                        >
-                          {isCol("name") && <td className="px-4 py-3 text-white font-medium">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : market.id); }}
-                                className="hover:text-white transition-colors"
-                                title={isExpanded ? "Collapse sources" : "Expand sources"}
-                              >
-                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-                              </button>
-                              {market.name}
-                            </div>
-                          </td>}
-                          {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
-                          {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
-                          {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
-                          {isCol("active") && <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <tr
+                        key={market.id}
+                        className="border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer"
+                        onClick={() => startEdit(market)}
+                      >
+                        {isCol("name") && (
+                          <td className="px-4 py-3 text-white font-medium">
+                            {market.name}
+                          </td>
+                        )}
+                        {isCol("state") && <td className="px-4 py-3 text-gray-400">{market.state}</td>}
+                        {isCol("coords") && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}</td>}
+                        {isCol("radius") && <td className="px-4 py-3 text-gray-400">{market.radiusKm} km</td>}
+                        {isCol("active") && (
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => {
                                 if (market.isActive) {
@@ -579,101 +372,31 @@ export default function MarketsPage() {
                                 market.isActive ? "translate-x-4" : "translate-x-0.5"
                               )} />
                             </button>
-                          </td>}
-                          {isCol("sources") && <td className="px-4 py-3">
+                          </td>
+                        )}
+                        {isCol("sources") && (
+                          <td className="px-4 py-3">
                             <span className="text-gray-400">{totalSrc}</span>
-                            {totalSrc > 0 && <span className="text-gray-600 text-xs ml-1">({tvStations.length} TV, {radioStations.length} Radio)</span>}
-                          </td>}
-                          {isCol("actions") && <td className="px-4 py-3">
+                            {totalSrc > 0 && <span className="text-gray-600 text-xs ml-1">({tvCount} TV, {radioCount} Radio)</span>}
+                          </td>
+                        )}
+                        {isCol("actions") && (
+                          <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
-                              <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete market "${market.name}"? This cannot be undone.`)) deleteMutation.mutate(market.id); }}
-                                className="filter-btn text-gray-500 hover:text-red-400" title="Delete market">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete market "${market.name}"? This cannot be undone.`)) deleteMutation.mutate(market.id);
+                                }}
+                                className="filter-btn text-gray-500 hover:text-red-400"
+                                title="Delete market"
+                              >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          </td>}
-                        </tr>
-                        {isExpanded && (
-                          <tr className="bg-surface-200/20">
-                            <td colSpan={colCount} className="px-6 py-4">
-                              <div className="space-y-3">
-                                {tvStations.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                      <Tv className="w-3 h-3" /> TV Stations ({tvStations.length})
-                                    </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                      {tvStations.map((s) => (
-                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
-                                          <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
-                                          <span className="text-gray-500 truncate flex-1">{s.network ? `${s.network}` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
-                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {radioStations.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                      <Radio className="w-3 h-3" /> Radio Stations ({radioStations.length})
-                                    </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                      {radioStations.map((s) => (
-                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
-                                          <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
-                                          <span className="text-gray-500 truncate flex-1">{s.format ? `(${s.format})` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
-                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {hlSources.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                      <Globe className="w-3 h-3" /> HyperLocal Intel ({hlSources.length})
-                                    </h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                      {hlSources.map((s) => (
-                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
-                                          <span className="text-white">{s.name}</span>
-                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {otherSources.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Other Sources ({otherSources.length})</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                      {otherSources.map((s) => (
-                                        <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
-                                          <span className="text-white">{s.name}</span>
-                                          <span className="text-gray-600">{s.platform}</span>
-                                          <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {totalSrc === 0 && (
-                                  <p className="text-gray-600 text-xs">No sources linked to this market yet.</p>
-                                )}
-                                <div className="pt-3 border-t border-surface-300/20 mt-3">
-                                  <a
-                                    href={`/admin/sources?addSource=true&marketId=${market.id}&marketName=${encodeURIComponent(market.name)}`}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 rounded transition-colors"
-                                  >
-                                    <Plus className="w-3 h-3" /> Add TV/Radio Station to {market.name}
-                                  </a>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
+                          </td>
                         )}
-                      </React.Fragment>
+                      </tr>
                     );
                   })}
                 </tbody>
@@ -689,6 +412,294 @@ export default function MarketsPage() {
             />
           </div>
         )}
+
+        {/* Market Modal */}
+        <Modal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          title={selectedMarket ? `Edit Market: ${selectedMarket.name}` : "Add New Market"}
+          width="max-w-3xl"
+        >
+          {/* Tabs — only show Sources tab in edit mode */}
+          {selectedMarket && (
+            <div className="flex gap-1 mb-5 border-b border-surface-300/50 -mt-1">
+              <button
+                onClick={() => setActiveTab("details")}
+                className={clsx(
+                  "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === "details"
+                    ? "border-accent text-white"
+                    : "border-transparent text-gray-500 hover:text-gray-300"
+                )}
+              >
+                Details
+              </button>
+              <button
+                onClick={() => setActiveTab("sources")}
+                className={clsx(
+                  "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === "sources"
+                    ? "border-accent text-white"
+                    : "border-transparent text-gray-500 hover:text-gray-300"
+                )}
+              >
+                Sources ({modalSourceCount})
+              </button>
+            </div>
+          )}
+
+          {/* Details Tab */}
+          {activeTab === "details" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      if (!selectedMarket) {
+                        setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+                      }
+                    }}
+                    placeholder="e.g., Houston"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Slug *</label>
+                  <input
+                    type="text"
+                    value={formSlug}
+                    onChange={(e) => setFormSlug(e.target.value)}
+                    placeholder="e.g., houston"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">State *</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formState}
+                      onChange={(e) => setFormState(e.target.value)}
+                      onBlur={() => {
+                        if (formName.trim() && formState.trim() && !formLat && !selectedMarket) {
+                          handleAutofill();
+                        }
+                      }}
+                      placeholder="e.g., TX"
+                      className="filter-input flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAutofill}
+                      disabled={!formName.trim() || !formState.trim() || autofillMutation.isPending}
+                      className={clsx(
+                        "filter-btn flex items-center gap-1 text-xs whitespace-nowrap",
+                        autofillMutation.isPending
+                          ? "text-purple-400 border-purple-500/30"
+                          : "text-purple-400 border-purple-500/30 hover:bg-purple-500/10",
+                        (!formName.trim() || !formState.trim()) && "opacity-40 cursor-not-allowed"
+                      )}
+                      title="Auto-fill lat/long, keywords, neighborhoods using AI"
+                    >
+                      {autofillMutation.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3 h-3" />
+                      )}
+                      Auto-fill
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formLat}
+                    onChange={(e) => setFormLat(e.target.value)}
+                    placeholder="29.7604"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formLon}
+                    onChange={(e) => setFormLon(e.target.value)}
+                    placeholder="-95.3698"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Radius (km)</label>
+                  <input
+                    type="number"
+                    value={formRadius}
+                    onChange={(e) => setFormRadius(e.target.value)}
+                    placeholder="50"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Timezone</label>
+                  <input
+                    type="text"
+                    value={formTimezone}
+                    onChange={(e) => setFormTimezone(e.target.value)}
+                    placeholder="America/Chicago"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Keywords (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={formKeywords}
+                    onChange={(e) => setFormKeywords(e.target.value)}
+                    placeholder="houston, htx, h-town"
+                    className="filter-input w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Neighborhoods (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={formNeighborhoods}
+                    onChange={(e) => setFormNeighborhoods(e.target.value)}
+                    placeholder="Montrose, Heights, Midtown"
+                    className="filter-input w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleSubmit}
+                  disabled={
+                    !formName.trim() ||
+                    !formSlug.trim() ||
+                    !formState.trim() ||
+                    isPending
+                  }
+                  className={clsx(
+                    "px-5 py-2 bg-accent hover:bg-accent-dim text-white text-sm font-medium rounded-lg transition-colors",
+                    (!formName.trim() ||
+                      !formSlug.trim() ||
+                      !formState.trim() ||
+                      isPending) &&
+                      "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {isPending
+                    ? "Saving..."
+                    : selectedMarket
+                    ? "Update Market"
+                    : "Add Market"}
+                </button>
+                {isFormError && (
+                  <span className="text-red-400 text-sm flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {(createMutation.error as Error)?.message ||
+                      (updateMutation.error as Error)?.message ||
+                      "Failed to save market"}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sources Tab */}
+          {activeTab === "sources" && selectedMarket && (
+            <div className="space-y-3">
+              {tvStations.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Tv className="w-3 h-3" /> TV Stations ({tvStations.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {tvStations.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                        <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
+                        <span className="text-gray-500 truncate flex-1">{s.network ? `${s.network}` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
+                        <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {radioStations.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Radio className="w-3 h-3" /> Radio Stations ({radioStations.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {radioStations.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                        <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
+                        <span className="text-gray-500 truncate flex-1">{s.format ? `(${s.format})` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
+                        <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {hlSources.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Globe className="w-3 h-3" /> HyperLocal Intel ({hlSources.length})
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {hlSources.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                        <span className="text-white">{s.name}</span>
+                        <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {otherSources.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Other Sources ({otherSources.length})</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {otherSources.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs">
+                        <span className="text-white">{s.name}</span>
+                        <span className="text-gray-600">{s.platform}</span>
+                        <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {modalSourceCount === 0 && (
+                <p className="text-gray-600 text-xs">No sources linked to this market yet.</p>
+              )}
+              <div className="pt-3 border-t border-surface-300/20 mt-3">
+                <a
+                  href={`/admin/sources?addSource=true&marketId=${selectedMarket.id}&marketName=${encodeURIComponent(selectedMarket.name)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Add TV/Radio Station to {selectedMarket.name}
+                </a>
+              </div>
+            </div>
+          )}
+        </Modal>
       </main>
     </div>
   );

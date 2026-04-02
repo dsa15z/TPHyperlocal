@@ -690,6 +690,174 @@ export async function pipelineRoutes(
     });
   });
 
+  // POST /api/v1/pipeline/heal-sources — Force self-healing on inactive/never-polled sources
+  app.post('/pipeline/heal-sources', async (_request, reply) => {
+    try {
+      // Find all sources that are inactive (auto-deactivated) or never polled
+      const sources = await prisma.source.findMany({
+        where: {
+          OR: [
+            { isActive: false }, // inactive (likely auto-deactivated from failures)
+            { isActive: true, lastPolledAt: null }, // active but never polled
+          ],
+          platform: 'RSS', // only RSS sources can self-heal
+          url: { not: null },
+        },
+        select: { id: true, name: true, url: true, platform: true, isActive: true, lastPolledAt: true, metadata: true },
+      });
+
+      let healed = 0;
+      let reactivated = 0;
+      let failed = 0;
+      const results: string[] = [];
+      const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+      for (const source of sources) {
+        const meta = (source.metadata || {}) as Record<string, unknown>;
+        const url = source.url!;
+
+        // Try fetching with browser UA
+        try {
+          const resp = await fetch(url, {
+            headers: {
+              'User-Agent': BROWSER_UA,
+              'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+              'Accept-Language': 'en-US,en;q=0.9',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
+
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+              // Feed works! Reactivate + reset failures
+              await prisma.source.update({
+                where: { id: source.id },
+                data: {
+                  isActive: true,
+                  metadata: { ...meta, consecutiveFailures: 0, useBrowserUA: true, healedAt: new Date().toISOString(), healResult: 'force-heal-success' },
+                },
+              });
+              healed++;
+              if (!source.isActive) reactivated++;
+              results.push(`✓ ${source.name} — feed works, reactivated`);
+              continue;
+            }
+
+            // HTML instead of RSS — check for Cloudflare or site without RSS
+            if (text.includes('cloudflare') || text.includes('Cloudflare') || text.includes('Just a moment')) {
+              // Try proxy-to-direct mapping for rsshub
+              if (url.includes('rsshub.app/apnews')) {
+                const apMatch = url.match(/rsshub\.app\/apnews\/topics\/(.+)/);
+                if (apMatch) {
+                  const directUrl = `https://apnews.com/hub/${apMatch[1].replace('apf-', '').replace(/\/$/, '')}?format=rss`;
+                  const directResp = await fetch(directUrl, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(10000) }).catch(() => null);
+                  if (directResp?.ok) {
+                    const directText = await directResp.text();
+                    if (directText.includes('<rss') || directText.includes('<feed')) {
+                      await prisma.source.update({
+                        where: { id: source.id },
+                        data: {
+                          isActive: true,
+                          url: directUrl,
+                          metadata: { ...meta, consecutiveFailures: 0, previousUrl: url, healResult: 'force-heal-proxy-to-direct', healedAt: new Date().toISOString() },
+                        },
+                      });
+                      healed++;
+                      if (!source.isActive) reactivated++;
+                      results.push(`✓ ${source.name} — switched from proxy to ${directUrl}`);
+                      continue;
+                    }
+                  }
+                }
+              }
+              results.push(`✗ ${source.name} — Cloudflare blocked`);
+              failed++;
+              continue;
+            }
+
+            // HTML but not Cloudflare — site doesn't have RSS
+            results.push(`✗ ${source.name} — returns HTML not RSS`);
+            failed++;
+          } else {
+            results.push(`✗ ${source.name} — HTTP ${resp.status}`);
+            failed++;
+          }
+        } catch (err: any) {
+          results.push(`✗ ${source.name} — ${err.message?.substring(0, 50)}`);
+          failed++;
+        }
+      }
+
+      return reply.send({
+        message: `Force heal complete: ${healed} healed, ${reactivated} reactivated, ${failed} still failing`,
+        total: sources.length,
+        healed,
+        reactivated,
+        failed,
+        results: results.slice(0, 100),
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/backfill-famous — Detect famous persons in existing stories
+  app.post('/pipeline/backfill-famous', async (_request, reply) => {
+    try {
+      const { generateWithFallback } = await import('../lib/llm-factory.js');
+
+      // Find stories that haven't been checked for famous persons
+      const stories = await prisma.story.findMany({
+        where: {
+          hasFamousPerson: false,
+          status: { notIn: ['ARCHIVED', 'STALE'] },
+          title: { not: '' },
+        },
+        select: { id: true, title: true, aiSummary: true, summary: true },
+        orderBy: { compositeScore: 'desc' },
+        take: 100, // Process top 100 stories per call
+      });
+
+      let updated = 0;
+      const famous: string[] = [];
+
+      for (const story of stories) {
+        try {
+          const text = `${story.title} ${story.aiSummary || story.summary || ''}`.substring(0, 500);
+          const result = await generateWithFallback(
+            `List any famous/notable people mentioned in this news story. Only include truly well-known public figures (presidents, governors, celebrities, pro athletes, Fortune 500 CEOs). Respond with just names, one per line, or NONE if no famous people.\n\nStory: ${text}`,
+            { maxTokens: 100, temperature: 0.1, systemPrompt: 'You identify famous people in news articles. Be strict — only list truly famous people.' }
+          );
+
+          const names = result.text.split('\n')
+            .map((l: string) => l.trim().replace(/^[-•*]\s*/, ''))
+            .filter((n: string) => n && n.length > 2 && n !== 'NONE' && n !== 'None' && n !== 'N/A');
+
+          if (names.length > 0) {
+            await prisma.story.update({
+              where: { id: story.id },
+              data: { hasFamousPerson: true, famousPersonNames: names },
+            });
+            updated++;
+            famous.push(`${story.title.substring(0, 40)}... → ${names.join(', ')}`);
+          }
+        } catch {
+          // Skip on LLM failure, continue with next story
+        }
+      }
+
+      return reply.send({
+        message: `Backfill complete: ${updated} stories flagged with famous persons`,
+        totalChecked: stories.length,
+        updated,
+        famous: famous.slice(0, 50),
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /api/v1/pipeline/fix-source-markets — Link sources to correct markets
   // Global sources → National market, city-named sources → their city market
   app.post('/pipeline/fix-source-markets', async (_request, reply) => {

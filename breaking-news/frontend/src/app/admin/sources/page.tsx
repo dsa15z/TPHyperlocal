@@ -128,7 +128,7 @@ const SOURCE_COLUMNS = [
 
 function getSourceHealth(source: Source): { status: "healthy" | "warning" | "failing" | "inactive"; color: string; label: string } {
   if (!source.isActive) return { status: "inactive", color: "text-gray-500 bg-gray-500/10", label: "Inactive" };
-  if (!source.lastPolledAt) return { status: "warning", color: "text-yellow-400 bg-yellow-500/10", label: "Never Polled" };
+  if (!source.lastPolledAt) return { status: "warning", color: "text-yellow-400 bg-yellow-500/10", label: "Never" };
   const hoursSincePolled = (Date.now() - new Date(source.lastPolledAt).getTime()) / (1000 * 60 * 60);
   const meta = source.metadata as Record<string, unknown> | null;
   const failures = (meta?.consecutiveFailures as number) || 0;
