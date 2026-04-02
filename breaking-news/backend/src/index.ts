@@ -59,6 +59,7 @@ import { voiceToneRoutes } from './routes/voice-tone.js';
 import { mediaModerationRoutes } from './routes/media-moderation.js';
 import { extrasRoutes } from './routes/extras.js';
 import { assistantRoutes } from './routes/assistant.js';
+import { userSettingsRoutes } from './routes/user-settings.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -210,6 +211,7 @@ async function buildServer() {
   await app.register(mediaModerationRoutes, { prefix: '/api/v1' });
   await app.register(extrasRoutes, { prefix: '/api/v1' });
   await app.register(assistantRoutes, { prefix: '/api/v1' });
+  await app.register(userSettingsRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown
@@ -290,6 +292,12 @@ async function ensureTables() {
       // Surveys
       `CREATE TABLE IF NOT EXISTS "Survey" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, title TEXT NOT NULL, questions JSONB NOT NULL, "targetGroup" TEXT DEFAULT 'all', "isActive" BOOLEAN DEFAULT true, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
       `CREATE TABLE IF NOT EXISTS "SurveyResponse" (id TEXT PRIMARY KEY, "surveyId" TEXT NOT NULL, "userId" TEXT, answers JSONB NOT NULL, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      // User Views (server-side persisted, per user)
+      `CREATE TABLE IF NOT EXISTS "UserView" (id TEXT PRIMARY KEY, "userId" TEXT NOT NULL, name TEXT NOT NULL, columns JSONB, filters JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE INDEX IF NOT EXISTS "UserView_userId_idx" ON "UserView"("userId")`,
+      // View Email Subscriptions
+      `CREATE TABLE IF NOT EXISTS "ViewSubscription" (id TEXT PRIMARY KEY, "userId" TEXT NOT NULL, "viewId" TEXT NOT NULL, email TEXT NOT NULL, frequency TEXT NOT NULL DEFAULT 'DAILY', "maxStories" INTEGER DEFAULT 20, timezone TEXT DEFAULT 'America/Chicago', "isActive" BOOLEAN DEFAULT true, "lastSentAt" TIMESTAMPTZ, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("userId", "viewId"))`,
+      `CREATE INDEX IF NOT EXISTS "ViewSubscription_userId_idx" ON "ViewSubscription"("userId")`,
     ];
 
     let created = 0;
