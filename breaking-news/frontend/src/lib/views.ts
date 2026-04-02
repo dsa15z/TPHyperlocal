@@ -27,7 +27,7 @@ export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
   { id: "famous", label: "", width: 32, defaultWidth: 32, minWidth: 28 },
   { id: "verified", label: "", width: 32, defaultWidth: 32, minWidth: 28 },
   { id: "status", label: "Status", width: 90, defaultWidth: 90, minWidth: 70 },
-  { id: "title", label: "Title", width: 400, defaultWidth: 400, minWidth: 200 },
+  { id: "title", label: "Title", width: 500, defaultWidth: 500, minWidth: 300 },
   { id: "category", label: "Category", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "location", label: "Location", width: 120, defaultWidth: 120, minWidth: 70 },
   { id: "breaking_score", label: "Breaking", width: 90, defaultWidth: 90, minWidth: 60 },

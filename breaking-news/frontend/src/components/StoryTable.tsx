@@ -166,7 +166,7 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
               <span className="inline-flex items-center flex-wrap">
                 <Link
                   href={`/stories/${story.id}`}
-                  className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
+                  className="text-gray-100 hover:text-accent font-medium transition-colors"
                 >
                   {displayTitle}
                 </Link>
@@ -416,7 +416,7 @@ export function StoryTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full" role="grid">
+      <table className="w-full min-w-[1200px]" role="grid">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-surface-300/50">
