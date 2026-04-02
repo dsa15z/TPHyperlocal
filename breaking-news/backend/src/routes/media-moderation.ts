@@ -9,12 +9,8 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { requireAccountUser } from '../lib/route-helpers.js';
 
-function requireAuth(req: any) {
-  const au = req.accountUser;
-  if (!au) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
-  return au;
-}
 
 export async function mediaModerationRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
@@ -24,7 +20,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // POST /activity/presence — update user presence (called by frontend heartbeat)
   app.post('/activity/presence', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     try {
       const redis = await import('../lib/redis.js').then(m => m.getRedis());
@@ -44,7 +40,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // GET /activity/online — list currently online users
   app.get('/activity/online', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     try {
       const redis = await import('../lib/redis.js').then(m => m.getRedis());
@@ -88,7 +84,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // GET /media/pending — images/videos pending moderation
   app.get('/media/pending', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     const query = z.object({
       type: z.enum(['image', 'video', 'all']).default('all'),
@@ -129,7 +125,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // POST /media/:postId/approve — approve media for a post
   app.post('/media/:postId/approve', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { postId } = request.params as { postId: string };
 
     await prisma.sourcePost.update({
@@ -149,7 +145,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // POST /media/:postId/reject — reject/remove media from a post
   app.post('/media/:postId/reject', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { postId } = request.params as { postId: string };
 
     await prisma.sourcePost.update({
@@ -174,7 +170,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // GET /feed-review/queue — sources due for quality review
   app.get('/feed-review/queue', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     const query = z.object({
       status: z.enum(['unreviewed', 'approved', 'poor', 'all']).default('unreviewed'),
@@ -216,7 +212,7 @@ export async function mediaModerationRoutes(app: FastifyInstance, _opts: Fastify
 
   // POST /feed-review/:sourceId — submit a feed quality review
   app.post('/feed-review/:sourceId', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { sourceId } = request.params as { sourceId: string };
 
     const body = z.object({

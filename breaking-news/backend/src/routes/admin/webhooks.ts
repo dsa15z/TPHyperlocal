@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import crypto from 'crypto';
+import { getUserId } from '../../lib/route-helpers.js';
 
 const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(255),
@@ -43,11 +44,6 @@ function getAccountId(request: FastifyRequest): string {
   return accountUser.accountId;
 }
 
-function getUserId(request: FastifyRequest): string {
-  const user = (request as any).user;
-  if (!user?.id) throw { statusCode: 401, message: 'Not authenticated' };
-  return user.id;
-}
 
 function assertAdmin(request: FastifyRequest): void {
   const accountUser = (request as any).accountUser;

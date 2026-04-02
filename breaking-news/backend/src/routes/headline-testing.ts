@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
 import { getRedis } from '../lib/redis.js';
+import { getUserId } from '../lib/route-helpers.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -84,11 +85,6 @@ async function getAllActiveTests(): Promise<Array<[string, HeadlineTest]>> {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function getUserId(req: any): string | null {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)).userId; } catch { return null; }
-}
 
 function calculateZScore(
   impressionsA: number,

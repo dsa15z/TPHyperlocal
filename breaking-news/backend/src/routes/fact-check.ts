@@ -4,12 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
 import { getQueue } from '../lib/queue.js';
+import { getUserId } from '../lib/route-helpers.js';
 
-function getUserId(req: any): string | null {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)).userId; } catch { return null; }
-}
 
 export async function factCheckRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   // GET /api/v1/stories/:id/fact-checks

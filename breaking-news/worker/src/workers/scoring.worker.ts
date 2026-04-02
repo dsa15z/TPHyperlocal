@@ -480,6 +480,23 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     isLocal,
   );
 
+  // Build pastScores snapshot BEFORE the update (was causing ReferenceError)
+  const pastScores = (story.pastScores || {}) as Record<string, any>;
+  const now = Date.now();
+  pastScores[String(now)] = {
+    composite: compositeScore,
+    social: socialScore,
+    rawSocial: socialResult.rawSocialTotal,
+    breaking: breakingScore,
+    trending: trendingScore,
+    sources: story.sourceCount,
+  };
+  // Keep only last 2 hours of snapshots (cleanup old entries)
+  const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+  for (const ts of Object.keys(pastScores)) {
+    if (Number(ts) < twoHoursAgo) delete pastScores[ts];
+  }
+
   // Update story with all scores (including social from TopicPulse model)
   await prisma.story.update({
     where: { id: storyId },
@@ -504,26 +521,8 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
       confidenceScore,
       localityScore,
       compositeScore,
-      // Extended fields stored in metadata for TopicPulse-style growth analysis
     },
   });
-
-  // Store extended snapshot data as story metadata for growth % calculation
-  const pastScores = (story.pastScores || {}) as Record<string, any>;
-  const now = Date.now();
-  pastScores[String(now)] = {
-    composite: compositeScore,
-    social: socialScore,
-    rawSocial: socialResult.rawSocialTotal,
-    breaking: breakingScore,
-    trending: trendingScore,
-    sources: story.sourceCount,
-  };
-  // Keep only last 2 hours of snapshots (cleanup old entries)
-  const twoHoursAgo = now - 2 * 60 * 60 * 1000;
-  for (const ts of Object.keys(pastScores)) {
-    if (Number(ts) < twoHoursAgo) delete pastScores[ts];
-  }
 
   // Log status changes
   if (previousStatus !== newStatus) {

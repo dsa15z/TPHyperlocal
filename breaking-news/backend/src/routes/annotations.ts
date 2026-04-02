@@ -4,12 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
 import { broadcastSSE } from '../lib/sse.js';
+import { getUserId } from '../lib/route-helpers.js';
 
-function getUserId(req: any): string | null {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)).userId; } catch { return null; }
-}
 
 function getUserRole(req: any): string | null {
   const auth = req.headers['authorization'];

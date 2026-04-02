@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, TokenPayload } from '../lib/auth.js';
+import { extractToken } from '../lib/route-helpers.js';
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────
 
@@ -15,15 +16,6 @@ const UpdatePreferencesSchema = z.object({
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function extractToken(request: any): TokenPayload | null {
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  try {
-    return verifyToken(authHeader.slice(7));
-  } catch {
-    return null;
-  }
-}
 
 // ─── User Routes Plugin ─────────────────────────────────────────────────────
 

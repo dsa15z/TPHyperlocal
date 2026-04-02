@@ -5,12 +5,8 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { requireAccountUser } from '../lib/route-helpers.js';
 
-function requireAuth(req: any) {
-  const au = req.accountUser;
-  if (!au) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
-  return au;
-}
 
 export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
@@ -20,7 +16,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // POST /extras/seed-yahoo — create Yahoo News RSS sources per market
   app.post('/extras/seed-yahoo', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER' && au.role !== 'ADMIN') {
       return reply.status(403).send({ error: 'Admin required' });
     }
@@ -84,7 +80,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // GET /surveys — list surveys for account
   app.get('/surveys', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     try {
       const surveys = await prisma.$queryRaw<any[]>`
@@ -98,7 +94,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // POST /surveys — create a survey
   app.post('/surveys', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     const body = z.object({
       title: z.string().min(1).max(255),
@@ -124,7 +120,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // POST /surveys/:id/respond — submit survey response
   app.post('/surveys/:id/respond', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { id: surveyId } = request.params as { id: string };
 
     const body = z.object({
@@ -148,7 +144,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // GET /surveys/:id/results — get survey results
   app.get('/surveys/:id/results', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
     const { id: surveyId } = request.params as { id: string };
 
     try {
@@ -167,7 +163,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // GET /merge-phrases — list custom merge phrases
   app.get('/merge-phrases', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     try {
       const phrases = await prisma.$queryRaw<any[]>`
@@ -181,7 +177,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // POST /merge-phrases — add a merge phrase
   app.post('/merge-phrases', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     const body = z.object({
       phrase: z.string().min(2).max(200),
@@ -204,7 +200,7 @@ export async function extrasRoutes(app: FastifyInstance, _opts: FastifyPluginOpt
 
   // DELETE /merge-phrases/:id — remove a merge phrase
   app.delete('/merge-phrases/:id', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
     const { id } = request.params as { id: string };
 
     try {

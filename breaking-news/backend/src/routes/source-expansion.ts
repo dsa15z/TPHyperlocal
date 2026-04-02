@@ -6,12 +6,8 @@ import { verifyToken } from '../lib/auth.js';
 import { EXPANDED_SOURCES } from '../data/expanded-sources.js';
 import { SCRAPE_SOURCES } from '../data/scrape-sources.js';
 import { MSA_DATABASE } from '../data/msa-database.js';
+import { getPayload } from '../lib/route-helpers.js';
 
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
 
 export async function sourceExpansionRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   // GET /pipeline/available-sources — list all available source seeds

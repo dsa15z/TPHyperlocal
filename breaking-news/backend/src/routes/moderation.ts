@@ -10,12 +10,8 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { requireAccountUser } from '../lib/route-helpers.js';
 
-function requireAuth(req: any) {
-  const au = req.accountUser;
-  if (!au) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
-  return au;
-}
 
 export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
@@ -25,7 +21,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // GET /moderation/queue — stories pending review
   app.get('/moderation/queue', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const query = z.object({
       status: z.enum(['pending', 'approved', 'rejected', 'flagged']).default('pending'),
       limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -67,7 +63,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/:storyId/approve — approve a story
   app.post('/moderation/:storyId/approve', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { storyId } = request.params as { storyId: string };
 
     await prisma.story.update({
@@ -84,7 +80,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/:storyId/reject — reject/kill a story
   app.post('/moderation/:storyId/reject', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { storyId } = request.params as { storyId: string };
 
     const body = z.object({ reason: z.string().optional() }).safeParse(request.body || {});
@@ -105,7 +101,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/:storyId/flag — flag story for review
   app.post('/moderation/:storyId/flag', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const { storyId } = request.params as { storyId: string };
 
     const body = z.object({ reason: z.string().optional() }).safeParse(request.body || {});
@@ -123,7 +119,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/bulk — bulk approve/reject
   app.post('/moderation/bulk', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     const body = z.object({
       storyIds: z.array(z.string()).min(1).max(100),
       action: z.enum(['approve', 'reject']),
@@ -149,7 +145,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // GET /moderation/words — list blacklist and flag words
   app.get('/moderation/words', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     // Store words in a simple key-value table or account metadata
     // For now, use a dedicated table via raw SQL
@@ -166,7 +162,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/words — add a blacklist or flag word
   app.post('/moderation/words', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     const body = z.object({
       word: z.string().min(1).max(100),
@@ -188,7 +184,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // DELETE /moderation/words/:id — remove a word
   app.delete('/moderation/words/:id', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
     const { id } = request.params as { id: string };
 
     try {
@@ -238,7 +234,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // GET /admin/knowledge — list knowledge documents
   app.get('/admin/knowledge', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
     try {
       const docs = await prisma.$queryRaw<any[]>`SELECT * FROM "SystemKnowledge" ORDER BY category, key`;
       return reply.send({ data: docs });
@@ -249,7 +245,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /admin/knowledge — add or update a knowledge document
   app.post('/admin/knowledge', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER' && au.role !== 'ADMIN') return reply.status(403).send({ error: 'Admin required' });
 
     const body = z.object({
@@ -273,7 +269,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // DELETE /admin/knowledge/:id
   app.delete('/admin/knowledge/:id', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER') return reply.status(403).send({ error: 'Owner required' });
     const { id } = request.params as { id: string };
     try {
@@ -284,7 +280,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /admin/knowledge/generate — auto-generate all RAG knowledge documents
   app.post('/admin/knowledge/generate', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER' && au.role !== 'ADMIN') return reply.status(403).send({ error: 'Admin required' });
 
     try {
@@ -313,7 +309,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // GET /moderation/algorithm — get current scoring thresholds
   app.get('/moderation/algorithm', async (request, reply) => {
-    requireAuth(request);
+    requireAccountUser(request);
 
     // Read from Redis or fallback to defaults
     try {
@@ -365,7 +361,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/algorithm — save custom thresholds
   app.post('/moderation/algorithm', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER' && au.role !== 'ADMIN') {
       return reply.status(403).send({ error: 'Only OWNER/ADMIN can modify algorithm' });
     }
@@ -386,7 +382,7 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
 
   // POST /moderation/algorithm/reset — reset to defaults
   app.post('/moderation/algorithm/reset', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
     if (au.role !== 'OWNER') {
       return reply.status(403).send({ error: 'Only OWNER can reset algorithm' });
     }

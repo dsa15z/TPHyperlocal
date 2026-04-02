@@ -10,10 +10,8 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { getAccountUser } from '../lib/route-helpers.js';
 
-function getAccountUser(req: any) {
-  return req.accountUser || null;
-}
 
 /**
  * Get or create an AccountStory for the given account + base story.

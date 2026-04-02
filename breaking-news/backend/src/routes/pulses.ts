@@ -3,12 +3,8 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
+import { getPayload } from '../lib/route-helpers.js';
 
-function getPayload(request: any) {
-  const auth = request.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
 
 export async function pulseRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   // List pulses

@@ -8,12 +8,8 @@
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { requireAccountUser } from '../lib/route-helpers.js';
 
-function requireAuth(req: any) {
-  const au = req.accountUser;
-  if (!au) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
-  return au;
-}
 
 const VoiceSchema = z.object({
   stationName: z.string().optional(),
@@ -32,7 +28,7 @@ export async function voiceToneRoutes(app: FastifyInstance, _opts: FastifyPlugin
 
   // GET /voice-tone — get account's voice settings
   app.get('/voice-tone', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     const account = await prisma.account.findUnique({
       where: { id: au.accountId },
@@ -45,7 +41,7 @@ export async function voiceToneRoutes(app: FastifyInstance, _opts: FastifyPlugin
 
   // PUT /voice-tone — save account's voice settings
   app.put('/voice-tone', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     const parsed = VoiceSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
@@ -69,7 +65,7 @@ export async function voiceToneRoutes(app: FastifyInstance, _opts: FastifyPlugin
 
   // GET /voice-tone/prompt — get the voice prompt string for AI injection
   app.get('/voice-tone/prompt', async (request, reply) => {
-    const au = requireAuth(request);
+    const au = requireAccountUser(request);
 
     const account = await prisma.account.findUnique({
       where: { id: au.accountId },

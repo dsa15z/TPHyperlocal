@@ -3,12 +3,8 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
+import { getUserId } from '../lib/route-helpers.js';
 
-function getUserId(request: any): string | null {
-  const auth = request.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)).userId; } catch { return null; }
-}
 
 export async function bookmarkRoutes(
   app: FastifyInstance,

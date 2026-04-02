@@ -10,12 +10,8 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
+import { getPayload } from '../lib/route-helpers.js';
 
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
 
 export async function hyperLocalIntelRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 

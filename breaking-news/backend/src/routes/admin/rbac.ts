@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { verifyToken, TokenPayload } from '../../lib/auth.js';
+import { extractToken, requireAccountUser } from '../../lib/route-helpers.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -89,15 +90,6 @@ function getDefaultMetadata() {
 
 // ─── Auth Helpers ───────────────────────────────────────────────────────────
 
-function extractToken(request: any): TokenPayload | null {
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  try {
-    return verifyToken(authHeader.slice(7));
-  } catch {
-    return null;
-  }
-}
 
 async function isSuperAdmin(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
@@ -109,7 +101,7 @@ async function isSuperAdmin(userId: string): Promise<boolean> {
   return meta?.isSuperAdmin === true;
 }
 
-async function requireAuth(request: any, reply: any): Promise<TokenPayload | null> {
+async function requireAccountUser(request: any, reply: any): Promise<TokenPayload | null> {
   const payload = extractToken(request);
   if (!payload) {
     reply.status(401).send({ error: 'Unauthorized', message: 'Missing or invalid token' });
@@ -119,7 +111,7 @@ async function requireAuth(request: any, reply: any): Promise<TokenPayload | nul
 }
 
 async function requireSuperAdmin(request: any, reply: any): Promise<TokenPayload | null> {
-  const payload = await requireAuth(request, reply);
+  const payload = await requireAccountUser(request, reply);
   if (!payload) return null;
   const superAdmin = await isSuperAdmin(payload.userId);
   if (!superAdmin) {
@@ -130,7 +122,7 @@ async function requireSuperAdmin(request: any, reply: any): Promise<TokenPayload
 }
 
 async function requireAccountAdmin(request: any, reply: any): Promise<TokenPayload | null> {
-  const payload = await requireAuth(request, reply);
+  const payload = await requireAccountUser(request, reply);
   if (!payload) return null;
   if (!payload.accountId) {
     reply.status(403).send({ error: 'Forbidden', message: 'No active account context' });

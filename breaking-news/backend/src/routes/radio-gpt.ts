@@ -4,12 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../lib/auth.js';
 import { getQueue } from '../lib/queue.js';
+import { getPayload } from '../lib/route-helpers.js';
 
-function getPayload(req: any) {
-  const auth = req.headers['authorization'];
-  if (!auth?.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
 
 export async function radioGPTRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   // GET /api/v1/radio/scripts - list generated scripts

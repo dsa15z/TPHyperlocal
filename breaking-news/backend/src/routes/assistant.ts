@@ -8,10 +8,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { getAccountUser } from '../lib/route-helpers.js';
 
-function getAccountUser(req: any) {
-  return req.accountUser || null;
-}
 
 // ─── Tool Definitions ──────────────────────────────────────────────────────
 // Each tool maps to an internal API call the LLM can invoke

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { getQueue } from '../lib/queue.js';
 import { verifyToken } from '../lib/auth.js';
+import { getPayload } from '../lib/route-helpers.js';
 
 const QUEUE_NAME = 'video-generation';
 
@@ -23,11 +24,6 @@ interface VideoProject {
 
 const videoProjectCache = new Map<string, VideoProject>();
 
-function getTokenPayload(request: any) {
-  const auth = request.headers.authorization || '';
-  if (!auth.startsWith('Bearer ')) return null;
-  try { return verifyToken(auth.slice(7)); } catch { return null; }
-}
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -66,7 +62,7 @@ export async function videoRoutes(
 ) {
   // POST /api/v1/video/generate — Generate video project from story
   app.post('/video/generate', async (request, reply) => {
-    const payload = getTokenPayload(request);
+    const payload = getPayload(request);
     if (!payload) return reply.status(401).send({ error: 'Unauthorized' });
 
     const parseResult = GenerateVideoSchema.safeParse(request.body);
@@ -130,7 +126,7 @@ export async function videoRoutes(
 
   // GET /api/v1/video/projects — List video projects for account
   app.get('/video/projects', async (request, reply) => {
-    const payload = getTokenPayload(request);
+    const payload = getPayload(request);
     if (!payload) return reply.status(401).send({ error: 'Unauthorized' });
 
     const parseResult = ListProjectsSchema.safeParse(request.query);
@@ -210,7 +206,7 @@ export async function videoRoutes(
 
   // GET /api/v1/video/projects/:id — Get video project detail
   app.get('/video/projects/:id', async (request, reply) => {
-    const payload = getTokenPayload(request);
+    const payload = getPayload(request);
     if (!payload) return reply.status(401).send({ error: 'Unauthorized' });
 
     const { id } = request.params as { id: string };
