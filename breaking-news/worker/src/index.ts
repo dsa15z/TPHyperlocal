@@ -44,6 +44,7 @@ import { createVelocityScorerWorker } from './workers/velocity-scorer.worker.js'
 import { createWebScraperWorker } from './workers/web-scraper.worker.js';
 import { createEventRegistryWorker } from './workers/event-registry.worker.js';
 import { createAccountStorySyncWorker } from './workers/account-story-sync.worker.js';
+import { createNewsDirectorWorker } from './workers/news-director.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 
 const workers: Worker[] = [];
@@ -130,6 +131,7 @@ async function main(): Promise<void> {
     ['event-registry', createEventRegistryWorker],
     ['velocity-scorer', createVelocityScorerWorker],
     ['account-story-sync', createAccountStorySyncWorker],
+    ['news-director', createNewsDirectorWorker],
   ];
 
   let started = 0;

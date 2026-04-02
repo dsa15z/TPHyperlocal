@@ -59,6 +59,7 @@ import { voiceToneRoutes } from './routes/voice-tone.js';
 import { mediaModerationRoutes } from './routes/media-moderation.js';
 import { extrasRoutes } from './routes/extras.js';
 import { assistantRoutes } from './routes/assistant.js';
+import { broadcastPackageGenRoutes } from './routes/broadcast-package-gen.js';
 import { userSettingsRoutes } from './routes/user-settings.js';
 import { workflowRoutes } from './routes/workflow.js';
 import { authMiddleware } from './middleware/auth.js';
@@ -212,6 +213,7 @@ async function buildServer() {
   await app.register(mediaModerationRoutes, { prefix: '/api/v1' });
   await app.register(extrasRoutes, { prefix: '/api/v1' });
   await app.register(assistantRoutes, { prefix: '/api/v1' });
+  await app.register(broadcastPackageGenRoutes, { prefix: '/api/v1' });
   await app.register(userSettingsRoutes, { prefix: '/api/v1' });
   await app.register(workflowRoutes, { prefix: '/api/v1/workflow' });
   registerSSERoutes(app);

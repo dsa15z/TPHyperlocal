@@ -784,6 +784,32 @@ function SourcesPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Failure Audit Log */}
+                {editingId && (() => {
+                  const source = sources.find((s: Source) => s.id === editingId);
+                  const failureLog = ((source?.metadata as any)?.failureLog || []) as Array<{ at: string; reason: string; failure: number }>;
+                  if (failureLog.length === 0) return null;
+                  return (
+                    <div className="mt-4 border-t border-surface-300/20 pt-3">
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Failure & Healing Log</h4>
+                      <div className="max-h-40 overflow-y-auto space-y-1">
+                        {failureLog.slice().reverse().map((entry, i) => (
+                          <div key={i} className={clsx("text-[11px] flex items-start gap-2 px-2 py-1 rounded",
+                            entry.reason.includes('SELF-HEAL SUCCESS') ? "bg-green-500/10 text-green-400" :
+                            entry.reason.includes('SELF-HEAL') ? "bg-purple-500/10 text-purple-400" :
+                            entry.reason.includes('AUTO-DEACTIVATED') ? "bg-red-500/10 text-red-400" :
+                            "bg-surface-200/30 text-gray-400"
+                          )}>
+                            <span className="text-gray-600 flex-shrink-0 tabular-nums">{new Date(entry.at).toLocaleTimeString()}</span>
+                            <span className="text-gray-600 flex-shrink-0">#{entry.failure}</span>
+                            <span className="truncate">{entry.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
         </Modal>

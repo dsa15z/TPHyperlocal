@@ -502,25 +502,43 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
     if (!source) return;
 
     const meta = (source.metadata || {}) as Record<string, unknown>;
-    const failures = ((meta.consecutiveFailures as number) || 0) + 1;
+    // Ensure failures is always a number (guard against string concatenation)
+    const failures = (parseInt(String(meta.consecutiveFailures || 0), 10) || 0) + 1;
+
+    // ── Audit log: record every failure with timestamp ──
+    const auditLog = ((meta.failureLog || []) as Array<{ at: string; reason: string; failure: number }>).slice(-20); // Keep last 20
+    auditLog.push({ at: new Date().toISOString(), reason: reason.substring(0, 200), failure: failures });
+
+    logger.info({ sourceId, name: source.name, failures, reason: reason.substring(0, 100) }, `Source failure #${failures}`);
 
     // At failure thresholds, try to self-heal (attempt at 3 and again at 7)
     if (failures === HEAL_AT_FAILURE || failures === 7) {
+      logger.info({ sourceId, name: source.name, failures }, `Self-heal attempt triggered at failure #${failures}`);
+      auditLog.push({ at: new Date().toISOString(), reason: `SELF-HEAL ATTEMPT at failure #${failures}`, failure: failures });
+
       const healed = await attemptSelfHeal(source);
       if (healed) {
-        // Track successful heal for metrics
-        const healStats = (meta.healStats || {}) as Record<string, number>;
-        const healResult = ((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata as any)?.healResult || 'unknown';
+        auditLog.push({ at: new Date().toISOString(), reason: 'SELF-HEAL SUCCESS', failure: failures });
+        // Re-read metadata after heal (it was modified by attemptSelfHeal)
+        const freshMeta = ((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata || {}) as Record<string, unknown>;
+        const healStats = (freshMeta.healStats || {}) as Record<string, number>;
+        const healResult = (freshMeta.healResult as string) || 'unknown';
         healStats[healResult] = (healStats[healResult] || 0) + 1;
         await prisma.source.update({
           where: { id: sourceId },
-          data: { metadata: { ...((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata as any || {}), healStats } },
+          data: { metadata: { ...freshMeta, healStats, failureLog: auditLog } },
         });
+        logger.info({ sourceId, name: source.name, healResult }, 'Self-heal succeeded');
         return;
+      } else {
+        auditLog.push({ at: new Date().toISOString(), reason: 'SELF-HEAL FAILED', failure: failures });
+        logger.warn({ sourceId, name: source.name, failures }, 'Self-heal failed');
       }
     }
 
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
+      auditLog.push({ at: new Date().toISOString(), reason: `AUTO-DEACTIVATED at failure #${failures}: ${reason.substring(0, 100)}`, failure: failures });
+
       // Auto-deactivate
       await prisma.source.update({
         where: { id: sourceId },
@@ -533,6 +551,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
             deactivateReason: reason,
             lastFailure: reason,
             lastFailureAt: new Date().toISOString(),
+            failureLog: auditLog,
           },
         },
       });
@@ -541,10 +560,10 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
       // Purge pending queue jobs for this source
       await purgeSourceJobs(sourceId);
     } else {
-      // Increment failure count
+      // Increment failure count with audit log
       await prisma.source.update({
         where: { id: sourceId },
-        data: { metadata: { ...meta, consecutiveFailures: failures, lastFailure: reason, lastFailureAt: new Date().toISOString() } },
+        data: { metadata: { ...meta, consecutiveFailures: failures, lastFailure: reason, lastFailureAt: new Date().toISOString(), failureLog: auditLog } },
       });
     }
   } catch (err) {

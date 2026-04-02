@@ -38,6 +38,7 @@ let credibilityQueue: Queue;
 let digestQueue: Queue;
 let newscatcherQueue: Queue;
 let hyperLocalIntelQueue: Queue;
+let newsDirectorQueue: Queue;
 
 /**
  * Initialize BullMQ queues used by the scheduler
@@ -1276,6 +1277,26 @@ async function scheduleEventRegistryPolls(): Promise<void> {
 }
 
 // Interval handles for cleanup on shutdown
+/**
+ * News Director: evaluate story landscape for proactive editorial alerts.
+ * Runs every 5 minutes.
+ */
+async function scheduleNewsDirectorEvaluation(): Promise<void> {
+  try {
+    const connection = getSharedConnection();
+    if (!newsDirectorQueue) {
+      newsDirectorQueue = new Queue('news-director', { connection });
+    }
+    await newsDirectorQueue.add('evaluate', { type: 'evaluate' }, {
+      jobId: `director-${Date.now()}`,
+      removeOnComplete: { age: 600 },
+      removeOnFail: { age: 3600 },
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to schedule News Director evaluation');
+  }
+}
+
 const intervals: NodeJS.Timeout[] = [];
 
 /**
@@ -1372,6 +1393,10 @@ export function startSchedulers(): void {
   const syncInterval = setInterval(scheduleAccountStorySync, 5 * 60 * 1000);
   intervals.push(syncInterval);
 
+  // News Director: every 5 minutes (proactive editorial intelligence)
+  const newsDirectorInterval = setInterval(scheduleNewsDirectorEvaluation, 5 * 60 * 1000);
+  intervals.push(newsDirectorInterval);
+
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
   void scheduleNewsAPIPolls();
@@ -1387,6 +1412,7 @@ export function startSchedulers(): void {
   void scheduleEventRegistryPolls();
   void scheduleDynamicNewsPoll();
   void scheduleAccountStorySync();
+  void scheduleNewsDirectorEvaluation();
 
   logger.info('All schedulers started');
 }
@@ -1431,6 +1457,7 @@ export async function stopSchedulers(): Promise<void> {
   if (sentimentQueue) await sentimentQueue.close();
   if (credibilityQueue) await credibilityQueue.close();
   if (digestQueue) await digestQueue.close();
+  if (newsDirectorQueue) await newsDirectorQueue.close();
 
   logger.info('Schedulers stopped');
 }

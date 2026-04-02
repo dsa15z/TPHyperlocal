@@ -564,6 +564,104 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     logger.debug({ storyId, err: (verifyErr as Error).message }, 'Verification update skipped');
   }
 
+  // ── Story Propagation Score ──────────────────────────────────────
+  // Track how many distinct markets this story has been detected in.
+  // Stories spreading across markets are more significant.
+  try {
+    // Count distinct market locations from source posts
+    const marketLocations = await prisma.$queryRawUnsafe<Array<{count: bigint}>>(
+      `SELECT COUNT(DISTINCT sp."locationName") as count
+       FROM "StorySource" ss
+       JOIN "SourcePost" sp ON sp.id = ss."sourcePostId"
+       WHERE ss."storyId" = $1 AND sp."locationName" IS NOT NULL`,
+      storyId
+    );
+    const marketSpread = Number(marketLocations[0]?.count || 0);
+
+    // Propagation boost: stories in 3+ markets get a score boost
+    const propagationBoost = marketSpread >= 5 ? 0.15 : marketSpread >= 3 ? 0.10 : marketSpread >= 2 ? 0.05 : 0;
+
+    if (propagationBoost > 0) {
+      // Apply propagation boost to composite score
+      const boostedComposite = Math.min(1, compositeScore + propagationBoost);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Story" SET "compositeScore" = $1 WHERE id = $2`,
+        boostedComposite, storyId
+      );
+      logger.info({ storyId, marketSpread, propagationBoost, boostedComposite }, 'Applied propagation boost');
+    }
+  } catch (propErr) {
+    logger.debug({ storyId, err: (propErr as Error).message }, 'Propagation tracking skipped');
+  }
+
+  // ── Audience-Aware Scoring ──────────────────────────────────────
+  // Boost stories that match the account's most-covered categories.
+  // Learn from what the newsroom actually publishes.
+  try {
+    // Get the top 5 most-covered categories across all accounts
+    const categoryWeights = await prisma.$queryRawUnsafe<Array<{category: string, coverCount: bigint}>>(
+      `SELECT s.category, COUNT(acs.id) as "coverCount"
+       FROM "AccountStory" acs
+       JOIN "Story" s ON s.id = acs."baseStoryId"
+       WHERE acs."coveredAt" IS NOT NULL AND s.category IS NOT NULL
+       GROUP BY s.category
+       ORDER BY COUNT(acs.id) DESC
+       LIMIT 5`,
+    );
+
+    if (categoryWeights.length > 0 && story.category) {
+      const totalCovered = categoryWeights.reduce((sum, c) => sum + Number(c.coverCount), 0);
+      const match = categoryWeights.find(c => c.category === story.category);
+      if (match && totalCovered > 0) {
+        const audienceAffinity = Number(match.coverCount) / totalCovered;
+        const audienceBoost = audienceAffinity * 0.10; // Max 10% boost
+        if (audienceBoost > 0.02) {
+          const boosted = Math.min(1, compositeScore + audienceBoost);
+          await prisma.$executeRawUnsafe(
+            `UPDATE "Story" SET "compositeScore" = $1 WHERE id = $2`,
+            boosted, storyId
+          );
+          logger.debug({ storyId, category: story.category, audienceBoost: audienceBoost.toFixed(3) }, 'Applied audience affinity boost');
+        }
+      }
+    }
+  } catch (audErr) {
+    logger.debug({ storyId, err: (audErr as Error).message }, 'Audience scoring skipped');
+  }
+
+  // ── Pre-Break Detection ─────────────────────────────────────────
+  // Detect stories that are ABOUT to break based on velocity patterns.
+  // If source velocity is accelerating AND story is < 60 min old, flag as pre-breaking.
+  try {
+    if (ageMinutes < 60 && breakingScore > 0.3) {
+      // Check source arrival velocity: count sources in last 15 min vs previous 15 min
+      const fifteenMinAgoDate = new Date(Date.now() - 15 * 60 * 1000);
+      const thirtyMinAgoDate = new Date(Date.now() - 30 * 60 * 1000);
+
+      const recentSourcesCount = await prisma.storySource.count({
+        where: { storyId, createdAt: { gte: fifteenMinAgoDate } },
+      });
+      const olderSourcesCount = await prisma.storySource.count({
+        where: { storyId, createdAt: { gte: thirtyMinAgoDate, lt: fifteenMinAgoDate } },
+      });
+
+      // Accelerating: more sources in recent 15 min than previous 15 min
+      const isAccelerating = recentSourcesCount > olderSourcesCount && recentSourcesCount >= 2;
+
+      if (isAccelerating) {
+        const velocityBoost = Math.min(0.15, recentSourcesCount * 0.03);
+        const boosted = Math.min(1, compositeScore + velocityBoost);
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Story" SET "compositeScore" = $1 WHERE id = $2`,
+          boosted, storyId
+        );
+        logger.info({ storyId, recentSources: recentSourcesCount, olderSources: olderSourcesCount, velocityBoost, title: story.title?.substring(0, 50) }, 'Pre-break detection: story accelerating');
+      }
+    }
+  } catch (preBreakErr) {
+    logger.debug({ storyId, err: (preBreakErr as Error).message }, 'Pre-break detection skipped');
+  }
+
   // Create score snapshot with all scores (TopicPulse stored at 5/15/30/45/60/90/120 min)
   await prisma.scoreSnapshot.create({
     data: {

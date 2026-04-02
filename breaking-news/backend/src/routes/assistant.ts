@@ -279,18 +279,35 @@ async function executeTool(toolName: string, args: Record<string, any>, accountU
 
 export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
-  // GET /assistant/alerts — proactive new story alerts for saved views
+  // GET /assistant/alerts — proactive new story alerts for saved views + News Director
   app.get('/assistant/alerts', async (request, reply) => {
     const au = getAccountUser(request);
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });
 
+    let viewAlerts: any[] = [];
+    let directorAlerts: any = null;
+
+    // View-based alerts
     try {
       const { checkViewsForNewStories } = await import('../lib/view-alerts.js');
-      const alerts = await checkViewsForNewStories(au.userId);
-      return reply.send({ alerts });
-    } catch {
-      return reply.send({ alerts: [] });
-    }
+      viewAlerts = await checkViewsForNewStories(au.userId);
+    } catch {}
+
+    // News Director alerts from Redis
+    try {
+      const redisUrl = process.env['REDIS_URL'] || 'redis://localhost:6379';
+      const conn = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+      const raw = await conn.get('news-director:alerts');
+      await conn.quit();
+      if (raw) {
+        directorAlerts = JSON.parse(raw);
+      }
+    } catch {}
+
+    return reply.send({
+      alerts: viewAlerts,
+      newsDirector: directorAlerts,
+    });
   });
 
   app.post('/assistant/chat', async (request, reply) => {
