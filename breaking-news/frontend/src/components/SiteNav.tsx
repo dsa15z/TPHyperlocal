@@ -80,18 +80,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [],
     section: "main",
   },
-  {
-    id: "alerts",
-    label: "Alerts & Intel",
-    icon: AlertTriangle,
-    accent: "text-red-400",
-    section: "main",
-    items: [
-      { href: "/beat-alerts", label: "Coverage & Competition", icon: Target },
-      { href: "/alerts", label: "Public Alerts", icon: Bell },
-      { href: "/predictions", label: "Predictions & Trends", icon: TrendingUp },
-    ],
-  },
+  // Alerts & Intel removed — coverage gaps shown via ☑ column on Leads table,
+  // breaking ticker handles alerts, score/trend columns cover predictions.
+  // Pages still accessible via URL (/beat-alerts, /alerts, /predictions).
 
   // ────────────────────────────────────────────────────────────────────────
   //  NEWSROOM — Managing people and workflow
