@@ -25,14 +25,13 @@ export interface ColumnConfig {
 export const ALL_COLUMNS: Omit<ColumnConfig, "visible">[] = [
   { id: "rank", label: "#", width: 40, defaultWidth: 40, minWidth: 32 },
   { id: "famous", label: "", width: 32, defaultWidth: 32, minWidth: 28 },
-  { id: "verified", label: "", width: 32, defaultWidth: 32, minWidth: 28 },
   { id: "status", label: "Status", width: 90, defaultWidth: 90, minWidth: 70 },
   { id: "title", label: "Title", width: 500, defaultWidth: 500, minWidth: 300 },
   { id: "category", label: "Category", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "location", label: "Location", width: 120, defaultWidth: 120, minWidth: 70 },
   { id: "score", label: "Score", width: 90, defaultWidth: 90, minWidth: 60 },
+  { id: "verified", label: "Sources", width: 60, defaultWidth: 60, minWidth: 45 },
   { id: "trend", label: "Trend", width: 90, defaultWidth: 90, minWidth: 60 },
-  { id: "source_count", label: "Sources", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "coverage", label: "Covered", width: 70, defaultWidth: 70, minWidth: 50 },
   { id: "first_seen", label: "First Seen", width: 100, defaultWidth: 100, minWidth: 70 },
   { id: "last_updated", label: "Updated", width: 100, defaultWidth: 100, minWidth: 70 },
@@ -118,7 +117,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "breaking-compact",
     name: "Breaking Compact",
     columns: makeColumns(
-      ["rank", "status", "title", "score", "source_count", "first_seen"],
+      ["rank", "status", "title", "score", "verified", "first_seen"],
       { title: 400 }
     ),
     filters: {
@@ -132,7 +131,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "coverage-gaps",
     name: "Coverage Gaps",
     columns: makeColumns(
-      ["rank", "title", "category", "coverage", "score", "source_count", "first_seen"],
+      ["rank", "title", "category", "coverage", "score", "verified", "first_seen"],
       { title: 360 }
     ),
     filters: {
@@ -146,7 +145,7 @@ export const PRESET_VIEWS: DashboardView[] = [
     id: "trending-focus",
     name: "Trending Focus",
     columns: makeColumns(
-      ["rank", "title", "score", "trend", "source_count", "category", "last_updated"],
+      ["rank", "title", "score", "trend", "verified", "category", "last_updated"],
       { title: 360 }
     ),
     filters: {
