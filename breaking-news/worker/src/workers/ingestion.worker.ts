@@ -12,8 +12,51 @@ const logger = createChildLogger('ingestion');
 const MAX_CONSECUTIVE_FAILURES = 10; // Auto-deactivate after this many failures
 const HEAL_AT_FAILURE = 3; // Attempt self-healing at this failure count
 
-// Realistic browser User-Agent to avoid 403 blocks from news sites
-const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// ── Rotating User-Agent pool ────────────────────────────────────────────────
+// Real browser UAs from 2024-2026. Rotated per-request to avoid fingerprinting.
+// Includes Chrome, Firefox, Safari, Edge across Windows/Mac/Linux.
+const UA_POOL = [
+  // Chrome (Windows)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  // Chrome (Mac)
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  // Firefox (Windows)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+  // Firefox (Mac)
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0',
+  // Safari (Mac)
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  // Edge (Windows)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+  // Chrome (Linux)
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+/** Get a random browser User-Agent from the pool */
+function getRandomUA(): string {
+  return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
+}
+
+/** Build realistic browser-like request headers for RSS fetching */
+function buildFetchHeaders(ua?: string): Record<string, string> {
+  const userAgent = ua || getRandomUA();
+  return {
+    'User-Agent': userAgent,
+    'Accept': 'application/rss+xml, application/xml, application/atom+xml, text/xml, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  };
+}
+
+// Keep BROWSER_UA for backward compatibility (metadata flag references it)
+const BROWSER_UA = UA_POOL[0];
 
 /**
  * Known RSS proxy services that are often Cloudflare-blocked.
@@ -114,7 +157,7 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
         if (directUrl && directUrl !== originalUrl) {
           try {
             const resp = await fetch(directUrl, {
-              headers: { 'User-Agent': BROWSER_UA },
+              headers: buildFetchHeaders(),
               signal: AbortSignal.timeout(10000),
             });
             if (resp.ok) {
@@ -151,7 +194,7 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
   if (source.platform === 'RSS' && originalUrl) {
     try {
       const resp = await fetch(originalUrl, {
-        headers: { 'User-Agent': BROWSER_UA },
+        headers: buildFetchHeaders(),
         signal: AbortSignal.timeout(10000),
       });
       if (resp.ok) {
@@ -212,7 +255,7 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
 
       try {
         const resp = await fetch(altUrl, {
-          headers: { 'User-Agent': BROWSER_UA },
+          headers: buildFetchHeaders(),
           signal: AbortSignal.timeout(10000),
         });
         if (!resp.ok) continue;
@@ -248,7 +291,7 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
       // Check if the base site is reachable at all
       const baseUrl = new URL(originalUrl).origin;
       const siteResp = await fetch(baseUrl, {
-        headers: { 'User-Agent': 'BreakingNewsBot/1.0' },
+        headers: buildFetchHeaders('BreakingNewsBot/1.0'),
         signal: AbortSignal.timeout(10000),
       });
 
@@ -516,15 +559,11 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   const { sourceId, feedUrl } = job.data;
   logger.info({ sourceId, feedUrl }, 'Polling RSS feed');
 
-  // Check if source needs browser UA (set by self-healing)
-  const sourceMeta = await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } });
-  const useBrowserUA = (sourceMeta?.metadata as any)?.useBrowserUA === true;
-  const userAgent = useBrowserUA ? BROWSER_UA : 'BreakingNewsBot/1.0';
-
+  // Always use rotating browser UA — prevents fingerprinting and preemptive bot blocks
   let response: Response;
   try {
     response = await fetch(feedUrl, {
-      headers: { 'User-Agent': userAgent },
+      headers: buildFetchHeaders(),
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
