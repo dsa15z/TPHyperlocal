@@ -82,7 +82,47 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - When a user takes any action on a story (edit, assign, note, AI draft), a private derivative is created
 - The derivative stays linked to the base story and receives upstream updates
 - Account-private: editedTitle, editedSummary, notes, accountStatus, assignedTo, aiDrafts, aiScripts, aiVideos, research
-- accountStatus: INBOX → ASSIGNED → IN_PROGRESS → DRAFT_READY → PUBLISHED → KILLED
+- accountStatus: customizable per-tenant workflow stages (default: LEAD → ASSIGNED → IN_PROGRESS → DRAFT_READY → EDITOR_REVIEW → APPROVED → PUBLISHED → KILLED)
+
+### WorkflowStage (Per-Tenant Customizable)
+- Each account defines their own editorial pipeline stages
+- Default 8 stages auto-seeded on first access
+- Each stage has: name, slug, order, color, icon, requiredRole, isInitial, isFinal
+- Stage transitions enforce role-based permissions (VIEWER → EDITOR → ADMIN → OWNER)
+
+### Story Verification
+- verificationStatus: UNVERIFIED, VERIFIED, SINGLE_SOURCE, DISPUTED
+- VERIFIED: 3+ independent sources with confidence >= 0.5
+- SINGLE_SOURCE: only 1 source reporting
+- verificationScore: 0-1 confidence in story accuracy
+- Blue checkmark icon (✓) for VERIFIED, orange warning (⚠) for SINGLE_SOURCE
+
+### Famous Person Detection
+- hasFamousPerson: boolean flag on stories mentioning notable public figures
+- famousPersonNames: JSON array of detected names (e.g., ["Donald Trump", "Tiger Woods"])
+- Yellow star icon (⭐) on dashboard when detected
+- Detected via LLM during enrichment
+
+### Story Entities (NER)
+- StoryEntity table links stories to named entities (PERSON, ORGANIZATION, LOCATION, EVENT)
+- Used for "Related Stories" feature: find stories sharing 2+ entities
+- Extracted by LLM during enrichment, stored with confidence score
+
+### Published Content
+- Tracks multi-platform publishing: WordPress, Twitter, Facebook, LinkedIn, TikTok, YouTube, custom webhook
+- Scheduling support: publish now or schedule for later
+- RSS feed output: GET /workflow/feed/:accountSlug/published.xml
+
+### Audio Spots
+- OpenAI TTS-generated audio spots for stories
+- 6 voices: alloy, echo, fable, onyx, nova, shimmer
+- Formats: 15s, 30s, 60s, full
+
+### Innovative Scoring Features
+- Story Propagation: +5-15% composite boost when story spreads across 2+ markets
+- Audience-Aware: up to +10% boost for stories matching newsroom's most-covered categories
+- Pre-Break Detection: up to +15% boost for stories < 60 min old with accelerating source velocity
+- AI News Director: proactive alerts every 5 min for uncovered high-score stories, famous person stories, spreading stories
 
 ## API Endpoints
 
@@ -135,6 +175,26 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - POST /api/v1/admin/knowledge — add or update a document (key, content, category)
 - DELETE /api/v1/admin/knowledge/:id — delete a document
 - POST /api/v1/admin/knowledge/generate — auto-generate all schema docs
+
+### Workflow
+- GET /api/v1/workflow/stages — list workflow stages for account (auto-seeds defaults)
+- PUT /api/v1/workflow/stages — replace all stages (workflow builder)
+- POST /api/v1/workflow/transition — move story between stages (role-checked)
+- GET/POST /api/v1/workflow/comments/:accountStoryId — editorial comment thread
+- POST /api/v1/workflow/audio — generate TTS audio spot via OpenAI
+- GET /api/v1/workflow/audio/:accountStoryId — list audio spots
+- POST /api/v1/workflow/publish — publish to external platform (Twitter, Facebook, etc.)
+- GET /api/v1/workflow/published/:accountStoryId — list published content
+- GET /api/v1/workflow/publish-queue — pending/scheduled publish jobs
+- GET /api/v1/workflow/feed/:accountSlug/published.xml — public RSS feed
+
+### Broadcast Package
+- POST /api/v1/broadcast-package/generate — one-click multi-format content generation
+  Formats: tv_30s, tv_60s, radio_30s, radio_60s, web_article, social_post, social_thread, push_notification
+
+### Story Verification & Entities
+- POST /api/v1/stories/:id/verify — LLM dual-check verification (OpenAI + Grok)
+- GET /api/v1/stories/:id/related — find stories sharing 2+ entities
 
 ### User Settings
 - PATCH /api/v1/user/settings/profile — update name, phone, timezone
