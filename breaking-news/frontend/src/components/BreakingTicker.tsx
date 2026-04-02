@@ -10,7 +10,7 @@ interface TickerStory {
   status: string;
 }
 
-// No API_BASE needed — Vercel rewrites /api/* to Railway backend
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 /**
  * Persistent breaking news ticker fixed to the bottom of the screen.
@@ -19,7 +19,6 @@ interface TickerStory {
  */
 export function BreakingTicker() {
   const [stories, setStories] = useState<TickerStory[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -27,25 +26,19 @@ export function BreakingTicker() {
     async function fetchBreaking() {
       try {
         const res = await fetch(
-          `/api/v1/stories?status=ALERT,BREAKING&maxAge=24&sort=breakingScore&order=desc&limit=20`,
+          `${API_BASE}/api/v1/stories?status=ALERT,BREAKING&maxAge=24&sort=breakingScore&order=desc&limit=20`,
           { headers: { "Content-Type": "application/json" } }
         );
-        if (!res.ok) {
-          if (active) setError(`API ${res.status}`);
-          return;
-        }
+        if (!res.ok) return;
         const json = await res.json();
         const items = (json.data || []).map((s: any) => ({
           id: s.id,
           title: s.title,
           status: s.status,
         }));
-        if (active) {
-          setStories(items);
-          setError(null);
-        }
-      } catch (e: any) {
-        if (active) setError(e.message || "fetch failed");
+        if (active) setStories(items);
+      } catch {
+        // Silently fail
       }
     }
 
@@ -53,15 +46,6 @@ export function BreakingTicker() {
     const interval = setInterval(fetchBreaking, 15_000);
     return () => { active = false; clearInterval(interval); };
   }, []);
-
-  // Debug: show error state so we can see if the component mounts
-  if (stories.length === 0 && error) {
-    return (
-      <div className="fixed bottom-0 left-0 right-0 z-[60] h-7 flex items-center bg-gray-900/90 border-t border-gray-700 px-3">
-        <span className="text-[10px] text-gray-500">Ticker: {error}</span>
-      </div>
-    );
-  }
 
   if (stories.length === 0) return null;
 
