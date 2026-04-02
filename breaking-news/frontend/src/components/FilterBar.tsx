@@ -63,39 +63,28 @@ function loadSavedFilters(): Record<string, any> {
 export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const saved = useRef(loadSavedFilters());
-
+  // Filter state initialized from URL params only — view system handles persistence
   const [searchInput, setSearchInput] = useState(
     searchParams.get("q") || ""
   );
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(saved.current.categories || []);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(saved.current.statuses || []);
-  const [selectedSources, setSelectedSources] = useState<string[]>(saved.current.sources || []);
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(saved.current.markets || []);
-  const [uncoveredOnly, setUncoveredOnly] = useState(saved.current.uncoveredOnly || false);
-  const [trend, setTrend] = useState(saved.current.trend || "all");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    searchParams.get("category")?.split(",").filter(Boolean) || []
+  );
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+    searchParams.get("status")?.split(",").filter(Boolean) || []
+  );
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(
+    searchParams.get("markets")?.split(",").filter(Boolean) || []
+  );
+  const [uncoveredOnly, setUncoveredOnly] = useState(false);
+  const [trend, setTrend] = useState("all");
   const [timeRange, setTimeRange] = useState(
-    searchParams.get("time_range") || saved.current.timeRange || "1h"
+    searchParams.get("time_range") || "24h"
   );
   const [minScore, setMinScore] = useState(
-    Number(searchParams.get("min_score") || saved.current.minScore || "0")
+    Number(searchParams.get("min_score") || "0")
   );
-
-  // Persist filter state to localStorage on change
-  useEffect(() => {
-    try {
-      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
-        categories: selectedCategories,
-        statuses: selectedStatuses,
-        sources: selectedSources,
-        markets: selectedMarkets,
-        uncoveredOnly,
-        trend,
-        timeRange,
-        minScore,
-      }));
-    } catch { /* storage full */ }
-  }, [selectedCategories, selectedStatuses, selectedSources, selectedMarkets, uncoveredOnly, trend, timeRange, minScore]);
 
   // Fetch user profile to determine accessible markets + superadmin status
   const { data: profileData } = useQuery({
@@ -242,7 +231,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     setTrend("all");
     setTimeRange("24h");
     setMinScore(0);
-    try { localStorage.removeItem(FILTER_STORAGE_KEY); } catch {}
+    // View system handles persistence — no localStorage to clean
     // Clear URL params so NLP filters don't persist
     router.replace("/", { scroll: false });
   };
