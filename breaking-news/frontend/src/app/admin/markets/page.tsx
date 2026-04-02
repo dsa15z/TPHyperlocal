@@ -542,7 +542,7 @@ export default function MarketsPage() {
                       <React.Fragment key={market.id}>
                         <tr
                           className={clsx("border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer", isExpanded && "bg-surface-300/10")}
-                          onClick={() => setExpandedId(isExpanded ? null : market.id)}
+                          onClick={() => startEdit(market)}
                         >
                           {isCol("name") && <td className="px-4 py-3 text-white font-medium">
                             <div className="flex items-center gap-2">

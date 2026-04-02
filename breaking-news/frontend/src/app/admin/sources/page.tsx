@@ -1011,14 +1011,15 @@ function SourcesPage() {
                     return (
                       <tr
                         key={source.id}
+                        onClick={() => startEdit(source)}
                         className={clsx(
-                          "border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors",
+                          "border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer",
                           !source.isActive && "opacity-70",
                           isSelected && "bg-accent/5"
                         )}
                       >
                         <td className="px-3 py-3 w-10">
-                          <button onClick={() => toggleSelect(source.id)} className="text-gray-400 hover:text-white transition-colors">
+                          <button onClick={(e) => { e.stopPropagation(); toggleSelect(source.id); }} className="text-gray-400 hover:text-white transition-colors">
                             {isSelected
                               ? <CheckSquare className="w-4 h-4 text-accent" />
                               : <Square className="w-4 h-4" />
@@ -1117,12 +1118,13 @@ function SourcesPage() {
                         </td>}
                         {isColVisible("active") && <td className="px-4 py-3" style={{ width: colWidth("active") }}>
                           <button
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               toggleMutation.mutate({
                                 id: source.id,
                                 enabled: !source.isActive,
-                              })
-                            }
+                              });
+                            }}
                             className={clsx(
                               "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
                               source.isActive ? "bg-green-500" : "bg-gray-600"
@@ -1146,7 +1148,7 @@ function SourcesPage() {
                         {isColVisible("actions") && <td className="px-4 py-3" style={{ width: colWidth("actions") }}>
                           <div className="flex items-center justify-end gap-1">
                             <button
-                              onClick={() => pollMutation.mutate(source.id)}
+                              onClick={(e) => { e.stopPropagation(); pollMutation.mutate(source.id); }}
                               disabled={pollMutation.isPending}
                               className="filter-btn flex items-center gap-1 text-xs text-accent hover:border-accent/50"
                               title="Poll this source now"
@@ -1154,15 +1156,7 @@ function SourcesPage() {
                               <Play className="w-3 h-3" />
                             </button>
                             <button
-                              onClick={() => startEdit(source)}
-                              className="filter-btn flex items-center gap-1 text-xs"
-                              title="Edit source"
-                            >
-                              <Pencil className="w-3 h-3" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(source)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(source); }}
                               disabled={deleteMutation.isPending}
                               className="filter-btn flex items-center gap-1 text-xs text-red-400 hover:text-red-300 hover:border-red-500/50"
                               title="Delete source"
