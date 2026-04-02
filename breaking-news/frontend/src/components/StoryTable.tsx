@@ -398,10 +398,12 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
         const acct = info.row.original.accountStory;
         const coverage = info.row.original.coverage || [];
         const isCovered = acct?.coveredAt || coverage.some((c) => c.isCovered);
-        if (!isCovered) return null;
         return (
           <span className="inline-flex items-center justify-center w-full">
-            <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+            {isCovered
+              ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+              : <span className="w-3 h-3 rounded-sm border border-gray-600" />
+            }
           </span>
         );
       },

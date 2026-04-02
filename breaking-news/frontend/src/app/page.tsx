@@ -81,11 +81,33 @@ function DashboardContent() {
   }, [activeViewId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filter state ────────────────────────────────────────────────────────
-  const [filters, setFilters] = useState<StoryFilters>(() => ({
-    ...savedFiltersToStoryFilters(activeView.filters),
-    page: 1,
-    page_size: 25,
-  }));
+  // Load from: 1) active view's saved filters, 2) FilterBar's localStorage, 3) defaults
+  const [filters, setFilters] = useState<StoryFilters>(() => {
+    const viewFilters = savedFiltersToStoryFilters(activeView.filters);
+    // If view has no explicit filters, try loading from FilterBar's localStorage
+    const hasViewFilters = activeView.filters.categories?.length || activeView.filters.statuses?.length || activeView.filters.timeRange || activeView.filters.nlpPrompt;
+    if (!hasViewFilters && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('tp-filter-prefs');
+        if (raw) {
+          const saved = JSON.parse(raw);
+          return {
+            category: saved.categories?.length ? saved.categories.join(',') : undefined,
+            status: saved.statuses?.length ? saved.statuses.join(',') : undefined,
+            time_range: saved.timeRange || '24h',
+            min_score: saved.minScore || undefined,
+            market_ids: saved.markets?.length ? saved.markets : undefined,
+            source_ids: saved.sources?.length ? saved.sources : undefined,
+            uncovered_only: saved.uncoveredOnly || undefined,
+            trend: saved.trend !== 'all' ? saved.trend : undefined,
+            page: 1,
+            page_size: 25,
+          };
+        }
+      } catch {}
+    }
+    return { ...viewFilters, page: 1, page_size: 25 };
+  });
 
   // Re-apply saved filters when the active view changes
   useEffect(() => {
