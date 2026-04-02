@@ -100,6 +100,113 @@ function isCloudflareChallenge(status: number, body: string): boolean {
   return false;
 }
 
+/**
+ * Detect bot challenge pages beyond Cloudflare (Akamai, PerimeterX, DataDome, Anubis).
+ */
+function isBotChallenge(status: number, body: string): string | null {
+  if (status === 403 || status === 503 || status === 202) {
+    if (body.includes('cloudflare') || body.includes('Cloudflare') || body.includes('cf-browser-verification')) return 'cloudflare';
+    if (body.includes('akamai') || body.includes('Akamai')) return 'akamai';
+    if (body.includes('perimeterx') || body.includes('PerimeterX') || body.includes('_pxhd')) return 'perimeterx';
+    if (body.includes('datadome') || body.includes('DataDome')) return 'datadome';
+    if (body.includes('anubis') || body.includes('Anubis') || body.includes('checking your browser')) return 'anubis';
+    if (body.includes('Just a moment') || body.includes('security verification') || body.includes('Verify you are human')) return 'generic-challenge';
+  }
+  return null;
+}
+
+/**
+ * Auto-discover RSS feed URLs from an HTML page by parsing <link> tags.
+ * e.g., <link rel="alternate" type="application/rss+xml" href="..." />
+ */
+async function discoverRSSFromHTML(htmlUrl: string, htmlBody?: string): Promise<string[]> {
+  try {
+    let html = htmlBody;
+    if (!html) {
+      const resp = await fetch(htmlUrl, {
+        headers: buildFetchHeaders(),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!resp.ok) return [];
+      html = await resp.text();
+    }
+
+    const feeds: string[] = [];
+    // Match <link rel="alternate" type="application/rss+xml" href="..." />
+    const linkPattern = /<link[^>]*rel=["']alternate["'][^>]*>/gi;
+    let match;
+    while ((match = linkPattern.exec(html)) !== null) {
+      const tag = match[0];
+      if (tag.includes('application/rss+xml') || tag.includes('application/atom+xml') || tag.includes('text/xml')) {
+        const hrefMatch = tag.match(/href=["']([^"']+)["']/);
+        if (hrefMatch) {
+          let feedUrl = hrefMatch[1];
+          // Resolve relative URLs
+          if (feedUrl.startsWith('/')) {
+            const base = new URL(htmlUrl);
+            feedUrl = `${base.origin}${feedUrl}`;
+          } else if (!feedUrl.startsWith('http')) {
+            feedUrl = new URL(feedUrl, htmlUrl).href;
+          }
+          feeds.push(feedUrl);
+        }
+      }
+    }
+    return feeds;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Per-domain request throttle — prevents banning from aggressive polling.
+ * Uses Redis to track last request time per domain.
+ */
+const MIN_DOMAIN_INTERVAL_MS = 3000; // 3 seconds between requests to same domain
+
+async function throttleDomain(url: string): Promise<void> {
+  try {
+    const domain = new URL(url).hostname;
+    const redis = getSharedConnection();
+    const key = `throttle:${domain}`;
+    const lastReq = await redis.get(key);
+
+    if (lastReq) {
+      const elapsed = Date.now() - parseInt(lastReq, 10);
+      if (elapsed < MIN_DOMAIN_INTERVAL_MS) {
+        const wait = MIN_DOMAIN_INTERVAL_MS - elapsed;
+        await new Promise(resolve => setTimeout(resolve, wait));
+      }
+    }
+    await redis.set(key, String(Date.now()), 'EX', 60); // Expire after 60s
+  } catch {
+    // Redis unavailable — skip throttle
+  }
+}
+
+/**
+ * Try fetching with www/non-www and https/http variants.
+ */
+function getProtocolVariants(url: string): string[] {
+  const variants: string[] = [];
+  try {
+    const u = new URL(url);
+    // www ↔ non-www
+    if (u.hostname.startsWith('www.')) {
+      variants.push(url.replace('www.', ''));
+    } else {
+      variants.push(url.replace(u.hostname, `www.${u.hostname}`));
+    }
+    // https ↔ http
+    if (u.protocol === 'https:') {
+      variants.push(url.replace('https:', 'http:'));
+    } else {
+      variants.push(url.replace('http:', 'https:'));
+    }
+  } catch {}
+  return variants;
+}
+
 // Common RSS URL variants to try when the original URL fails
 const RSS_URL_VARIANTS = [
   (base: string) => base.replace(/\/?$/, '/feed'),
@@ -286,17 +393,65 @@ async function attemptSelfHeal(source: { id: string; name: string; url: string |
       }
     }
 
-    // Strategy 2: All RSS variants failed — switch to web scraping
+    // Strategy 1.5: Try www/non-www and https/http protocol variants
+    for (const variant of getProtocolVariants(originalUrl)) {
+      try {
+        const resp = await fetch(variant, {
+          headers: buildFetchHeaders(),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (resp.ok) {
+          const text = await resp.text();
+          if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+            await prisma.source.update({
+              where: { id: source.id },
+              data: {
+                url: variant,
+                metadata: { ...meta, consecutiveFailures: 0, healAttempts, healResult: 'protocol-variant', previousUrl: originalUrl, healedAt: new Date().toISOString() },
+              },
+            });
+            logger.info({ sourceId: source.id, oldUrl: originalUrl, newUrl: variant }, 'Self-healed: protocol/www variant');
+            return true;
+          }
+        }
+      } catch { /* next */ }
+    }
+
+    // Strategy 2: Auto-discover RSS from the site's HTML <link> tags
     try {
-      // Check if the base site is reachable at all
+      const baseUrl = new URL(originalUrl).origin;
+      const discoveredFeeds = await discoverRSSFromHTML(baseUrl);
+      for (const feedUrl of discoveredFeeds) {
+        if (feedUrl === originalUrl) continue;
+        try {
+          const resp = await fetch(feedUrl, { headers: buildFetchHeaders(), signal: AbortSignal.timeout(10000) });
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+              await prisma.source.update({
+                where: { id: source.id },
+                data: {
+                  url: feedUrl,
+                  metadata: { ...meta, consecutiveFailures: 0, healAttempts, healResult: 'auto-discovered', previousUrl: originalUrl, discoveredFrom: baseUrl, healedAt: new Date().toISOString() },
+                },
+              });
+              logger.info({ sourceId: source.id, oldUrl: originalUrl, newUrl: feedUrl }, 'Self-healed: auto-discovered RSS from HTML link tags');
+              return true;
+            }
+          }
+        } catch { /* next feed */ }
+      }
+    } catch { /* discovery failed */ }
+
+    // Strategy 3: Switch to web scraping (site is up but RSS is broken)
+    try {
       const baseUrl = new URL(originalUrl).origin;
       const siteResp = await fetch(baseUrl, {
-        headers: buildFetchHeaders('BreakingNewsBot/1.0'),
+        headers: buildFetchHeaders(),
         signal: AbortSignal.timeout(10000),
       });
 
       if (siteResp.ok) {
-        // Site is up but RSS is broken — switch to web scraping
         await prisma.source.update({
           where: { id: source.id },
           data: {
@@ -349,10 +504,20 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
     const meta = (source.metadata || {}) as Record<string, unknown>;
     const failures = ((meta.consecutiveFailures as number) || 0) + 1;
 
-    // At failure threshold, try to self-heal before giving up
-    if (failures === HEAL_AT_FAILURE) {
+    // At failure thresholds, try to self-heal (attempt at 3 and again at 7)
+    if (failures === HEAL_AT_FAILURE || failures === 7) {
       const healed = await attemptSelfHeal(source);
-      if (healed) return; // Source was healed, don't increment failure count
+      if (healed) {
+        // Track successful heal for metrics
+        const healStats = (meta.healStats || {}) as Record<string, number>;
+        const healResult = ((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata as any)?.healResult || 'unknown';
+        healStats[healResult] = (healStats[healResult] || 0) + 1;
+        await prisma.source.update({
+          where: { id: sourceId },
+          data: { metadata: { ...((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata as any || {}), healStats } },
+        });
+        return;
+      }
     }
 
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
@@ -571,10 +736,14 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   if (meta.lastETag) headers['If-None-Match'] = meta.lastETag as string;
   if (meta.lastModified) headers['If-Modified-Since'] = meta.lastModified as string;
 
+  // Per-domain throttle — prevents banning from aggressive polling
+  await throttleDomain(feedUrl);
+
   let response: Response;
   try {
     response = await fetch(feedUrl, {
       headers,
+      redirect: 'follow',
       signal: AbortSignal.timeout(15000),
     });
   } catch (err) {
@@ -607,11 +776,22 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   if (!response.ok) {
     let body = '';
     try { body = await response.text(); } catch {}
-    const reason = isCloudflareChallenge(response.status, body)
-      ? `Cloudflare challenge (HTTP ${response.status}) — source may need direct URL`
+    const challenge = isBotChallenge(response.status, body);
+    const reason = challenge
+      ? `Bot challenge: ${challenge} (HTTP ${response.status}) — source may need direct URL or scraping`
       : `HTTP ${response.status}`;
     await trackSourceFailure(sourceId, reason);
     throw new Error(`RSS fetch failed: ${reason}`);
+  }
+
+  // Track redirect: if feed redirected, update the URL for future polls
+  const finalUrl = response.url || feedUrl;
+  if (finalUrl !== feedUrl) {
+    logger.info({ sourceId, originalUrl: feedUrl, redirectedTo: finalUrl }, 'Feed redirected — updating source URL');
+    await prisma.source.update({
+      where: { id: sourceId },
+      data: { url: finalUrl, metadata: { ...meta, previousUrl: feedUrl, redirectDetectedAt: new Date().toISOString() } },
+    });
   }
 
   const xml = await response.text();
