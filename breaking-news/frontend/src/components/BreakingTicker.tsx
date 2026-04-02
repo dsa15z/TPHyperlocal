@@ -1,44 +1,62 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { Zap, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
-import { fetchStories, type Story } from "@/lib/api";
+
+interface TickerStory {
+  id: string;
+  title: string;
+  status: string;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 /**
  * Persistent breaking news ticker fixed to the bottom of the screen.
- * Fetches BREAKING/ALERT stories independently on a 15s interval.
- * Visible on every page — renders nothing when no breaking stories exist.
+ * Uses raw fetch (not React Query) to avoid any dependency issues.
+ * Polls every 15 seconds. Renders nothing when no breaking stories.
  */
 export function BreakingTicker() {
-  const { data } = useQuery({
-    queryKey: ["breaking-ticker"],
-    queryFn: () =>
-      fetchStories({
-        status: "ALERT,BREAKING",
-        time_range: "24h",
-        page_size: 20,
-        sort_by: "breaking_score",
-        sort_order: "desc",
-      }).catch(() => ({ stories: [], total: 0, page: 1, page_size: 20, total_pages: 1 })),
-    refetchInterval: 15_000,
-    retry: false,
-  });
+  const [stories, setStories] = useState<TickerStory[]>([]);
 
-  const stories: Story[] = data?.stories || [];
+  useEffect(() => {
+    let active = true;
+
+    async function fetchBreaking() {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/v1/stories?status=ALERT,BREAKING&maxAge=24&sort=breakingScore&order=desc&limit=20`,
+          { headers: { "Content-Type": "application/json" } }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        const items = (json.data || []).map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          status: s.status,
+        }));
+        if (active) setStories(items);
+      } catch {
+        // Silently fail — ticker just won't show
+      }
+    }
+
+    fetchBreaking();
+    const interval = setInterval(fetchBreaking, 15_000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
   if (stories.length === 0) return null;
 
   const hasAlert = stories.some((s) => s.status === "ALERT");
   const label = hasAlert ? "ALERT" : "BREAKING";
   const Icon = hasAlert ? AlertTriangle : Zap;
 
-  // Build ticker text: "TITLE • TITLE • TITLE • ..." duplicated for seamless loop
-  const items = stories.map((s) => ({ id: s.id, title: s.title, status: s.status }));
-
   return (
     <div
       className={clsx(
-        "fixed bottom-0 left-0 right-0 z-50 h-9 flex items-center overflow-hidden",
+        "fixed bottom-0 left-0 right-0 z-[60] h-9 flex items-center overflow-hidden",
         hasAlert
           ? "bg-red-950/95 border-t border-red-500/40"
           : "bg-orange-950/95 border-t border-orange-500/40"
@@ -48,9 +66,7 @@ export function BreakingTicker() {
       <div
         className={clsx(
           "flex-shrink-0 flex items-center gap-1.5 px-3 h-full font-bold text-xs uppercase tracking-wider",
-          hasAlert
-            ? "bg-red-600 text-white"
-            : "bg-orange-600 text-white"
+          hasAlert ? "bg-red-600 text-white" : "bg-orange-600 text-white"
         )}
       >
         <Icon className="w-3.5 h-3.5" />
@@ -60,10 +76,9 @@ export function BreakingTicker() {
       {/* Scrolling ticker */}
       <div className="flex-1 overflow-hidden relative">
         <div className="ticker-scroll flex items-center gap-0 whitespace-nowrap">
-          {/* Duplicate the items so the loop is seamless */}
           {[0, 1].map((copy) => (
             <div key={copy} className="flex items-center gap-0 flex-shrink-0">
-              {items.map((s) => (
+              {stories.map((s) => (
                 <a
                   key={`${copy}-${s.id}`}
                   href={`/stories/${s.id}`}
