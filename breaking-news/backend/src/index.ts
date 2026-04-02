@@ -58,6 +58,7 @@ import { moderationRoutes } from './routes/moderation.js';
 import { voiceToneRoutes } from './routes/voice-tone.js';
 import { mediaModerationRoutes } from './routes/media-moderation.js';
 import { extrasRoutes } from './routes/extras.js';
+import { assistantRoutes } from './routes/assistant.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -208,6 +209,7 @@ async function buildServer() {
   await app.register(voiceToneRoutes, { prefix: '/api/v1' });
   await app.register(mediaModerationRoutes, { prefix: '/api/v1' });
   await app.register(extrasRoutes, { prefix: '/api/v1' });
+  await app.register(assistantRoutes, { prefix: '/api/v1' });
   registerSSERoutes(app);
 
   // Graceful shutdown

@@ -7,6 +7,7 @@ import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { OnboardingTour } from "@/components/OnboardingTour";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { Heartbeat } from "@/components/Heartbeat";
+import { AIAssistant } from "@/components/AIAssistant";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -43,6 +44,7 @@ export default function RootLayout({
           <OnboardingTour />
           <OnboardingWizard />
           <Heartbeat />
+          <AIAssistant />
         </Providers>
         <script
           dangerouslySetInnerHTML={{
