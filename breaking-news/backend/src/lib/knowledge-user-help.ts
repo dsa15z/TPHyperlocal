@@ -8,247 +8,222 @@ export function generateUserHelpKnowledge(): string {
 # TopicPulse — End-User Help Guide
 
 ## What is TopicPulse?
-TopicPulse is a broadcast newsroom intelligence platform that monitors 700+ news sources across 50 US metro markets, clusters related reports into stories, scores them for breaking/trending potential, and helps newsroom editors decide what to cover. It replaces manual monitoring of dozens of feeds and social media accounts with a single, prioritized dashboard.
+TopicPulse is a broadcast newsroom intelligence platform that monitors 700+ news sources across 50 US metro markets, clusters related reports into stories (called "leads"), scores them for breaking/trending potential, and helps newsroom editors decide what to cover. It serves TV stations, radio stations, and digital newsrooms.
 
 ## Getting Started
 
-### Logging In
+### First Login
 1. Go to the TopicPulse URL provided by your administrator
-2. Enter your email and password
-3. You'll see the Stories dashboard with your market's stories
-4. Your role (Viewer, Editor, Admin, Owner) determines what actions you can take
+2. Click "Sign In" (top right) and enter your email/password
+3. You'll see the Leads dashboard with the latest stories from your markets
+4. If you're not logged in, you see a "teaser" view with the 10 most recent stories
 
-### Understanding the Dashboard
-The main Stories page shows:
-- **News Pipeline** (top) — real-time progress of story ingestion and processing
-- **View Selector** — save and switch between different filter configurations
-- **Filter Bar** — search, filter by category/status/source/market/time/trend
-- **Story Table** — sortable, customizable columns showing all matching stories
-- **Story Cards** — alternative card layout (toggle with the grid icon)
+### Navigation
+The left sidebar has these sections:
+- **Leads**: Main dashboard — all detected stories with scores, trends, and filters
+- **Newsroom**: Assignments, Reporters, Deadlines, Shift Briefings
+- **Production**: Show Production, Audio Studio, Video Studio
+- **Publish**: Publishing queue and multi-platform distribution
+- **Intelligence**: Analytics, Market Movers, Bookmarks
+- **Admin** (Sources & Data, AI & Content, System): Configuration for administrators
 
-## Stories
+## The Leads Dashboard
 
-### Finding Stories
-**Text search**: Type keywords in the search bar for exact text matching
-**NLP search**: Type a natural language query like "breaking crime in Houston last hour" — the AI parses it into structured filters automatically (indicated by the blue "AI" badge)
-**Filters**: Use the dropdown menus to filter by category, status, source, market, time range, or trend direction
-**Min Score slider**: Set a minimum composite score to see only high-scoring stories
+### Table Columns
+- **#**: Row number
+- **⭐** (Star): Yellow star = story mentions a famous person. Hover to see names.
+- **Sources** (✓/⚠ + number): Source count with verification status.
+  - Blue ✓ + number = VERIFIED (3+ sources, high confidence)
+  - Orange ⚠ + 1 = SINGLE SOURCE (only 1 source, not corroborated)
+  - Gray number = unverified but multiple sources
+  - Hover to see the list of reporting sources
+- **☑** (Covered): Green checkbox = your newsroom has covered this. Empty square = not yet covered.
+- **Status**: BREAKING (red), TOP STORY (purple), DEVELOPING (blue), ONGOING (gray), etc.
+- **Title**: Story headline. Click to open the detail page.
+- **Category**: CRIME, WEATHER, TRAFFIC, POLITICS, BUSINESS, SPORTS, etc.
+- **Location**: City, neighborhood, or "National"
+- **Score**: Composite score 0-100, color-coded: Red (60+)=hot, Orange (40-60)=significant, Yellow (20-40)=moderate, Gray (<20)=low. Hover for full breakdown.
+- **Trend**: Sparkline chart showing recent score trajectory. Green=rising, Red=declining.
 
-### Understanding Story Status
-| Status | Meaning | Visual |
-|--------|---------|--------|
-| ALERT | Critical emergency requiring immediate attention | Red |
-| BREAKING | High-velocity story, multiple sources confirming | Orange |
-| DEVELOPING | New story, still gathering sources | Blue |
-| TOP_STORY | Popular story with strong audience interest | Purple |
-| ONGOING | Established story, no longer growing rapidly | Gray |
-| FOLLOW_UP | Related to a previous breaking story | Teal |
-| STALE | No new activity for 48+ hours | Dim |
-| ARCHIVED | Older than 72 hours, no longer active | Hidden by default |
+### Column Customization
+- Click **Columns** button (top right) to show/hide columns
+- Drag column headers to reorder them in the table
+- Drag the edge of any column header to resize
+- Click **Save** on your view to persist column changes
+- Additional columns available: Breaking, Trending, Confidence, Locality (hidden by default)
 
-### Understanding Scores
-Each story gets five scores from 0 to 100:
-- **Breaking Score** — How fast is this story developing? Based on how many sources are reporting it and how quickly.
-- **Trending Score** — Is this story gaining momentum? Compares current activity to past activity.
-- **Confidence Score** — How trustworthy is this story? Based on source diversity and trust ratings.
-- **Locality Score** — How relevant is this to your local market? Exact location matches score highest.
-- **Social Score** — How much social engagement does this story have? Likes, shares, comments.
-- **Composite Score** — The overall weighted blend of all five scores.
+### Saved Views
+- **Default**: Shows all leads, 24-hour window
+- Click the view dropdown to switch between saved views
+- Click **Save** to save current filters and columns to the active view
+- Create new views, duplicate, rename, or delete via the dropdown menu
+- Views persist across sessions — your setup survives page refresh
 
-### Story Details
-Click any story row to open the detail page:
-- **Summary** — AI-generated and human-edited summaries
-- **Source Posts** — All individual source reports that make up this story
-- **Score Breakdown** — Visual breakdown of each score component
-- **Your Workspace** — Account-private area for editing, assigning, and generating content
+### Filtering
+**Primary filters** (always visible):
+- **Search bar**: Type keywords or natural language queries like "breaking crime in Houston last hour" (AI-parsed)
+- **Statuses**: Filter by BREAKING, DEVELOPING, TOP_STORY, etc.
+- **Categories**: Filter by CRIME, WEATHER, POLITICS, etc.
+- **Time range**: 1h, 6h, 24h, 7d, 30d
 
-### Working with Stories (Editors & Admins)
-When you take any action on a story, a private copy (derivative) is created for your account:
-- **Edit** title or summary — your edits are private to your account
-- **Assign** to a reporter — set assignedTo and change status to ASSIGNED
-- **Add notes** — private editorial notes
-- **Generate AI content** — TV scripts, web articles, social posts, radio scripts
-- **Track coverage** — mark as covered, link to your published piece
+**Advanced filters** (click "More"):
+- **Sources**: Filter by specific news sources
+- **Markets**: Filter by geographic market (Houston, Dallas, etc.)
+- **Trends**: Rising or declining stories only
+- **Min Score**: Slider to filter by minimum composite score
+- **Gaps Only**: Show only stories your competitors covered but you haven't
 
-## Views & Saved Filters
+Click **Clear** to reset all filters. Click **Save** to persist filters with your view.
 
-### Saving a View
-1. Set up your preferred filters (market, categories, time range, etc.)
-2. Click the "Save" button next to the view name
-3. Give it a descriptive name like "Houston Crime Watch" or "National Breaking"
-4. The view saves all filter settings including NLP prompts
+### Sorting
+Click any column header to sort. Click again to reverse. Arrow icons show sort direction.
+You can sort by: Status, Title, Category, Location, Score, Sources, Trend, First Seen, Updated.
+Icon columns (Famous, Sources/Verified, Covered) are also sortable.
 
-### Switching Views
-- Click the view dropdown to see all saved views
-- Select a view to instantly apply its saved filters
-- The dot indicator shows if current filters differ from the saved view
+## Story Detail Page
+Click any lead title to open its detail page.
 
-### Managing Views
-- **Duplicate** a view to create variations
-- **Rename** views to keep them organized
-- **Delete** views you no longer need
-- The "Default" view always exists as a fallback
+### What You See
+- **Title & Summary**: AI-generated summary from multiple sources (auto-generated on first view for multi-source stories). Shows model name and generation time.
+- **Score Cards**: Breaking, Trending, Confidence, Locality scores with hover tooltips explaining the exact calculation.
+- **Verification Badge**: Blue ✓ VERIFIED, Orange ⚠ SINGLE SOURCE
+- **Famous Person Badge**: Yellow ⭐ with person names
+- **Source Articles**: List of all source posts with links to originals
+- **Related Stories**: Stories sharing 2+ entities (people, organizations, locations)
+- **Workflow Panel**: Accept as Lead → manage through editorial stages
+- **AI Tools**: Regenerate summary, generate first draft, research, fact-check
 
-## Column Customization
+### Editorial Workflow
+1. Click "Accept as Lead" to create your private editorial copy
+2. Use the Workflow tab to move between stages: Lead → Assigned → In Progress → Draft Ready → Editor Review → Approved → Published
+3. Add editorial comments at each stage transition
+4. Assign to reporters, set deadlines
 
-### Changing Columns
-1. Click the "Columns (N)" button in the toolbar
-2. Toggle columns on/off with checkboxes
-3. Drag columns to reorder them
-4. Changes are saved per-view
+### Audio Production
+In the Audio tab of the Workflow Panel:
+1. Enter a script (or use AI-generated text)
+2. Select a voice: alloy (neutral), echo (male), fable (storyteller), onyx (deep male), nova (female), shimmer (warm female)
+3. Click "Generate Audio" — OpenAI TTS produces an MP3
+4. Play inline or download
 
-### Available Columns
-Title, Status, Category, Composite Score, Breaking Score, Trending Score, Confidence Score, Locality Score, Social Score, Sources, Location, First Seen, Last Updated, Trend
+### Publishing
+In the Publish tab:
+1. Select platform: Twitter, Facebook, LinkedIn, YouTube, TikTok, WordPress, Custom Webhook, RSS
+2. Click Publish — content is sent to the selected platform
+3. Track publish status: PENDING, PUBLISHED, FAILED, SCHEDULED
+4. For scheduled publishing, set a future date/time
 
-### Resizing Columns
-Drag the right edge of any column header to resize it. Changes save to your current view.
+### One-Click Broadcast Package
+POST /broadcast-package/generate with a story ID generates ALL formats in parallel:
+- TV anchor read (30s and 60s)
+- Radio news brief (30s and 60s)
+- Web article (200 words, SEO-friendly)
+- Social media post (280 chars with hashtags)
+- Social media thread (4 tweets)
+- Push notification (title + body)
 
-## Email Alerts & Subscriptions
+## Breaking News Ticker
+The orange/red bar at the bottom of every page shows BREAKING stories.
+- Orange = BREAKING status stories
+- Red = ALERT status stories (emergencies)
+- Stories scroll left-to-right like a news ticker
+- Hover to pause scrolling
+- Click any story title to open its detail page
+- Auto-refreshes every 15 seconds
+- Only appears when there are BREAKING/ALERT stories
 
-### Setting Up Email Alerts
-1. Go to your profile (click avatar top-right) → Email Alerts tab
-2. Click "Subscribe"
-3. Select a saved view — alerts will use that view's filters
-4. Enter your email address
-5. Choose frequency: hourly, daily, or weekly
-6. Set max stories per email
-7. You'll receive emails with stories matching your saved view
+## AI Chatbot
+Click the blue chat icon (bottom-right) or press Cmd+K to open.
 
-## Data Sources
+### What It Can Do
+- Search stories: "what's breaking in Houston?"
+- Explain scores: "why is this story trending?"
+- Manage sources: "add this RSS feed", "show inactive sources"
+- Pipeline operations: "pull new stories", "clear failed jobs"
+- Generate content: "write a TV script for this story"
+- Navigate: "go to markets page"
+- Answer questions: "how many sources do we have?"
 
-### Source Types
-- **RSS Feeds** — Standard news website feeds, polled every 5 minutes
-- **Event Registry** — Global news API with 200K+ sources
-- **Newscatcher** — News search API with category classification
-- **HyperLocal Intel** — Geo-scored local news aggregation
-- **X/Twitter** — Social media monitoring via API
-- **LLM Sources** — AI models (OpenAI, Grok, Gemini) scanning for breaking news
-- **Web Scrapers** — Direct website monitoring for sites without RSS
-- **GDELT** — Global event validation database
+### Example Prompts
+- "Show me breaking crime stories from the last hour"
+- "Why isn't the Tiger Woods story marked as breaking?"
+- "Assign this story to John and move it to in-progress"
+- "What markets do we cover?"
+- "Generate a radio script for this story"
+- "Is the pipeline healthy?"
 
-### Managing Sources (Admins)
-Go to Sources & Data → Data Feeds:
-- **Add Source** — Click "+ Add Source", choose type, enter URL, assign to markets
-- **Test Feed** — Click the play button to test-poll a source immediately
-- **Bulk Actions** — Select multiple sources to activate, deactivate, or delete
-- **Health Status** — Green = healthy, Yellow = slow, Red = failing
+## Admin Features
 
-## Markets
+### Sources & Data → Data Feeds
+- View all 700+ news sources with health status, trust scores, story counts
+- Click any source to edit: name, URL, platform, trust score, market assignments
+- **Test Feed**: Validates the RSS URL and shows item count
+- **Self-Heal**: Attempts automatic recovery for failing sources (tries browser UA, alternate URLs, proxy-to-direct mapping)
+- **Failure & Healing Log**: Shows timestamped history of failures and self-heal attempts
+- Bulk actions: activate, deactivate, delete, assign markets
 
-### What is a Market?
-A market represents a geographic area (usually a TV market/MSA). TopicPulse comes pre-configured with 50 US metro markets. Each market has:
-- Geographic center (lat/long) and radius
-- Keywords for location matching (county names, neighborhoods)
-- Linked sources that are polled for that market
-- TV and radio stations in the area
+### Sources & Data → Markets
+- 50 US metro markets + National
+- Click any market to edit: name, state, coordinates, radius, timezone, keywords, neighborhoods
+- Sources tab shows TV stations, radio stations, and other sources linked to that market
+- Auto-fill: AI generates keywords, neighborhoods, and coordinates from market name
 
-### The National Market
-"National" is a special market for stories that aren't location-specific. National stories are only shown when you explicitly select the National market filter.
+### AI & Content → Knowledge Base
+- Documents injected into all AI prompts (chatbot, NLP search, content generation)
+- Click "Auto-Generate Schema Docs" to regenerate from code
+- Add custom knowledge documents (editorial guidelines, market context, etc.)
 
-### Market Management (Admins)
-Go to Sources & Data → Markets:
-- **Sync All 50 Markets** — Import all pre-configured US MSA markets
-- **Activate/Deactivate** — Only active markets get their sources polled
-- **Edit** — Modify keywords, neighborhoods, radius for better matching
+### System → Team & Roles
+- Manage users and role assignments
+- Roles: VIEWER (read-only), EDITOR (assign/edit), ADMIN (configure), OWNER (full access)
+- Role determines which workflow stages a user can access
 
-## AI Assistant (Chatbot)
+## Scoring Explained (Detailed)
 
-### Opening the Assistant
-- Click the blue bot icon in the bottom-right corner
-- Or press Cmd+K (Mac) / Ctrl+K (Windows)
+### How Composite Score Works
+The score (0-100) shown on the dashboard blends 5 sub-scores:
+- Breaking (25%): How fast are new sources picking this up?
+- Trending (20%): Is the story accelerating or decaying?
+- Confidence (15%): How trustworthy are the sources?
+- Locality (15%): How relevant is this to your local market?
+- Social (25%): What's the social media engagement?
 
-### What You Can Ask
-- "What's breaking?" — Get current breaking stories
-- "Show me Houston crime" — Search with filters
-- "Tell me about this story" — Get details on the story you're viewing
-- "Why is this trending?" — Explain a story's scores
-- "Assign this to John" — Workflow action on current story
-- "How many sources are active?" — System statistics
-- "Clear failed jobs" — Pipeline maintenance
-- "Generate a TV script for this story" — Content generation
+Plus bonus scoring:
+- Stories spreading across 2+ markets get a propagation boost (+5-15%)
+- Stories matching your newsroom's most-covered categories get an audience affinity boost (+10%)
+- New stories (< 60 min) with accelerating source velocity get a pre-break boost (+15%)
 
-### Tips
-- The assistant knows what page you're on and what story you're viewing
-- It can navigate you to any page: "go to sources", "open markets"
-- It remembers your conversation context (last 10 messages)
-- It uses the same scoring and filtering as the main dashboard
-
-## News Pipeline
-
-### Understanding the Pipeline
-The pipeline panel (top of dashboard) shows real-time processing status:
-- **Ingestion** — Fetching new content from sources
-- **Enrichment** — Classifying category, extracting entities and location
-- **Clustering** — Grouping related posts into stories
-- **Scoring** — Calculating scores and updating story status
-
-### Pipeline Controls
-- **Pull Now** — Force immediate ingestion (1h, 6h, or 24h lookback)
-- **Clear Pending** — Remove all waiting jobs from all queues
-- **Clear Failed** — Remove all failed jobs from all queues
-- **Per-queue controls** — Expand any queue to see jobs, clear failures, or force-run
-
-### Why Might the Pipeline Stall?
-- No users active for 6+ minutes (polling pauses to save costs)
-- API rate limits hit on source providers
-- Redis connection issues
-- Source configuration errors (bad URLs, expired tokens)
-
-## User Roles
-
-| Role | Can View | Can Edit | Can Manage Sources | Can Manage Users | Can Tune Algorithm |
-|------|----------|----------|--------------------|------------------|--------------------|
-| VIEWER | Stories in their markets | No | No | No | No |
-| EDITOR | Stories in their markets | Yes (assign, draft, notes) | No | No | No |
-| ADMIN | All stories | Yes | Yes | Yes | No |
-| OWNER | All stories | Yes | Yes | Yes | Yes |
-
-## Account Settings
-
-### Profile
-Click your avatar (top-right) → My Profile:
-- **Profile tab** — Update name, phone, timezone
-- **Password tab** — Change your password
-- **Access tab** — See your accounts, roles, and markets
-- **Views tab** — Manage saved dashboard views
-- **Email Alerts tab** — Manage email subscriptions
-
-## Keyboard Shortcuts
-- **Cmd/Ctrl + K** — Open AI Assistant
-- **Escape** — Close modals and drawers
+### What the Icons Mean
+- ⭐ Yellow star = Famous person mentioned (hover for names)
+- ✓ Blue checkmark = VERIFIED by 3+ independent sources
+- ⚠ Orange warning = Only 1 source (SINGLE SOURCE)
+- ☑ Green checkbox = Your newsroom has covered this story
+- □ Empty square = Not yet covered
 
 ## Troubleshooting
 
-### "I see 0 stories"
-1. Click the "Clear" button to reset all filters
-2. Expand the time range to 24h or 7d
-3. Check that the pipeline is running (should show "jobs in progress")
-4. If pipeline is idle, click "Pull Now" to trigger fresh ingestion
-5. If there are many failed jobs, use "Clear Failed" and re-trigger
+### No stories showing
+1. Click Clear to reset all filters
+2. Expand time range to 24h or 7d
+3. Check pipeline status (expand the "News Pipeline" panel at top)
+4. If many failed jobs, expand the pipeline panel and click "Clear Failed"
+5. Ask the chatbot: "is the pipeline healthy?"
 
-### "Stories aren't updating"
-1. Check if anyone has been active in the last 6 minutes (polling pauses when idle)
-2. Open the pipeline panel — are jobs processing?
-3. Check for failed jobs in the pipeline — they may indicate source issues
-4. Ask your admin to check source health in Data Feeds
+### Source showing as INACTIVE
+1. Click the source to open edit modal
+2. Click "Self-Heal" to attempt automatic recovery
+3. Review the Failure & Healing Log for details
+4. If the URL is a proxy (rsshub.app), the self-healer will try the direct source URL
+5. Toggle the Active switch to reactivate manually
 
-### "Scores seem wrong"
-1. Scores are relative and recalculated every 10 minutes
-2. Breaking scores decay over time — this is by design
-3. Local stories have lower thresholds than national stories
-4. Social engagement boosts both breaking and trending scores
-5. Ask the AI assistant "explain the score for this story" for a detailed breakdown
+### Filters seem stuck
+1. Click Clear to reset all filters
+2. If still showing old data, save the view (click Save) to persist the clean state
+3. Refresh the page — filters load from the saved view, not from stale localStorage
 
-### "I can't see a story someone else mentioned"
-1. You may not have access to that market — check your Access settings
-2. The story may have been archived (older than 72 hours)
-3. Try expanding your time range to 30 days
-4. National stories only show when National market is selected
-
-### "Email alerts aren't arriving"
-1. Check your spam/junk folder
-2. Verify your email in Profile → Email Alerts
-3. Make sure the saved view has matching stories (test by loading the view)
-4. Alerts only send when there are new stories matching the view's filters
+### Stories not scoring properly
+1. Check if the scoring queue has failed jobs (pipeline panel)
+2. Stories need to be scored to get verification badges and proper status
+3. Admin can force re-score: pipeline panel → Scoring → Run Now
 `.trim();
 }

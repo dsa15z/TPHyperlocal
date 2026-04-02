@@ -5,196 +5,118 @@
 
 export function generateBackendServicesKnowledge(): string {
   return `
-# TopicPulse Backend Services & Architecture
+# TopicPulse — Backend Services Architecture
 
-## System Architecture
-TopicPulse is a monorepo with four services:
-- **Backend** (Fastify): REST API, auth, routes — deployed on Railway
-- **Worker** (BullMQ): Background job processors — deployed on Railway
-- **Frontend** (Next.js 14): UI — deployed on Vercel
-- **MCP Server**: AI tool interface (read-only story queries) — deployed on Railway
-
-All services share PostgreSQL (source of truth) and Redis (queues, cache, ephemeral state).
-
-## Data Pipeline (strict order)
+## Pipeline Architecture (Strict Order)
 \`\`\`
 Sources → Ingestion Worker → SourcePost table
-  → Enrichment Worker (category, entities, location)
-  → Clustering Worker (dedup, merge into Story)
-  → Scoring Worker (5 scores + status transition)
+  → Enrichment Worker (category, entities, location, famous person detection)
+  → Clustering Worker (dedup, merge into Story, write StoryEntity)
+  → Scoring Worker (5 scores + verification + status transition + propagation + audience + pre-break)
   → REST API / MCP Server / RSS feeds serve the results
 \`\`\`
 
 Each stage is idempotent and independently retryable. Failure in one stage does not block others.
+BullMQ queues with Redis broker. Jobs have 3 retry attempts with exponential backoff.
 
-## Worker Services
+## Core Pipeline Workers
 
-### Core Pipeline Workers
-1. **ingestion.worker** — Fetches content from RSS/API sources, creates SourcePost records. Dedup guard: platformPostId unique index prevents double-ingestion.
-2. **enrichment.worker** — Classifies category, extracts entities (people, orgs, places), determines location. Uses keyword matching + LLM fallback.
-3. **clustering.worker** — Groups related SourcePosts into Stories. Uses Jaccard similarity on titles + person entity matching. MUST run serially (no concurrent clustering).
-4. **scoring.worker** — Calculates 5 scores (breaking, trending, confidence, locality, social) and transitions story status. Runs after each clustering pass.
+### 1. ingestion.worker.ts — Source Polling & Content Fetching
+- Queue: ingestion, Concurrency: 10
+- Fetches content from RSS feeds, news APIs, Twitter, Facebook
+- Dedup: platformPostId unique index prevents double-ingestion
+- Content hash: SHA-256 hash dedup catches duplicate content from different URLs
+- Self-healing: 10 strategies for failing sources
+- Rotating pool of 12 real browser UAs to prevent bot detection
+- HTTP caching: ETag/If-Modified-Since conditional fetch, content-hash skip
+- Per-domain 3-second throttle via Redis
+- Tracks consecutive failures, auto-deactivates at 10
 
-### Enrichment Workers
-5. **article-extraction.worker** — Extracts full article text from source URLs
-6. **geocoding.worker** — Resolves location names to lat/long coordinates
-7. **embeddings.worker** — Generates vector embeddings for semantic search
-8. **summarization.worker** — Generates AI summaries for stories
-9. **sentiment.worker** — Analyzes sentiment (positive/negative/neutral)
-10. **credibility.worker** — Scores source credibility and trust
+### 2. enrichment.worker.ts — NLP Classification & Entity Extraction
+- Queue: enrichment, Concurrency: 10
+- Step 1: Keyword-based categorization (14 categories)
+- Step 2: Regex entity extraction (people, organizations, locations)
+- Step 3: Location extraction (neighborhoods, streets, cities)
+- Step 4: LLM enrichment when heuristic returns OTHER or no location
+  - Single call extracts: CATEGORY, LOCATION, ENTITIES, FAMOUS persons
+  - Uses OpenAI → Grok → Gemini fallback chain
 
-### Content Generation Workers
-11. **first-draft.worker** — Generates TV scripts, web articles, social posts using LLM
-12. **video-generation.worker** — Creates video content packages
+### 3. clustering.worker.ts — Story Dedup & Aggregation
+- Queue: clustering, Concurrency: 1 (SERIAL — prevents merge race conditions)
+- Title dedup: Jaccard similarity threshold 0.65
+- Person entity matching: shared person names boost similarity
+- Embedding similarity: cosine on JSON embeddings (0.75 merge, 0.60 related)
+- Writes entities to StoryEntity table
+- Sets hasFamousPerson + famousPersonNames on new stories
 
-### Source-Specific Workers
-13. **event-registry.worker** — Polls Event Registry API for news articles
-14. **newscatcher.worker** — Polls Newscatcher API for news
-15. **hyperlocal-intel.worker** — Polls HyperLocal Intel API for geo-scored local news
-16. **llm-ingestion.worker** — Uses OpenAI/Grok/Gemini to scan for breaking news
-17. **web-scraper.worker** — Scrapes configured web pages for content
-18. **social-monitor.worker** — Monitors social media platforms
+### 4. scoring.worker.ts — Score Calculation & Verification
+- Queue: scoring, Concurrency: 5
+- Formula: compositeScore = 0.25×breaking + 0.20×trending + 0.15×confidence + 0.15×locality + 0.25×social
+- Bonus: propagation (+5-15%), audience affinity (+10%), pre-break velocity (+15%)
+- Verification: 3+ sources + confidence >= 0.5 → VERIFIED
+- Status determination with tiered thresholds (local markets lower)
 
-### Analytics & Alert Workers
-19. **prediction.worker** — Viral prediction using regression model
-20. **velocity-scorer.worker** — Real-time velocity scoring for breaking detection
-21. **beat-alert.worker** — Sends alerts when stories match reporter beats
-22. **notification.worker** — Push notifications for breaking stories
-23. **digest.worker** — Compiles email digest summaries
-24. **shift-briefing.worker** — Generates shift handoff briefings
+### 5. news-director.worker.ts — AI News Director
+- Queue: news-director, Concurrency: 1, Runs every 5 min
+- Evaluates top 20 hot stories, generates editorial alerts
+- Alert types: cover_now, famous_person, spreading
+- Stores in Redis key news-director:alerts (10-min TTL)
 
-### Operational Workers
-25. **account-story-sync.worker** — Syncs base story updates to AccountStory derivatives
-26. **domain-scoring.worker** — Scores source domains for trust
-27. **rss-discovery.worker** — Auto-discovers RSS feeds from URLs
-28. **story-splitter.worker** — Splits multi-topic stories into separate stories
-29. **story-research.worker** — Deep research on story background
-
-## Poll Scheduler
-The poll scheduler runs in the worker service and manages all source polling intervals:
+## Polling Schedule
 
 | Source Type | Interval | Notes |
-|-------------|----------|-------|
-| RSS feeds | 5 min | Standard RSS polling |
-| NewsAPI / Twitter | 3 min | Real-time sources |
-| Facebook pages | 5 min | Graph API polling |
-| Grok fast poll | 5 min | X/Twitter intelligence |
-| Sentiment analysis | 5 min | On new stories |
-| Digests | 5 min | Email delivery check |
-| Account story sync | 5 min | Upstream sync |
-| Newscatcher | 10 min | API rate limits |
-| LLM ingestion | 10 min | Cost control |
-| Embeddings | 10 min | Vector generation |
-| Score decay | 10 min | Lower stale scores |
-| HyperLocal Intel | 15 min | Geo-scored news |
-| Event Registry | 15 min | Global news |
-| Geocoding | 15 min | Location resolution |
-| Summarization | 15 min | AI summaries |
-| Web scraper | 30 min | Website polling |
-| Stock monitor | 30 min | Financial data |
-| Cleanup (archival) | 60 min | Archive old stories |
-| Credibility | 24 hours | Trust recalculation |
+|------------|----------|-------|
+| RSS feeds | 5 min | National always polls, local pauses when idle |
+| NewsAPI/Twitter | 3 min | Pauses when idle |
+| Grok LLM | 5 min | Consolidated multi-market call |
+| Bing/Google News | 5 min | Dynamic per-market URLs |
+| Event Registry | 15 min | Consolidated per-market |
+| Newscatcher | 10 min | |
+| HyperLocal Intel | 15 min | |
+| Web scrapers | 30 min | |
+| Embeddings | 10 min | Skips already-embedded |
+| Score decay | 10 min | Re-scores non-archived |
+| Cleanup | 1 hour | Archives stories > 72h |
+| News Director | 5 min | Proactive alerts |
 
-### Idle Detection (Cost Control)
-- Frontend sends heartbeat to Redis key \`tp:last_ui_activity\` every few seconds
-- If no heartbeat for 6 minutes, ALL polling stops
-- This saves API costs when no one is watching
-- Polling resumes immediately when a user opens the UI
-- isUIActive() check is at the top of every poll function
+## Idle Detection
+- Frontend heartbeat → Redis tp:last_ui_activity
+- 6-minute timeout → most polling stops (cost control)
+- Exempt: National RSS, embeddings, score decay, cleanup, account sync
+- Fail-open: if Redis down, assumes active
 
-## Queue System (BullMQ + Redis)
-Queue names: ingestion, enrichment, clustering, scoring, llm-ingestion, hyperlocal-intel, article-extraction, geocoding, embeddings, summarization, sentiment, credibility, first-draft, digest, newscatcher, alerts, coverage
+## Self-Healing (10 Strategies, triggers at failure 3 and 7)
+1. Proxy-to-direct URL mapping (rsshub → apnews)
+2. Browser UA + full headers (rotating 12 UAs)
+3. HTML-not-RSS detection → switch to web scraping
+4. 9 RSS URL variants (/feed, /rss, /rss.xml, etc.)
+5. Protocol variants (www/non-www, https/http)
+6. RSS auto-discovery from HTML link tags
+7. Switch to web scraping (last resort)
+8. Per-domain throttle (3s via Redis)
+9. Redirect tracking (update URL on redirect)
+10. Bot challenge detection (Cloudflare, Akamai, PerimeterX, DataDome, Anubis)
+Auto-deactivate at failure 10. Audit log in source.metadata.failureLog[].
 
-Key patterns:
-- Each job must be idempotent — safe to retry (3 attempts, exponential backoff)
-- Queue instances MUST be closed after use: await queue.close()
-- Dedup guard: platformPostId unique index prevents double-ingestion
-- StorySource unique constraint prevents double-linking
-- Clustering runs serially — no concurrent story merges
+## Source Management
+- SourceMarket M:N join table (not legacy Source.marketId FK)
+- Consolidated sources: 1 Bing/Google/ER/Grok source → dynamic per-market polls
+- fix-source-markets: auto-links sources to markets by name matching
+- consolidate-news-sources: merges per-market duplicates
 
-## Backend API Routes
+## LLM Factory (Multi-Provider Fallback)
+- OpenAI (gpt-4o-mini) → Grok (grok-3-mini) → Gemini (gemini-2.0-flash)
+- Used by: enrichment, summarization, NLP search, chatbot, verification, broadcast packages
 
-### Public (no auth)
-- GET /api/v1/health — service health check
-- GET /api/v1/feeds/* — RSS feed output
-- GET /api/v1/stories (read-only with limited features)
-
-### Authenticated (x-api-key or JWT Bearer)
-- Stories: GET/POST /api/v1/stories, GET /api/v1/stories/:id
-- Account Stories: POST/PATCH /api/v1/account-stories/:baseStoryId/*
-- Pipeline: GET/POST /api/v1/pipeline/* (status, trigger, clear, drain)
-- Sources: GET/POST/PATCH/DELETE /api/v1/admin/sources
-- Markets: GET/POST/PATCH /api/v1/admin/markets
-- Knowledge: GET/POST/DELETE /api/v1/admin/knowledge
-- Moderation: GET/POST /api/v1/moderation/*
-- User Settings: GET/PATCH /api/v1/user/settings/*
-- Assistant: POST /api/v1/assistant/chat, GET /api/v1/assistant/alerts
-- Content: POST /api/v1/first-drafts, /api/v1/conversation-starters/*
-
-### Rate Limiting
-- 100 requests/minute per API key
-- Pagination: limit (max 100) + offset
-- Sorting: sort + order params
-
-## LLM Integration (llm-factory.ts)
-Supports multiple providers with automatic fallback:
-1. **OpenAI** (gpt-4o-mini) — primary
-2. **xAI Grok** (grok-3-mini) — secondary, has live X/Twitter access
-3. **Google Gemini** (gemini-2.0-flash) — tertiary
-
-Features:
-- Function calling support for structured output
-- System prompt injection with RAG knowledge base
-- Temperature control per use case
-- Automatic retry with provider fallback
-
-## Scoring System Detail
-
-### Breaking Score Calculation
-- Source velocity: posts per 15-minute window
-- Source diversity: number of unique source platforms
-- Recency: exponential decay from firstSeenAt
-- Category-specific decay curves (EMERGENCY decays slower)
-- 3+ sources in 15 min → automatic BREAKING threshold
-
-### Status Transitions
-Valid transitions follow a directed graph:
-- ALERT → BREAKING, DEVELOPING
-- BREAKING → DEVELOPING, TOP_STORY, ONGOING
-- DEVELOPING → BREAKING, TOP_STORY, ONGOING
-- TOP_STORY → ONGOING, FOLLOW_UP, STALE
-- ONGOING → TOP_STORY, FOLLOW_UP, STALE
-- FOLLOW_UP → ONGOING, STALE
-- STALE → ONGOING, ARCHIVED
-- ARCHIVED → (terminal, no transitions out)
-
-Local markets use LOWER thresholds:
-- Breaking: > 0.35 (vs 0.6 national)
-- This means local stories surface faster
-
-### Score Decay
-Every 10 minutes, scores for non-archived stories are recalculated:
-- Breaking score decays exponentially based on time since last source
-- Stories transition STALE after 48 hours of no activity
-- Stories ARCHIVE after 72 hours of no activity
-
-## Database Key Models
-
-### Story (core entity)
-- Linked to SourcePosts via StorySource join table
-- Has pastScores (JSON) for growth calculation
-- peakBreakingScore and peakStatus track historical highs
-- mergedIntoId links to parent when stories are merged
-
-### Source → Market (M:N)
-- SourceMarket join table links sources to markets
-- Source has NO accountId field — use AccountSource for account links
-- Sources only polled when their markets are active
-
-### AccountStory (copy-on-write)
-- Created lazily on first user action
-- Links accountId + baseStoryId (unique)
-- Private fields: editedTitle, editedSummary, notes, assignedTo, aiDrafts, etc.
-- lastSyncedAt tracks when base story updates were pulled in
+## Key Pipeline Endpoints
+- POST /pipeline/trigger — force ingestion
+- POST /pipeline/run-queue — force run queue
+- POST /pipeline/clear-failed — clear failed jobs
+- POST /pipeline/heal-source/:id — self-heal single source
+- POST /pipeline/fix-source-markets — create tables + link sources
+- POST /pipeline/consolidate-news-sources — merge duplicates
+- POST /pipeline/backfill-famous — detect famous persons in existing stories
+- POST /broadcast-package/generate — one-click multi-format content
+- POST /stories/:id/verify — LLM dual-check verification
 `.trim();
 }
