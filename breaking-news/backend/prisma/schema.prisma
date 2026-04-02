@@ -77,6 +77,9 @@ model Account {
   feeds          RSSFeed[]
   coverageFeeds  CoverageFeed[]
   auditLogs      AuditLog[]
+  workflowStages    WorkflowStage[]
+  publishedContent  PublishedContent[]
+  audioSpots        AudioSpot[]
 
   @@index([slug])
   @@index([isActive])
@@ -447,6 +450,10 @@ model AccountStory {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  publishedContent  PublishedContent[]
+  audioSpots        AudioSpot[]
+  editorialComments EditorialComment[]
 
   @@unique([accountId, baseStoryId])
   @@index([accountId, accountStatus])
@@ -1280,4 +1287,96 @@ model SystemKnowledge {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([category])
+}
+
+// ─── Editorial Workflow ────────────────────────────────────────────────────
+// Per-tenant customizable workflow stages. Each account defines their own
+// pipeline from Lead → Published. Default stages are seeded on account creation.
+
+model WorkflowStage {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String   // e.g., "Lead", "Assigned", "In Progress", "Draft Ready", "Editor Review", "Approved", "Published"
+  slug        String   // e.g., "lead", "assigned", "in-progress"
+  order       Int      // display order (0 = first)
+  color       String   @default("#6B7280") // hex color for UI badges
+  icon        String?  // lucide icon name
+  requiredRole String  @default("VIEWER") // minimum role to move INTO this stage
+  isInitial   Boolean  @default(false) // the starting stage (only one per account)
+  isFinal     Boolean  @default(false) // terminal stage (Published, Killed)
+  autoActions Json?    // array of { type: "notify_slack"|"send_email"|"generate_draft"|"trigger_webhook", config: {} }
+  createdAt   DateTime @default(now())
+
+  @@unique([accountId, slug])
+  @@index([accountId, order])
+}
+
+// Published content: tracks what was published, where, and when
+model PublishedContent {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+
+  platform        String   // "wordpress", "rss", "twitter", "facebook", "linkedin", "tiktok", "youtube", "instagram", "custom_webhook"
+  externalId      String?  // ID on the external platform
+  externalUrl     String?  // URL on the external platform
+  contentType     String   @default("article") // "article", "video", "audio", "social_post", "thread"
+  content         Json?    // the actual content that was published (title, body, media URLs)
+  status          String   @default("PENDING") // PENDING, PUBLISHED, FAILED, SCHEDULED
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  error           String?  // error message if failed
+  metadata        Json?    // platform-specific metadata
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@index([accountStoryId])
+  @@index([platform])
+}
+
+// Audio spots generated for stories
+model AudioSpot {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+
+  title           String
+  script          String   @db.Text  // the script that was read
+  voiceId         String   @default("alloy") // OpenAI TTS voice
+  format          String   @default("30s") // "15s", "30s", "60s", "full"
+  audioUrl        String?  // URL to the generated audio file (stored on S3 or inline base64)
+  audioBase64     String?  @db.Text  // base64-encoded audio if no S3
+  durationMs      Int?
+  model           String   @default("tts-1") // OpenAI model
+  status          String   @default("PENDING") // PENDING, GENERATING, READY, FAILED
+  error           String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([accountStoryId])
+  @@index([accountId])
+}
+
+// Editorial comments on stories (editor sends back to reporter with notes)
+model EditorialComment {
+  id              String   @id @default(cuid())
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+  userId          String
+
+  content         String   @db.Text
+  action          String?  // "approve", "reject", "send_back", "comment"
+  fromStage       String?  // stage when comment was made
+  toStage         String?  // stage it moved to
+
+  createdAt       DateTime @default(now())
+
+  @@index([accountStoryId, createdAt])
 }
