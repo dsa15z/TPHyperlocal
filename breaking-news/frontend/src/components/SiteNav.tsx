@@ -74,7 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
   // ────────────────────────────────────────────────────────────────────────
   {
     id: "stories",
-    label: "Stories",
+    label: "Leads",
     icon: Newspaper,
     directLink: "/",
     items: [],

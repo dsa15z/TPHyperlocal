@@ -563,7 +563,6 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     // Non-fatal: log and continue — scoring still works without verification
     logger.debug({ storyId, err: (verifyErr as Error).message }, 'Verification update skipped');
   }
-  });
 
   // Create score snapshot with all scores (TopicPulse stored at 5/15/30/45/60/90/120 min)
   await prisma.scoreSnapshot.create({

@@ -294,7 +294,7 @@ function DashboardContent() {
         {/* Results count */}
         {!isLoading && (
           <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>{total} stories found</span>
+            <span>{total} leads found</span>
             {total > 0 && (
               <span>
                 Page {currentPage} of {totalPages}
@@ -309,7 +309,7 @@ function DashboardContent() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-300/30 mb-4">
               <Search className="w-7 h-7 text-gray-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories found</h3>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No leads found</h3>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
               Try a different search term, adjust filters, or expand the time range.
             </p>
@@ -325,9 +325,9 @@ function DashboardContent() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-300/30 mb-4">
               <Search className="w-7 h-7 text-gray-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories found</h3>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No leads found</h3>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
-              No stories found matching your filters. Try adjusting the time range or clearing filters.
+              No leads found matching your filters. Try adjusting the time range or clearing filters.
             </p>
           </div>
         )}
@@ -442,13 +442,13 @@ function TeaserDashboard() {
 
         {/* Story list — simple table, no customization */}
         {isLoading && (
-          <div className="glass-card p-12 text-center text-gray-500">Loading latest stories...</div>
+          <div className="glass-card p-12 text-center text-gray-500">Loading latest leads...</div>
         )}
 
         {!isLoading && stories.length === 0 && (
           <div className="glass-card p-12 text-center">
             <Search className="w-8 h-8 mx-auto mb-3 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-300 mb-2">No stories available</h3>
+            <h3 className="text-lg font-semibold text-gray-300 mb-2">No leads available</h3>
             <p className="text-gray-500 text-sm">Check back shortly — stories update continuously.</p>
           </div>
         )}
@@ -546,7 +546,7 @@ function TeaserDashboard() {
 
         {/* Teaser footer */}
         <div className="text-center text-xs text-gray-600">
-          Showing {stories.length} most recent stories{market ? ` for ${market.name}` : ""}.
+          Showing {stories.length} most recent leads{market ? ` for ${market.name}` : ""}.
           Sign in for unlimited access with filters, AI analysis, and real-time alerts.
         </div>
       </main>

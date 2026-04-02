@@ -60,6 +60,7 @@ import { mediaModerationRoutes } from './routes/media-moderation.js';
 import { extrasRoutes } from './routes/extras.js';
 import { assistantRoutes } from './routes/assistant.js';
 import { userSettingsRoutes } from './routes/user-settings.js';
+import { workflowRoutes } from './routes/workflow.js';
 import { authMiddleware } from './middleware/auth.js';
 import { jwtAuthMiddleware } from './middleware/jwt-auth.js';
 import { prisma } from './lib/prisma.js';
@@ -212,6 +213,7 @@ async function buildServer() {
   await app.register(extrasRoutes, { prefix: '/api/v1' });
   await app.register(assistantRoutes, { prefix: '/api/v1' });
   await app.register(userSettingsRoutes, { prefix: '/api/v1' });
+  await app.register(workflowRoutes, { prefix: '/api/v1/workflow' });
   registerSSERoutes(app);
 
   // Graceful shutdown
@@ -300,6 +302,18 @@ async function ensureTables() {
       `CREATE INDEX IF NOT EXISTS "ViewSubscription_userId_idx" ON "ViewSubscription"("userId")`,
       // System Knowledge (RAG for AI)
       `CREATE TABLE IF NOT EXISTS "SystemKnowledge" (id TEXT PRIMARY KEY, key TEXT NOT NULL UNIQUE, content TEXT NOT NULL, category TEXT DEFAULT 'general', "updatedBy" TEXT, "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      // Editorial Workflow
+      `CREATE TABLE IF NOT EXISTS "WorkflowStage" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL, "order" INTEGER NOT NULL, color TEXT DEFAULT '#6B7280', icon TEXT, "requiredRole" TEXT DEFAULT 'VIEWER', "isInitial" BOOLEAN DEFAULT false, "isFinal" BOOLEAN DEFAULT false, "autoActions" JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW(), UNIQUE("accountId", slug))`,
+      `CREATE INDEX IF NOT EXISTS "WorkflowStage_accountId_order_idx" ON "WorkflowStage"("accountId", "order")`,
+      `CREATE TABLE IF NOT EXISTS "PublishedContent" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "accountStoryId" TEXT NOT NULL, platform TEXT NOT NULL, "externalId" TEXT, "externalUrl" TEXT, "contentType" TEXT DEFAULT 'article', content JSONB, status TEXT DEFAULT 'PENDING', "scheduledFor" TIMESTAMPTZ, "publishedAt" TIMESTAMPTZ, error TEXT, metadata JSONB, "createdAt" TIMESTAMPTZ DEFAULT NOW(), "updatedAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE INDEX IF NOT EXISTS "PublishedContent_accountId_status_idx" ON "PublishedContent"("accountId", status)`,
+      `CREATE INDEX IF NOT EXISTS "PublishedContent_accountStoryId_idx" ON "PublishedContent"("accountStoryId")`,
+      `CREATE INDEX IF NOT EXISTS "PublishedContent_platform_idx" ON "PublishedContent"(platform)`,
+      `CREATE TABLE IF NOT EXISTS "AudioSpot" (id TEXT PRIMARY KEY, "accountId" TEXT NOT NULL, "accountStoryId" TEXT NOT NULL, title TEXT NOT NULL, script TEXT NOT NULL, "voiceId" TEXT DEFAULT 'alloy', format TEXT DEFAULT '30s', "audioUrl" TEXT, "audioBase64" TEXT, "durationMs" INTEGER, model TEXT DEFAULT 'tts-1', status TEXT DEFAULT 'PENDING', error TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE INDEX IF NOT EXISTS "AudioSpot_accountStoryId_idx" ON "AudioSpot"("accountStoryId")`,
+      `CREATE INDEX IF NOT EXISTS "AudioSpot_accountId_idx" ON "AudioSpot"("accountId")`,
+      `CREATE TABLE IF NOT EXISTS "EditorialComment" (id TEXT PRIMARY KEY, "accountStoryId" TEXT NOT NULL, "userId" TEXT NOT NULL, content TEXT NOT NULL, action TEXT, "fromStage" TEXT, "toStage" TEXT, "createdAt" TIMESTAMPTZ DEFAULT NOW())`,
+      `CREATE INDEX IF NOT EXISTS "EditorialComment_accountStoryId_createdAt_idx" ON "EditorialComment"("accountStoryId", "createdAt")`,
     ];
 
     let created = 0;

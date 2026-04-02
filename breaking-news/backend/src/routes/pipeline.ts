@@ -991,6 +991,94 @@ export async function pipelineRoutes(
       `;
       await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "SystemKnowledge_category_idx" ON "SystemKnowledge"("category")`;
 
+      // ── Editorial Workflow tables ──────────────────────────────────────
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "WorkflowStage" (
+          "id" TEXT NOT NULL DEFAULT concat('ws_', gen_random_uuid()),
+          "accountId" TEXT NOT NULL,
+          "name" TEXT NOT NULL,
+          "slug" TEXT NOT NULL,
+          "order" INTEGER NOT NULL,
+          "color" TEXT NOT NULL DEFAULT '#6B7280',
+          "icon" TEXT,
+          "requiredRole" TEXT NOT NULL DEFAULT 'VIEWER',
+          "isInitial" BOOLEAN NOT NULL DEFAULT false,
+          "isFinal" BOOLEAN NOT NULL DEFAULT false,
+          "autoActions" JSONB,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "WorkflowStage_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "WorkflowStage_accountId_slug_key" UNIQUE ("accountId", "slug"),
+          CONSTRAINT "WorkflowStage_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "WorkflowStage_accountId_order_idx" ON "WorkflowStage"("accountId", "order")`;
+
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "PublishedContent" (
+          "id" TEXT NOT NULL DEFAULT concat('pc_', gen_random_uuid()),
+          "accountId" TEXT NOT NULL,
+          "accountStoryId" TEXT NOT NULL,
+          "platform" TEXT NOT NULL,
+          "externalId" TEXT,
+          "externalUrl" TEXT,
+          "contentType" TEXT NOT NULL DEFAULT 'article',
+          "content" JSONB,
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "scheduledFor" TIMESTAMP(3),
+          "publishedAt" TIMESTAMP(3),
+          "error" TEXT,
+          "metadata" JSONB,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "PublishedContent_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "PublishedContent_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE,
+          CONSTRAINT "PublishedContent_accountStoryId_fkey" FOREIGN KEY ("accountStoryId") REFERENCES "AccountStory"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PublishedContent_accountId_status_idx" ON "PublishedContent"("accountId", "status")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PublishedContent_accountStoryId_idx" ON "PublishedContent"("accountStoryId")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "PublishedContent_platform_idx" ON "PublishedContent"("platform")`;
+
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "AudioSpot" (
+          "id" TEXT NOT NULL DEFAULT concat('as_', gen_random_uuid()),
+          "accountId" TEXT NOT NULL,
+          "accountStoryId" TEXT NOT NULL,
+          "title" TEXT NOT NULL,
+          "script" TEXT NOT NULL,
+          "voiceId" TEXT NOT NULL DEFAULT 'alloy',
+          "format" TEXT NOT NULL DEFAULT '30s',
+          "audioUrl" TEXT,
+          "audioBase64" TEXT,
+          "durationMs" INTEGER,
+          "model" TEXT NOT NULL DEFAULT 'tts-1',
+          "status" TEXT NOT NULL DEFAULT 'PENDING',
+          "error" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "AudioSpot_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "AudioSpot_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE CASCADE,
+          CONSTRAINT "AudioSpot_accountStoryId_fkey" FOREIGN KEY ("accountStoryId") REFERENCES "AccountStory"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "AudioSpot_accountStoryId_idx" ON "AudioSpot"("accountStoryId")`;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "AudioSpot_accountId_idx" ON "AudioSpot"("accountId")`;
+
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "EditorialComment" (
+          "id" TEXT NOT NULL DEFAULT concat('ec_', gen_random_uuid()),
+          "accountStoryId" TEXT NOT NULL,
+          "userId" TEXT NOT NULL,
+          "content" TEXT NOT NULL,
+          "action" TEXT,
+          "fromStage" TEXT,
+          "toStage" TEXT,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "EditorialComment_pkey" PRIMARY KEY ("id"),
+          CONSTRAINT "EditorialComment_accountStoryId_fkey" FOREIGN KEY ("accountStoryId") REFERENCES "AccountStory"("id") ON DELETE CASCADE
+        )
+      `;
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "EditorialComment_accountStoryId_createdAt_idx" ON "EditorialComment"("accountStoryId", "createdAt")`;
+
       // Add new Story columns if they don't exist
       await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "hasFamousPerson" BOOLEAN DEFAULT false`;
       await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "famousPersonNames" JSONB`;
