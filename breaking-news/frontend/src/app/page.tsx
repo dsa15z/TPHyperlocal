@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search, Zap, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
 import { fetchStories, fetchTeaserStories, type StoryFilters, type TeaserResponse } from "@/lib/api";
 import { useUser } from "@/components/UserProvider";
@@ -59,6 +59,50 @@ function storyFiltersToSaved(filters: StoryFilters): SavedFilters {
     uncoveredOnly: filters.uncovered_only,
     trend: filters.trend,
   };
+}
+
+// ─── Breaking Banner ──────────────────────────────────────────────────────
+
+function BreakingBanner({ stories }: { stories: Array<{ id: string; title: string; status: string; source_count: number }> }) {
+  const breaking = stories.filter(s => s.status === "BREAKING" || s.status === "ALERT");
+  if (breaking.length === 0) return null;
+
+  const alerts = breaking.filter(s => s.status === "ALERT");
+  const isAlert = alerts.length > 0;
+
+  return (
+    <div className={clsx(
+      "rounded-lg px-4 py-3 flex items-center gap-3 animate-in",
+      isAlert
+        ? "bg-red-500/10 border border-red-500/30"
+        : "bg-orange-500/10 border border-orange-500/30"
+    )}>
+      <div className={clsx(
+        "flex items-center gap-2 font-semibold text-sm whitespace-nowrap",
+        isAlert ? "text-red-400" : "text-orange-400"
+      )}>
+        {isAlert ? <AlertTriangle className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+        {breaking.length} {isAlert ? "ALERT" : "BREAKING"}
+      </div>
+      <div className="flex-1 min-w-0 flex items-center gap-3 overflow-x-auto scrollbar-none">
+        {breaking.slice(0, 5).map(s => (
+          <a
+            key={s.id}
+            href={`/stories/${s.id}`}
+            className={clsx(
+              "text-sm truncate max-w-[300px] hover:underline flex-shrink-0",
+              isAlert ? "text-red-300" : "text-orange-300"
+            )}
+          >
+            {s.title}
+          </a>
+        ))}
+        {breaking.length > 5 && (
+          <span className="text-xs text-gray-500 flex-shrink-0">+{breaking.length - 5} more</span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────
@@ -235,12 +279,15 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-4">
+      <main className="max-w-[1600px] mx-auto px-4 md:px-6 py-6 space-y-4">
+        {/* Breaking stories banner — urgency at a glance */}
+        {!isLoading && stories.length > 0 && <BreakingBanner stories={stories} />}
+
         {/* Pipeline progress */}
         <NewsProgressPanel />
 
         {/* View toolbar */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 flex-wrap">
           <ViewSelector
             views={views}
             activeViewId={activeViewId}
@@ -422,10 +469,10 @@ function TeaserDashboard() {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-6">
+      <main className="max-w-[1200px] mx-auto px-4 md:px-6 py-6 space-y-6">
         {/* Teaser header */}
         <div className="glass-card p-6 text-center space-y-3">
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-xl md:text-2xl font-bold text-white">
             {market ? `${market.name} News Intelligence` : "News Intelligence"}
           </h1>
           <p className="text-gray-400 text-sm max-w-lg mx-auto">
@@ -434,7 +481,7 @@ function TeaserDashboard() {
           </p>
           <a
             href="/auth/login"
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-dim text-white font-medium rounded-lg transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-dim text-white font-medium rounded-lg transition-colors w-full md:w-auto"
           >
             Sign In for Full Access
           </a>
@@ -454,53 +501,94 @@ function TeaserDashboard() {
         )}
 
         {!isLoading && stories.length > 0 && (
-          <div className="glass-card overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-surface-300/30">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Story</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Category</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-24">Sources</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-36">Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stories.map((story) => (
-                  <tr
-                    key={story.id}
-                    className="border-b border-surface-300/10 hover:bg-surface-200/30 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-white line-clamp-2">{story.title}</div>
-                      {story.location && (
-                        <div className="text-xs text-gray-500 mt-0.5">{story.location}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={clsx(
-                        "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
-                        story.status === "BREAKING" && "bg-orange-500/10 text-orange-400",
-                        story.status === "ALERT" && "bg-red-500/10 text-red-400",
-                        story.status === "DEVELOPING" && "bg-blue-500/10 text-blue-400",
-                        story.status === "TOP_STORY" && "bg-purple-500/10 text-purple-400",
-                        story.status === "ONGOING" && "bg-gray-500/10 text-gray-400",
-                      )}>
-                        {story.status?.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">{story.category || "—"}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 tabular-nums">{story.source_count}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block glass-card overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-surface-300/30">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Story</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-28">Category</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-24">Sources</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider w-36">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stories.map((story) => (
+                    <tr
+                      key={story.id}
+                      className="border-b border-surface-300/10 hover:bg-surface-200/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-white line-clamp-2">{story.title}</div>
+                        {story.location && (
+                          <div className="text-xs text-gray-500 mt-0.5">{story.location}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={clsx(
+                          "px-2 py-0.5 rounded text-[10px] font-semibold uppercase",
+                          story.status === "BREAKING" && "bg-orange-500/10 text-orange-400",
+                          story.status === "ALERT" && "bg-red-500/10 text-red-400",
+                          story.status === "DEVELOPING" && "bg-blue-500/10 text-blue-400",
+                          story.status === "TOP_STORY" && "bg-purple-500/10 text-purple-400",
+                          story.status === "ONGOING" && "bg-gray-500/10 text-gray-400",
+                        )}>
+                          {story.status?.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-400">{story.category || "—"}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 tabular-nums">{story.source_count}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {new Date(story.last_updated).toLocaleString(undefined, {
+                          month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="md:hidden space-y-3">
+              {stories.map((story) => (
+                <div
+                  key={story.id}
+                  className="glass-card p-4 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-medium text-white line-clamp-2 flex-1">{story.title}</div>
+                    <span className={clsx(
+                      "px-2 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0",
+                      story.status === "BREAKING" && "bg-orange-500/10 text-orange-400",
+                      story.status === "ALERT" && "bg-red-500/10 text-red-400",
+                      story.status === "DEVELOPING" && "bg-blue-500/10 text-blue-400",
+                      story.status === "TOP_STORY" && "bg-purple-500/10 text-purple-400",
+                      story.status === "ONGOING" && "bg-gray-500/10 text-gray-400",
+                    )}>
+                      {story.status?.replace("_", " ")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-400">
+                    <span>{story.category || "Uncategorized"}</span>
+                    <span className="text-gray-600">|</span>
+                    <span className="tabular-nums">{story.source_count} source{story.source_count !== 1 ? "s" : ""}</span>
+                    <span className="text-gray-600">|</span>
+                    <span className="text-gray-500">
                       {new Date(story.last_updated).toLocaleString(undefined, {
                         month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
                       })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </span>
+                  </div>
+                  {story.location && (
+                    <div className="text-xs text-gray-500">{story.location}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Teaser footer */}

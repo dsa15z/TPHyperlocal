@@ -8,45 +8,33 @@ import {
   AlertTriangle,
   Users,
   Timer,
-  ListOrdered,
   Mic2,
   Send,
-  Video,
   FileText,
   TrendingUp,
   Bell,
   BarChart3,
   Bookmark,
-  Zap,
   Radio,
   DollarSign,
-  Network,
-  Settings,
   Database,
   MapPin,
   Target,
-  Tv,
   Globe,
   Shield,
   MessageSquare,
-  Code,
   Brain,
-  Webhook,
   Crown,
-  Mail,
-  ScrollText,
   KeyRound,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   Menu,
   X,
-  Plug,
   Wrench,
   ClipboardCheck,
   MonitorPlay,
   Share2,
-  Rss,
   LogIn,
   User,
 } from "lucide-react";
@@ -170,7 +158,7 @@ const NAV_GROUPS: NavGroup[] = [
   // ════════════════════════════════════════════════════════════════════════
 
   // ────────────────────────────────────────────────────────────────────────
-  //  SOURCES — Where data comes from
+  //  SOURCES & DATA — Where data comes from + external integrations
   // ────────────────────────────────────────────────────────────────────────
   {
     id: "sources",
@@ -180,27 +168,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/sources", label: "Data Feeds", icon: Database },
       { href: "/admin/markets", label: "Markets", icon: MapPin },
-    ],
-  },
-
-  // ────────────────────────────────────────────────────────────────────────
-  //  COVERAGE & COMPETITION — Tracking competitors and gaps
-  // ────────────────────────────────────────────────────────────────────────
-  // Coverage & Competition removed — accessible via /beat-alerts tab bar
-
-  // ────────────────────────────────────────────────────────────────────────
-  //  INTEGRATIONS — Connecting to external systems
-  // ────────────────────────────────────────────────────────────────────────
-  {
-    id: "integrations",
-    label: "Integrations",
-    icon: Plug,
-    section: "admin",
-    items: [
       { href: "/admin/cms-publish", label: "CMS Publishing", icon: Globe },
-      { href: "/admin/mos-integration", label: "ENPS / iNews", icon: MonitorPlay },
       { href: "/admin/social-accounts", label: "Social Accounts", icon: Share2 },
-      { href: "/admin/slack", label: "Delivery Channels", icon: MessageSquare },
     ],
   },
 
@@ -216,7 +185,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/voices", label: "AI Config", icon: MessageSquare },
       { href: "/admin/knowledge", label: "Knowledge Base", icon: Brain },
       { href: "/admin/editor", label: "Review Queue", icon: ClipboardCheck },
-      { href: "/admin/widgets", label: "Widgets", icon: Code },
     ],
   },
 
@@ -231,10 +199,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/accounts", label: "Team & Roles", icon: Users },
       { href: "/admin/superadmin", label: "Super Admin", icon: Crown },
-      { href: "/admin/feature-flags", label: "Feature Flags", icon: Shield },
-      { href: "/admin/dashboards", label: "Layouts", icon: Settings },
       { href: "/admin/credentials", label: "API Keys", icon: KeyRound },
-      { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
+      { href: "/admin/feature-flags", label: "Feature Flags", icon: Shield },
     ],
   },
 ];

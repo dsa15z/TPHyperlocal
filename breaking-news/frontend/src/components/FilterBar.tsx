@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Search, X } from "lucide-react";
+import { Search, X, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
 import {
   type StoryFilters,
   type SourceWithCount,
@@ -258,8 +258,20 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     timeRange !== "24h" ||
     minScore > 0;
 
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Count how many advanced filters are active (to show badge)
+  const advancedFilterCount =
+    (selectedSources.length > 0 ? 1 : 0) +
+    (selectedMarkets.length > 0 ? 1 : 0) +
+    (trend !== "all" ? 1 : 0) +
+    (minScore > 0 ? 1 : 0) +
+    (uncoveredOnly ? 1 : 0);
+
   return (
-    <div className="glass-card p-4 space-y-4 relative z-30 overflow-visible">
+    <div className="glass-card p-4 space-y-3 relative z-30 overflow-visible">
+      {/* Primary row: search + essential filters */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search input — supports both text search and NLP queries */}
         <div className="relative flex-1 min-w-[220px]">
@@ -279,15 +291,7 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           )}
         </div>
 
-        {/* Category multi-select */}
-        <MultiSelectDropdown
-          options={categoryOptions}
-          selected={selectedCategories}
-          onChange={setSelectedCategories}
-          placeholder="All Categories"
-        />
-
-        {/* Status multi-select */}
+        {/* Status multi-select — always visible */}
         <MultiSelectDropdown
           options={statusOptions}
           selected={selectedStatuses}
@@ -295,75 +299,37 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           placeholder="All Statuses"
         />
 
-        {/* Source multi-select with search */}
+        {/* Category multi-select — always visible */}
         <MultiSelectDropdown
-          options={sourceOptions}
-          selected={selectedSources}
-          onChange={setSelectedSources}
-          placeholder="All Sources"
-          searchable
+          options={categoryOptions}
+          selected={selectedCategories}
+          onChange={setSelectedCategories}
+          placeholder="All Categories"
         />
 
-        {/* Market multi-select with search */}
-        {marketOptions.length > 0 && (
-          <MultiSelectDropdown
-            options={marketOptions}
-            selected={selectedMarkets}
-            onChange={setSelectedMarkets}
-            placeholder="All Markets"
-            searchable
-          />
-        )}
-
-        {/* Time range dropdown */}
+        {/* Time range — always visible */}
         <SingleSelectDropdown
           options={TIME_RANGE_OPTIONS}
           value={timeRange}
           onChange={setTimeRange}
         />
 
-        {/* Trend dropdown */}
-        <SingleSelectDropdown
-          options={TREND_OPTIONS}
-          value={trend}
-          onChange={setTrend}
-        />
-
-        {/* Min score */}
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <label htmlFor="min-score" className="whitespace-nowrap">
-            Min Score:
-          </label>
-          <input
-            id="min-score"
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={minScore}
-            onChange={(e) => setMinScore(Number(e.target.value))}
-            className="w-24 accent-accent"
-          />
-          <span className="text-xs font-mono text-gray-300 w-8 text-right">
-            {minScore}
-          </span>
-        </div>
-
-        {/* Uncovered only toggle */}
+        {/* More filters toggle */}
         <button
-          onClick={() => setUncoveredOnly(!uncoveredOnly)}
-          aria-label="Toggle gaps only filter"
-          aria-pressed={uncoveredOnly}
+          onClick={() => setShowAdvanced(!showAdvanced)}
           className={clsx(
             "filter-btn flex items-center gap-1.5 text-sm",
-            uncoveredOnly && "filter-btn-active border-red-500/50 text-red-400"
+            (showAdvanced || advancedFilterCount > 0) && "filter-btn-active"
           )}
         >
-          <span className={clsx(
-            "w-3 h-3 rounded-full border",
-            uncoveredOnly ? "bg-red-500 border-red-500" : "border-gray-500"
-          )} />
-          Gaps Only
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">More</span>
+          {advancedFilterCount > 0 && (
+            <span className="bg-accent/20 text-accent text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {advancedFilterCount}
+            </span>
+          )}
+          {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
 
         {/* Clear */}
@@ -378,6 +344,75 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
           </button>
         )}
       </div>
+
+      {/* Advanced row: sources, markets, trend, score, gaps */}
+      {showAdvanced && (
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-surface-300/20 animate-in">
+          {/* Source multi-select with search */}
+          <MultiSelectDropdown
+            options={sourceOptions}
+            selected={selectedSources}
+            onChange={setSelectedSources}
+            placeholder="All Sources"
+            searchable
+          />
+
+          {/* Market multi-select with search */}
+          {marketOptions.length > 0 && (
+            <MultiSelectDropdown
+              options={marketOptions}
+              selected={selectedMarkets}
+              onChange={setSelectedMarkets}
+              placeholder="All Markets"
+              searchable
+            />
+          )}
+
+          {/* Trend dropdown */}
+          <SingleSelectDropdown
+            options={TREND_OPTIONS}
+            value={trend}
+            onChange={setTrend}
+          />
+
+          {/* Min score */}
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <label htmlFor="min-score" className="whitespace-nowrap">
+              Min Score:
+            </label>
+            <input
+              id="min-score"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+              className="w-24 accent-accent"
+            />
+            <span className="text-xs font-mono text-gray-300 w-8 text-right">
+              {minScore}
+            </span>
+          </div>
+
+          {/* Uncovered only toggle */}
+          <button
+            onClick={() => setUncoveredOnly(!uncoveredOnly)}
+            aria-label="Toggle gaps only filter"
+            aria-pressed={uncoveredOnly}
+            className={clsx(
+              "filter-btn flex items-center gap-1.5 text-sm",
+              uncoveredOnly && "filter-btn-active border-red-500/50 text-red-400"
+            )}
+          >
+            <span className={clsx(
+              "w-3 h-3 rounded-full border",
+              uncoveredOnly ? "bg-red-500 border-red-500" : "border-gray-500"
+            )} />
+            Gaps Only
+          </button>
+        </div>
+      )}
     </div>
   );
 }
