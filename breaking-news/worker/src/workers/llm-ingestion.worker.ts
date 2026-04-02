@@ -217,62 +217,94 @@ async function pollClaude(job: LLMPollJob): Promise<LLMResponse> {
 }
 
 async function pollGrok(job: LLMPollJob): Promise<LLMResponse> {
-  const model = job.model || 'grok-3';
-  // Use Grok-specific prompts that leverage its real-time X/Twitter data access
+  // Try models in order — xAI updates model names frequently
+  const modelsToTry = [job.model, 'grok-3-mini', 'grok-3', 'grok-2'].filter(Boolean) as string[];
   const userPrompt = buildGrokUserPrompt(job.marketName, job.marketKeywords);
 
-  // Grok uses OpenAI-compatible API at api.x.ai — with real-time X data access
-  const response = await fetch('https://api.x.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${job.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: GROK_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
+  let lastError = '';
+  for (const model of modelsToTry) {
+    try {
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${job.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: GROK_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 4000,
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Grok API error: ${response.status} - ${body}`);
+      if (!response.ok) {
+        const body = await response.text();
+        lastError = `Grok API ${response.status} (model=${model}): ${body.substring(0, 200)}`;
+        logger.warn({ model, status: response.status }, `Grok model ${model} failed, trying next`);
+        continue; // Try next model
+      }
+
+      const data = await response.json() as {
+        choices: Array<{ message: { content: string } }>;
+        model: string;
+      };
+
+      const content = data.choices[0]?.message?.content;
+      if (!content) {
+        lastError = `Empty response from Grok (model=${model})`;
+        continue;
+      }
+
+      // Parse JSON — handle markdown code blocks and raw JSON
+      let jsonStr = content;
+      const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) jsonStr = jsonMatch[1]!;
+
+      // Also try to find JSON array/object if not wrapped in code blocks
+      if (!jsonStr.trim().startsWith('{') && !jsonStr.trim().startsWith('[')) {
+        const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+        if (braceMatch) jsonStr = braceMatch[0];
+      }
+
+      let parsed: { stories: LLMNewsItem[] };
+      try {
+        parsed = JSON.parse(jsonStr.trim());
+      } catch (parseErr) {
+        lastError = `JSON parse failed (model=${model}): ${(parseErr as Error).message}. Raw: ${content.substring(0, 200)}`;
+        logger.warn({ model, rawContent: content.substring(0, 300) }, 'Grok returned non-JSON response');
+        continue;
+      }
+
+      logger.info({ model, storyCount: (parsed.stories || []).length }, `Grok poll success with model ${model}`);
+
+      // Grok stories may include xSignals — merge into sources and rawData
+      const stories = (parsed.stories || []).map((story) => {
+        const xSignals = (story as any).xSignals;
+        if (xSignals?.notableAccounts) {
+          story.sources = [...(story.sources || []), ...xSignals.notableAccounts];
+        }
+        return story;
+      });
+
+      return {
+        stories,
+        model: data.model || model,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      lastError = `Grok model ${model} error: ${(err as Error).message}`;
+      logger.warn({ model, err: (err as Error).message }, `Grok model ${model} failed`);
+      continue;
+    }
   }
 
-  const data = await response.json() as {
-    choices: Array<{ message: { content: string } }>;
-    model: string;
-  };
-
-  const content = data.choices[0]?.message?.content;
-  if (!content) throw new Error('Empty response from Grok');
-
-  let jsonStr = content;
-  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) jsonStr = jsonMatch[1]!;
-
-  const parsed = JSON.parse(jsonStr.trim()) as { stories: LLMNewsItem[] };
-
-  // Grok stories may include xSignals — merge into sources and rawData
-  const stories = (parsed.stories || []).map((story) => {
-    const xSignals = (story as any).xSignals;
-    if (xSignals?.notableAccounts) {
-      story.sources = [...(story.sources || []), ...xSignals.notableAccounts];
-    }
-    return story;
-  });
-
-  return {
-    stories,
-    model: data.model || model,
-    timestamp: new Date().toISOString(),
-  };
+  // All models failed
+  throw new Error(`All Grok models failed. Last error: ${lastError}`);
 }
 
 async function pollGemini(job: LLMPollJob): Promise<LLMResponse> {
