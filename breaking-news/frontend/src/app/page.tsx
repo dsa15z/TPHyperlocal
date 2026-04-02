@@ -143,6 +143,20 @@ function DashboardContent() {
     setHasViewChanges(true);
   }, []);
 
+  /** Reorder columns by dragging headers in the table grid */
+  const handleColumnReorder = useCallback((fromId: string, toId: string) => {
+    setColumnConfig((prev) => {
+      const updated = [...prev];
+      const fromIdx = updated.findIndex((c) => c.id === fromId);
+      const toIdx = updated.findIndex((c) => c.id === toId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const [moved] = updated.splice(fromIdx, 1);
+      updated.splice(toIdx, 0, moved);
+      return updated;
+    });
+    setHasViewChanges(true);
+  }, []);
+
   // ── View CRUD ───────────────────────────────────────────────────────────
   const persistViews = useCallback(
     (updated: DashboardView[]) => {
@@ -345,6 +359,7 @@ function DashboardContent() {
                 onSortingChange={setSorting}
                 columnConfig={columnConfig}
                 onColumnResize={handleColumnResize}
+                onColumnReorder={handleColumnReorder}
               />
             </div>
           )

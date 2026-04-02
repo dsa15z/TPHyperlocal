@@ -20,6 +20,15 @@ interface ColumnCustomizerProps {
   allColumns?: Omit<ColumnConfig, "visible">[];
 }
 
+// Display names for columns that use icon-only headers in the grid
+const COLUMN_DISPLAY_NAMES: Record<string, string> = {
+  rank: "#",
+  famous: "Famous Person",
+  verified: "Sources / Verified",
+  coverage: "Covered",
+  score: "Score",
+};
+
 export function ColumnCustomizer({ columns, onChange, allColumns }: ColumnCustomizerProps) {
   const defaults = allColumns || ALL_COLUMNS;
   const [isOpen, setIsOpen] = useState(false);
@@ -207,7 +216,7 @@ export function ColumnCustomizer({ columns, onChange, allColumns }: ColumnCustom
                     col.visible ? "text-gray-200" : "text-gray-500"
                   )}
                 >
-                  {col.label}
+                  {COLUMN_DISPLAY_NAMES[col.id] || col.label || col.id}
                 </span>
 
                 {/* Width control */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   useReactTable,
@@ -84,6 +84,8 @@ interface StoryTableProps {
   columnConfig?: ColumnConfig[];
   /** Called when a column is resized directly in the grid header */
   onColumnResize?: (columnId: string, newWidth: number) => void;
+  /** Called when columns are reordered via drag in the grid header */
+  onColumnReorder?: (fromId: string, toId: string) => void;
 }
 
 const columnHelper = createColumnHelper<Story>();
@@ -435,7 +437,10 @@ export function StoryTable({
   onSortingChange,
   columnConfig,
   onColumnResize,
+  onColumnReorder,
 }: StoryTableProps) {
+  const [dragColId, setDragColId] = useState<string | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
   const columns = useMemo(() => {
     const allDefs = buildColumnDefs();
 
@@ -505,10 +510,27 @@ export function StoryTable({
                 const sorted = header.column.getIsSorted();
                 const isResizing = header.column.getIsResizing();
 
+                const colId = header.column.id;
                 return (
                   <th
                     key={header.id}
-                    className={clsx("table-header relative group/th", canSort && "cursor-pointer")}
+                    draggable={!!onColumnReorder}
+                    onDragStart={() => setDragColId(colId)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverColId(colId); }}
+                    onDrop={() => {
+                      if (dragColId && dragColId !== colId && onColumnReorder) {
+                        onColumnReorder(dragColId, colId);
+                      }
+                      setDragColId(null);
+                      setDragOverColId(null);
+                    }}
+                    onDragEnd={() => { setDragColId(null); setDragOverColId(null); }}
+                    className={clsx(
+                      "table-header relative group/th",
+                      canSort && "cursor-pointer",
+                      dragOverColId === colId && dragColId !== colId && "border-l-2 border-accent",
+                      dragColId === colId && "opacity-40"
+                    )}
                     style={{ width: header.getSize() }}
                     onClick={header.column.getToggleSortingHandler()}
                     aria-sort={
