@@ -613,6 +613,11 @@ export default function StoryDetailPage() {
   const params = useParams();
   const id = params.id as string;
 
+  // Always scroll to top when navigating to a story
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
+
   const { data: story, isLoading, isError, error } = useQuery({
     queryKey: ["story", id],
     queryFn: () => fetchStory(id),
