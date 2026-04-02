@@ -106,6 +106,52 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
       cell: (info) => <StatusBadge status={info.getValue()} />,
       size: 120,
     }),
+    famous: columnHelper.display({
+      id: "famous",
+      header: () => <Star className="w-3.5 h-3.5 text-yellow-400 mx-auto" />,
+      cell: (info) => {
+        const story = info.row.original;
+        if (!story.hasFamousPerson || !story.famousPersonNames?.length) return null;
+        return (
+          <span className="inline-flex items-center group/famous relative justify-center w-full">
+            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/famous:opacity-100 transition-opacity pointer-events-none z-50">
+              {story.famousPersonNames.join(', ')}
+            </span>
+          </span>
+        );
+      },
+      size: 32,
+    }),
+    verified: columnHelper.display({
+      id: "verified",
+      header: () => <BadgeCheck className="w-3.5 h-3.5 text-blue-400 mx-auto" />,
+      cell: (info) => {
+        const story = info.row.original;
+        if (story.verificationStatus === 'VERIFIED') {
+          return (
+            <span className="inline-flex items-center group/verified relative justify-center w-full">
+              <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/verified:opacity-100 transition-opacity pointer-events-none z-50">
+                Verified ({Math.round((story.verificationScore || 0) * 100)}%)
+              </span>
+            </span>
+          );
+        }
+        if (story.verificationStatus === 'SINGLE_SOURCE') {
+          return (
+            <span className="inline-flex items-center group/single relative justify-center w-full">
+              <AlertTriangle className="w-3 h-3 text-orange-400" />
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/single:opacity-100 transition-opacity pointer-events-none z-50">
+                Single source
+              </span>
+            </span>
+          );
+        }
+        return null;
+      },
+      size: 32,
+    }),
     title: columnHelper.accessor("title", {
       header: "Title",
       cell: (info) => {
@@ -118,36 +164,12 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
           <div className="flex items-start gap-1.5">
             <div className="flex-1 min-w-0">
               <span className="inline-flex items-center flex-wrap">
-                {story.hasFamousPerson && story.famousPersonNames && story.famousPersonNames.length > 0 && (
-                  <span className="inline-flex items-center mr-1 group/famous relative">
-                    <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                    <span className="absolute bottom-full left-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/famous:opacity-100 transition-opacity pointer-events-none z-50">
-                      {story.famousPersonNames.join(', ')}
-                    </span>
-                  </span>
-                )}
                 <Link
                   href={`/stories/${story.id}`}
                   className="text-gray-100 hover:text-accent font-medium transition-colors line-clamp-2"
                 >
                   {displayTitle}
                 </Link>
-                {story.verificationStatus === 'VERIFIED' && (
-                  <span className="inline-flex items-center ml-1 group/verified relative">
-                    <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="absolute bottom-full right-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/verified:opacity-100 transition-opacity pointer-events-none z-50">
-                      Verified ({Math.round((story.verificationScore || 0) * 100)}% confidence)
-                    </span>
-                  </span>
-                )}
-                {story.verificationStatus === 'SINGLE_SOURCE' && (
-                  <span className="inline-flex items-center ml-1 group/single relative">
-                    <AlertTriangle className="w-3 h-3 text-orange-400" />
-                    <span className="absolute bottom-full right-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/single:opacity-100 transition-opacity pointer-events-none z-50">
-                      Single source — not yet corroborated
-                    </span>
-                  </span>
-                )}
               </span>
               {acct && (
                 <div className="flex items-center gap-1.5 mt-0.5">
