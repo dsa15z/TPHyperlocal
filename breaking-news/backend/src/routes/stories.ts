@@ -204,8 +204,11 @@ export async function storiesRoutes(
       mergedIntoId: null, // exclude merged stories
     };
 
-    // Apply NLP text search if present
+    // Apply NLP text search if present — both keyword AND semantic
+    let semanticStoryIds: string[] | null = null;
+
     if (nlpTextSearch) {
+      // Keyword search (fast, exact)
       if (!where.AND) where.AND = [];
       (where.AND as Prisma.StoryWhereInput[]).push({
         OR: [
@@ -215,6 +218,60 @@ export async function storiesRoutes(
           { locationName: { contains: nlpTextSearch, mode: 'insensitive' } },
         ],
       });
+
+      // Semantic search (embedding similarity) — runs in parallel
+      // Generates an embedding for the search query and finds similar stories
+      try {
+        const openaiKey = process.env['OPENAI_API_KEY'];
+        if (openaiKey) {
+          const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'text-embedding-3-small', input: nlpTextSearch }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (embRes.ok) {
+            const embData = await embRes.json();
+            const queryEmbedding = embData.data?.[0]?.embedding;
+            if (queryEmbedding && Array.isArray(queryEmbedding)) {
+              // Find stories with similar embeddings using cosine similarity via raw SQL
+              // Stories store embeddings in embeddingJson as JSON array
+              const similarStories = await prisma.$queryRaw<Array<{ id: string; similarity: number }>>`
+                SELECT id,
+                  1 - (
+                    SELECT SUM(a * b) / (SQRT(SUM(a * a)) * SQRT(SUM(b * b)))
+                    FROM unnest(ARRAY(SELECT jsonb_array_elements_text("embeddingJson"::jsonb)::float8)) WITH ORDINALITY AS t1(a, ord)
+                    JOIN unnest(ARRAY(SELECT unnest(${queryEmbedding}::float8[]))) WITH ORDINALITY AS t2(b, ord) USING (ord)
+                  ) as similarity
+                FROM "Story"
+                WHERE "embeddingJson" IS NOT NULL
+                  AND "mergedIntoId" IS NULL
+                  AND "firstSeenAt" >= NOW() - INTERVAL '7 days'
+                ORDER BY similarity DESC
+                LIMIT 20
+              `.catch(() => []);
+
+              if (similarStories.length > 0) {
+                semanticStoryIds = similarStories
+                  .filter(s => s.similarity > 0.3) // Only stories with >30% similarity
+                  .map(s => s.id);
+              }
+            }
+          }
+        }
+      } catch {
+        // Semantic search is best-effort — don't block on failure
+      }
+    }
+
+    // If semantic search found results, blend with keyword results
+    if (semanticStoryIds && semanticStoryIds.length > 0) {
+      // Expand the OR to include semantically similar stories
+      const andClause = where.AND as Prisma.StoryWhereInput[];
+      const lastOr = andClause[andClause.length - 1];
+      if (lastOr && 'OR' in lastOr && Array.isArray(lastOr.OR)) {
+        lastOr.OR.push({ id: { in: semanticStoryIds } });
+      }
     }
 
     // Market filter: match story location against market name, neighborhoods, and keywords

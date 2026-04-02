@@ -233,6 +233,88 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
   });
 
   // ═══════════════════════════════════════════════════════════════════════
+  // SYSTEM KNOWLEDGE (RAG for AI)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // GET /admin/knowledge — list knowledge documents
+  app.get('/admin/knowledge', async (request, reply) => {
+    requireAuth(request);
+    try {
+      const docs = await prisma.$queryRaw<any[]>`SELECT * FROM "SystemKnowledge" ORDER BY category, key`;
+      return reply.send({ data: docs });
+    } catch {
+      return reply.send({ data: [] });
+    }
+  });
+
+  // POST /admin/knowledge — add or update a knowledge document
+  app.post('/admin/knowledge', async (request, reply) => {
+    const au = requireAuth(request);
+    if (au.role !== 'OWNER' && au.role !== 'ADMIN') return reply.status(403).send({ error: 'Admin required' });
+
+    const body = z.object({
+      key: z.string().min(1).max(100),
+      content: z.string().min(1),
+      category: z.string().default('general'),
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Validation error' });
+
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+        VALUES (${`sk_${Date.now()}`}, ${body.data.key}, ${body.data.content}, ${body.data.category}, ${au.userId}, NOW())
+        ON CONFLICT (key) DO UPDATE SET content = ${body.data.content}, category = ${body.data.category}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
+      `;
+      return reply.send({ message: 'Knowledge saved' });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // DELETE /admin/knowledge/:id
+  app.delete('/admin/knowledge/:id', async (request, reply) => {
+    const au = requireAuth(request);
+    if (au.role !== 'OWNER') return reply.status(403).send({ error: 'Owner required' });
+    const { id } = request.params as { id: string };
+    try {
+      await prisma.$executeRaw`DELETE FROM "SystemKnowledge" WHERE id = ${id}`;
+      return reply.send({ message: 'Deleted' });
+    } catch { return reply.status(404).send({ error: 'Not found' }); }
+  });
+
+  // POST /admin/knowledge/generate — auto-generate schema reference docs
+  app.post('/admin/knowledge/generate', async (request, reply) => {
+    const au = requireAuth(request);
+    if (au.role !== 'OWNER' && au.role !== 'ADMIN') return reply.status(403).send({ error: 'Admin required' });
+
+    try {
+      const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
+      const fullDoc = generateSystemKnowledge();
+
+      // Split into sections and store each
+      const sections = fullDoc.split(/\n## /).map((s, i) => i === 0 ? s : '## ' + s);
+      let saved = 0;
+
+      for (const section of sections) {
+        const titleMatch = section.match(/^(?:##?\s+)?(.+)/);
+        const title = titleMatch ? titleMatch[1].trim().substring(0, 80) : `section_${saved}`;
+        const key = `auto_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').substring(0, 60)}`;
+
+        await prisma.$executeRaw`
+          INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+          VALUES (${`sk_auto_${Date.now()}_${saved}`}, ${key}, ${section.trim()}, 'schema', ${au.userId}, NOW())
+          ON CONFLICT (key) DO UPDATE SET content = ${section.trim()}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
+        `;
+        saved++;
+      }
+
+      return reply.send({ message: `Generated ${saved} knowledge documents`, saved });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
   // ALGORITHM TUNING
   // ═══════════════════════════════════════════════════════════════════════
 

@@ -146,12 +146,38 @@ export function AIAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Focus input when opened
+  // Focus input + check proactive alerts when opened
   useEffect(() => {
     if (isOpen && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
+
+      // Check for proactive alerts (new stories in saved views)
+      if (messages.length === 0 || (messages.length > 0 && Date.now() - messages[messages.length - 1].timestamp > 5 * 60 * 1000)) {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/v1/assistant/alerts`, {
+          headers: getAuthHeaders(),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.alerts && data.alerts.length > 0) {
+              const alertText = data.alerts.slice(0, 3).map((a: any) =>
+                `**${a.viewName}**: ${a.newStoryCount} new ${a.newStoryCount === 1 ? 'story' : 'stories'}${a.topStory ? ` — "${a.topStory.title.substring(0, 60)}..."` : ''}`
+              ).join('\n');
+              const alertMsg: Message = {
+                role: "assistant",
+                content: `New stories in your views:\n${alertText}\n\nAsk me about any of these, or try "show me breaking stories".`,
+                timestamp: Date.now(),
+              };
+              setMessages(prev => {
+                // Don't duplicate if already shown
+                if (prev.some(m => m.content.includes('New stories in your views'))) return prev;
+                return [...prev, alertMsg];
+              });
+            }
+          })
+          .catch(() => {}); // Silent fail
+      }
     }
-  }, [isOpen]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcut: Cmd+K to toggle
   useEffect(() => {

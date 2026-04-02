@@ -281,6 +281,20 @@ async function executeTool(toolName: string, args: Record<string, any>, accountU
 
 export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
 
+  // GET /assistant/alerts — proactive new story alerts for saved views
+  app.get('/assistant/alerts', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+
+    try {
+      const { checkViewsForNewStories } = await import('../lib/view-alerts.js');
+      const alerts = await checkViewsForNewStories(au.userId);
+      return reply.send({ alerts });
+    } catch {
+      return reply.send({ alerts: [] });
+    }
+  });
+
   app.post('/assistant/chat', async (request, reply) => {
     const au = getAccountUser(request);
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });

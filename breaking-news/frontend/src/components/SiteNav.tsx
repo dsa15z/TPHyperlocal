@@ -30,6 +30,7 @@ import {
   Shield,
   MessageSquare,
   Code,
+  Brain,
   Webhook,
   Crown,
   Mail,
@@ -213,6 +214,7 @@ const NAV_GROUPS: NavGroup[] = [
     section: "admin",
     items: [
       { href: "/admin/voices", label: "AI Config", icon: MessageSquare },
+      { href: "/admin/knowledge", label: "Knowledge Base", icon: Brain },
       { href: "/admin/editor", label: "Review Queue", icon: ClipboardCheck },
       { href: "/admin/widgets", label: "Widgets", icon: Code },
     ],
