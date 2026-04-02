@@ -579,7 +579,7 @@ export async function storiesRoutes(
           AND st."mergedIntoId" IS NULL
           ${maxAge !== undefined ? Prisma.sql`AND st."firstSeenAt" >= ${new Date(Date.now() - maxAge * 60 * 60 * 1000)}` : Prisma.empty}
           ${minScore !== undefined ? Prisma.sql`AND st."compositeScore" >= ${minScore}` : Prisma.empty}
-          ${status ? Prisma.sql`AND st.status IN (${Prisma.join(status.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
+          ${status ? Prisma.sql`AND st.status::text IN (${Prisma.join(status.split(',').map(s => s.trim()).filter(Boolean))})` : Prisma.empty}
           ${category ? (() => {
             const cats = category.split(',').map(s => s.trim()).filter(Boolean);
             const hasUnknown = cats.includes('Unknown');
