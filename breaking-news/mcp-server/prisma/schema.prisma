@@ -1,0 +1,1382 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // pgvector requires special PostgreSQL build — enable when available
+  // extensions = [vector, pg_trgm]
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Platform {
+  FACEBOOK
+  TWITTER
+  RSS
+  NEWSAPI
+  NEWSCATCHER
+  PERIGON
+  GDELT
+  LLM_OPENAI
+  LLM_CLAUDE
+  LLM_GROK
+  LLM_GEMINI
+  MANUAL
+}
+
+enum SourceType {
+  NEWS_ORG
+  GOV_AGENCY
+  PUBLIC_PAGE
+  RSS_FEED
+  API_PROVIDER
+  LLM_PROVIDER
+}
+
+enum StoryStatus {
+  ALERT       // Editor-confirmed, highest urgency — go live now
+  BREAKING    // Auto-detected or editor-set breaking news
+  DEVELOPING  // Story still gathering sources, could escalate
+  TOP_STORY   // Biggest story of the cycle, high engagement
+  ONGOING     // Multi-day story with continued interest
+  FOLLOW_UP   // Update to a previously covered story
+  STALE       // No meaningful activity
+  ARCHIVED    // Terminal state
+}
+
+enum UserRole {
+  VIEWER
+  EDITOR
+  ADMIN
+  OWNER
+}
+
+// ─── Multi-Tenant: Account ─────────────────────────────────────────────────
+
+model Account {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  plan        String   @default("free") // free, pro, enterprise
+  maxMarkets  Int      @default(1)
+  maxSources  Int      @default(20)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users          AccountUser[]
+  markets        Market[]
+  accountSources AccountSource[]
+  accountStories AccountStory[]
+  credentials    AccountCredential[]
+  apiKeys        APIKey[]
+  feeds          RSSFeed[]
+  coverageFeeds  CoverageFeed[]
+  auditLogs      AuditLog[]
+  workflowStages    WorkflowStage[]
+  publishedContent  PublishedContent[]
+  audioSpots        AudioSpot[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ─── Multi-Tenant: Users & Auth ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  displayName   String?
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    AccountUser[]
+  preferences UserPreference[]
+  auditLogs   AuditLog[]
+
+  @@index([email])
+}
+
+model AccountUser {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      UserRole @default(VIEWER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountId, userId])
+  @@index([accountId])
+  @@index([userId])
+}
+
+// ─── User Preferences (News Profile) ───────────────────────────────────────
+
+model UserPreference {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String
+  // News profile settings
+  defaultMarketId String?  // preferred market to view on dashboard
+  categories      Json?    // ["CRIME", "POLITICS", "WEATHER"] - preferred categories
+  minScore        Float    @default(0) // minimum composite score filter
+  keywords        Json?    // ["flooding", "energy"] - custom keywords of interest
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, accountId])
+  @@index([accountId])
+}
+
+// ─── Multi-Tenant: Markets ──────────────────────────────────────────────────
+
+model Market {
+  id          String  @id @default(cuid())
+  accountId   String
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String  // "Houston", "Dallas", "Austin"
+  slug        String  // "houston", "dallas", "austin"
+  state       String? // "TX"
+  latitude    Float
+  longitude   Float
+  radiusKm    Float   @default(80)
+  timezone    String  @default("America/Chicago")
+  isActive    Boolean @default(true)
+  // Market-specific keyword sets for filtering
+  keywords    Json?   // ["houston", "harris county", "galveston"]
+  neighborhoods Json? // ["Galleria", "Montrose", "Heights", ...]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sources      Source[]
+  stories      Story[]
+  sourceMarkets SourceMarket[]
+
+  @@unique([accountId, slug])
+  @@index([accountId, isActive])
+}
+
+// ─── Source ↔ Market M:N Join Table ────────────────────────────────────────
+// A source can serve multiple markets. "National" is a market.
+// Only sources linked to markets with active accounts get polled.
+
+model SourceMarket {
+  id        String   @id @default(cuid())
+  sourceId  String
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, marketId])
+  @@index([sourceId])
+  @@index([marketId])
+}
+
+// ─── Multi-Tenant: Per-Account Credentials ──────────────────────────────────
+// Each account stores their own API keys for external services
+
+model AccountCredential {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  platform    Platform
+  name        String   // "NewsAPI Key", "OpenAI API Key", etc.
+  // Encrypted credential fields
+  apiKey      String?  @db.Text // encrypted at rest
+  apiSecret   String?  @db.Text // encrypted at rest
+  accessToken String?  @db.Text // encrypted at rest
+  extraConfig Json?    // additional platform-specific config
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([accountId, platform, name])
+  @@index([accountId, platform])
+}
+
+// ─── Multi-Tenant: Account-Source Configuration ─────────────────────────────
+// Controls which sources are enabled for each account
+
+model AccountSource {
+  id             String   @id @default(cuid())
+  accountId      String
+  account        Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceId       String
+  source         Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  isEnabled      Boolean  @default(true)
+  pollIntervalMs Int?     // override default poll interval
+  metadata       Json?    // account-specific source config
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([accountId, sourceId])
+  @@index([accountId, isEnabled])
+}
+
+// ─── Sources ────────────────────────────────────────────────────────────────
+
+model Source {
+  id           String       @id @default(cuid())
+  platform     Platform
+  sourceType   SourceType
+  name         String
+  url          String?
+  platformId   String?
+  trustScore   Float        @default(0.5)
+  isActive     Boolean      @default(true)
+  isGlobal     Boolean      @default(false) // DEPRECATED: use sourceMarkets with National market instead
+  marketId     String?      // DEPRECATED: primary market (kept for backward compat)
+  market       Market?      @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  metadata     Json?
+  lastPolledAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  posts          SourcePost[]
+  accountSources AccountSource[]
+  sourceMarkets  SourceMarket[]
+
+  @@index([platform, isActive])
+  @@index([sourceType])
+  @@index([marketId])
+  @@index([isGlobal])
+}
+
+// ─── Source Posts ────────────────────────────────────────────────────────────
+
+model SourcePost {
+  id                 String   @id @default(cuid())
+  sourceId           String
+  source             Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  platformPostId     String   @unique
+  content            String   @db.Text
+  contentHash        String
+  title              String?
+  url                String?
+  authorName         String?
+  authorId           String?
+  engagementLikes    Int      @default(0)
+  engagementShares   Int      @default(0)
+  engagementComments Int      @default(0)
+  latitude           Float?
+  longitude          Float?
+  locationName       String?
+  category           String?
+  mediaUrls          Json?
+  rawData            Json?
+  // LLM-specific fields
+  llmModel           String?  // "gpt-4o", "claude-sonnet-4-6", "grok-3", "gemini-2.0-flash"
+  llmConfidence      Float?   // LLM's self-reported confidence 0-1
+  // Article extraction
+  fullArticleText    String?  @db.Text  // extracted full article from URL
+  fullArticleExtractedAt DateTime?
+  // Embeddings (pgvector)
+  // embedding stored as JSON until pgvector is available
+  embeddingJson      Json?    // array of 1536 floats (upgrade to pgvector later)
+  // NER entities (structured)
+  entities           Json?    // { people: [], organizations: [], locations: [], events: [] }
+  // Sentiment
+  sentimentScore     Float?   // -1.0 (negative) to 1.0 (positive)
+  sentimentLabel     String?  // POSITIVE, NEGATIVE, NEUTRAL
+  // MinHash signature for LSH dedup
+  minhashSignature   Json?    // array of hash values for LSH
+  publishedAt        DateTime
+  collectedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  storySources StorySource[]
+
+  @@index([platformPostId])
+  @@index([contentHash])
+  @@index([sourceId, publishedAt])
+  @@index([category])
+  @@index([publishedAt])
+  @@index([sentimentLabel])
+}
+
+// ─── Stories ────────────────────────────────────────────────────────────────
+
+model Story {
+  id              String      @id @default(cuid())
+  marketId        String?
+  market          Market?     @relation(fields: [marketId], references: [id], onDelete: SetNull)
+  title           String
+  summary         String?     @db.Text
+  aiSummary       String?     @db.Text // LLM-generated canonical summary
+  aiSummaryModel  String?     // which LLM generated the summary
+  aiSummaryAt     DateTime?   // when summary was generated
+  category        String?
+  locationName    String?
+  latitude        Float?
+  longitude       Float?
+  neighborhood    String?
+  geocodedAt      DateTime?   // when geocoding was performed
+  breakingScore   Float       @default(0)
+  trendingScore   Float       @default(0)
+  confidenceScore Float       @default(0)
+  localityScore   Float       @default(0)
+  compositeScore  Float       @default(0)
+  // Sentiment aggregate
+  sentimentScore  Float?      // avg sentiment across source posts
+  sentimentLabel  String?     // POSITIVE, NEGATIVE, NEUTRAL, MIXED
+  // Source credibility
+  credibilityScore Float?     // auto-calculated from corroboration history
+  // Editor review
+  editedTitle     String?     // editor-modified title (null = use AI/original)
+  editedSummary   String?     @db.Text // editor-modified summary
+  editedBy        String?     // userId of last editor
+  editedAt        DateTime?
+  editHistory     Json?       // array of { title, summary, editedBy, editedAt }
+  reviewStatus    String?     @default("UNREVIEWED") // UNREVIEWED, APPROVED, REJECTED, EDITED
+  // Topic cluster (BERTopic)
+  topicId         Int?        // BERTopic topic number
+  topicLabel      String?     // human-readable topic label
+  // Embedding for story-level similarity (JSON until pgvector available)
+  embeddingJson   Json?
+  status              StoryStatus @default(DEVELOPING)
+  editorialOverride   Boolean     @default(false) // true = system scoring won't auto-change state
+  statusChangedAt     DateTime    @default(now()) // explicit status change timestamp
+  horizon             String      @default("BREAKING") // BREAKING or TRENDING — one-way latch
+  parentStoryId       String?     // for FOLLOW_UP stories linking to original
+  parentStory         Story?      @relation("StoryFollowUp", fields: [parentStoryId], references: [id])
+  followUps           Story[]     @relation("StoryFollowUp")
+  // Extended scoring fields
+  longTrendingScore       Float?  // trending-horizon composite
+  sustainedActivityScore  Float?  // how consistently new sources arrive
+  peakBreakingScore       Float   @default(0)
+  peakStatus              String?
+  // Famous person detection
+  hasFamousPerson         Boolean @default(false)
+  famousPersonNames       Json?   // ["Donald Trump", "Taylor Swift"] — notable people in this story
+  // Story verification
+  verificationStatus      String  @default("UNVERIFIED") // UNVERIFIED, VERIFIED, DISPUTED, SINGLE_SOURCE
+  verificationScore       Float   @default(0) // 0-1, confidence in story accuracy
+  verifiedAt              DateTime?
+  verificationDetails     Json?   // { sourceCount, crossSourceMatch, llmValidation, reasons[] }
+  pastScores              Json?   // cached score snapshots at N-minutes-ago
+  sourceCount     Int         @default(0)
+  firstSeenAt     DateTime    @default(now())
+  lastUpdatedAt   DateTime    @default(now())
+  mergedIntoId    String?
+  mergedInto      Story?      @relation("StoryMerges", fields: [mergedIntoId], references: [id])
+  mergedFrom      Story[]     @relation("StoryMerges")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  storySources       StorySource[]
+  scoreSnapshots     ScoreSnapshot[]
+  notifications      Notification[]
+  coverageMatches    CoverageMatch[]
+  stateTransitions   StoryStateTransition[]
+  firstDrafts        FirstDraft[]
+  bookmarks          Bookmark[]
+  annotations        StoryAnnotation[]
+  predictions        StoryPrediction[]
+  editSessions       StoryEditSession[]
+  factChecks         FactCheck[]
+  translations       TranslatedContent[]
+  assignments        Assignment[]
+  breakingPackages   BreakingPackage[]
+  accountStories     AccountStory[]
+  storyEntities      StoryEntity[]
+
+  @@index([marketId])
+  @@index([compositeScore(sort: Desc)])
+  @@index([status])
+  @@index([firstSeenAt(sort: Desc)])
+  @@index([breakingScore(sort: Desc)])
+  @@index([trendingScore(sort: Desc)])
+  @@index([category])
+  @@index([status, compositeScore(sort: Desc)])
+  @@index([marketId, status, compositeScore(sort: Desc)])
+  @@index([horizon, compositeScore(sort: Desc)])
+  @@index([statusChangedAt])
+  @@index([parentStoryId])
+}
+
+// ─── Account Story (per-account derivative workspace) ──────────────────────
+// Created lazily on first user action. Links an account to a base story
+// with account-private overlay data. Base story updates flow downstream;
+// account edits/content are private.
+
+model AccountStory {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  baseStoryId     String
+  baseStory       Story    @relation(fields: [baseStoryId], references: [id], onDelete: Cascade)
+
+  // ── Account-private editorial overlay ──────────────────────────────────
+  editedTitle     String?              // account's custom title (null = use base)
+  editedSummary   String?  @db.Text    // account's custom summary
+  notes           String?  @db.Text    // editorial notes
+  editedBy        String?              // userId of last editor
+  editedAt        DateTime?
+
+  // ── Account editorial workflow (independent of base story status) ──────
+  accountStatus   String   @default("INBOX")  // INBOX, ASSIGNED, IN_PROGRESS, DRAFT_READY, PUBLISHED, KILLED
+  assignedTo      String?              // userId of assigned reporter
+  assignedAt      DateTime?
+  coveredAt       DateTime?            // when account published/aired this story
+  coverageFeedId  String?              // which show/feed covered it
+
+  // ── AI-generated content (private to account) ─────────────────────────
+  aiDrafts        Json?    // array of { model, content, format, createdAt }
+  aiScripts       Json?    // array of { type: "tv"|"radio"|"web", content, createdAt }
+  aiVideos        Json?    // array of { provider, url, thumbnailUrl, createdAt }
+
+  // ── Research & context (private to account) ───────────────────────────
+  research        Json?    // { backgroundContext, relatedLinks, factChecks, timeline }
+  tags            Json?    // account-specific tags/labels
+
+  // ── Sync tracking ─────────────────────────────────────────────────────
+  lastSyncedAt    DateTime @default(now())  // when base story data was last pulled
+  baseSnapshotAt  DateTime?                 // base story updatedAt at last sync
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  publishedContent  PublishedContent[]
+  audioSpots        AudioSpot[]
+  editorialComments EditorialComment[]
+
+  @@unique([accountId, baseStoryId])
+  @@index([accountId, accountStatus])
+  @@index([accountId, createdAt(sort: Desc)])
+  @@index([baseStoryId])
+  @@index([assignedTo])
+}
+
+// ─── Story-Source Links ─────────────────────────────────────────────────────
+
+model StorySource {
+  id              String     @id @default(cuid())
+  storyId         String
+  story           Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourcePostId    String
+  sourcePost      SourcePost @relation(fields: [sourcePostId], references: [id], onDelete: Cascade)
+  similarityScore Float
+  isPrimary       Boolean    @default(false)
+  addedAt         DateTime   @default(now())
+
+  @@unique([storyId, sourcePostId])
+  @@index([storyId])
+  @@index([sourcePostId])
+}
+
+// ─── Score History ──────────────────────────────────────────────────────────
+
+model ScoreSnapshot {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  breakingScore   Float
+  trendingScore   Float
+  confidenceScore Float
+  localityScore   Float
+  compositeScore  Float
+  snapshotAt      DateTime @default(now())
+
+  @@index([storyId, snapshotAt(sort: Desc)])
+}
+
+// ─── RSS Feed Definitions ───────────────────────────────────────────────────
+
+model RSSFeed {
+  id        String   @id @default(cuid())
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String   @unique
+  filters   Json
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+// ─── API Keys (for third-party consumers of OUR API) ────────────────────────
+
+model APIKey {
+  id          String    @id @default(cuid())
+  accountId   String?
+  account     Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  key         String    @unique
+  name        String
+  ownerId     String
+  permissions Json?
+  rateLimit   Int       @default(100)
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([key])
+  @@index([accountId])
+}
+
+// ─── Audit Log ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  entityType  String
+  entityId    String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([accountId])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ─── Notifications / Webhooks ───────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  type        String   // BREAKING_ALERT, TRENDING_ALERT, DIGEST
+  channel     String   // EMAIL, WEBHOOK, SLACK
+  recipient   String   // email address, webhook URL, or Slack channel
+  payload     Json?    // notification content
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([storyId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String
+  url         String   // webhook endpoint URL
+  secret      String?  // HMAC signing secret
+  events      Json     // ["BREAKING", "TRENDING", "NEW_STORY"]
+  filters     Json?    // { category: "CRIME", minScore: 0.7 }
+  isActive    Boolean  @default(true)
+  lastDeliveredAt DateTime?
+  failCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
+}
+
+// ─── Email Digest Subscriptions ─────────────────────────────────────────────
+
+model DigestSubscription {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String
+  email       String
+  frequency   String   // HOURLY, TWICE_DAILY, DAILY, WEEKLY
+  schedule    String?  // cron expression override
+  timezone    String   @default("America/Chicago")
+  filters     Json?    // { category: "CRIME", minScore: 0.5 }
+  isActive    Boolean  @default(true)
+  lastSentAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([userId])
+  @@index([frequency, isActive])
+}
+
+// ─── Source Credibility Tracking ────────────────────────────────────────────
+
+model SourceCredibilityLog {
+  id              String   @id @default(cuid())
+  sourceId        String
+  storyId         String
+  wasCorroborated Boolean  // did other sources confirm this story?
+  corroboratedBy  Int      @default(0) // how many other sources confirmed
+  timeToCorroboration Int? // minutes until first corroboration
+  createdAt       DateTime @default(now())
+
+  @@index([sourceId])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ─── Topic Clusters (BERTopic) ──────────────────────────────────────────────
+
+model TopicCluster {
+  id          Int      @id // BERTopic topic number
+  label       String   // auto-generated or admin-edited label
+  keywords    Json     // top keywords for this topic
+  storyCount  Int      @default(0)
+  isActive    Boolean  @default(true)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, storyCount(sort: Desc)])
+}
+
+// ─── Phase 1: Story State Transitions ──────────────────────────────────────
+
+model StoryStateTransition {
+  id          String      @id @default(cuid())
+  storyId     String
+  story       Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  fromState   StoryStatus
+  toState     StoryStatus
+  trigger     String      // SYSTEM_SCORING, EDITOR_OVERRIDE, TIME_DECAY, GROK_ALERT
+  triggeredBy String?     // userId if editor
+  reason      String?
+  metadata    Json?       // scoring data at time of transition
+  createdAt   DateTime    @default(now())
+
+  @@index([storyId, createdAt(sort: Desc)])
+}
+
+// ─── Phase 2: LLM Factory + FirstDraft + Prompts + Voices ──────────────────
+
+model Prompt {
+  id          String   @id @default(cuid())
+  accountId   String?  // null = system default
+  name        String   // "summary", "tweet", "rewrite", etc.
+  type        String   // "first_draft", "idea_starter", "notification"
+  template    String   @db.Text
+  variables   Json     // list of available variables
+  isDefault   Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type, isDefault])
+  @@index([accountId])
+}
+
+model FirstDraft {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId      String?
+  type        String   // summary, short_summary, rewrite, tweet, bullets, idea_starter
+  voiceId     String?
+  content     String   @db.Text
+  model       String   // which LLM generated it
+  promptId    String?
+  tokens      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storyId, type])
+}
+
+model Voice {
+  id           String   @id @default(cuid())
+  accountId    String
+  name         String
+  systemPrompt String   @db.Text
+  sampleText   String?  @db.Text
+  interests    Json?
+  tone         Json?    // ["professional", "conversational"]
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+// ─── Phase 3: CommunityRadar ───────────────────────────────────────────────
+
+model CommunityRadarConfig {
+  id                  String   @id @default(cuid())
+  accountId           String
+  name                String
+  platform            Platform
+  url                 String
+  urlType             String   // FB_PAGE, FB_GROUP, TWITTER_LIST, TWITTER_SEARCH
+  scrapeFrequencyMin  Int      @default(120)
+  isActive            Boolean  @default(true)
+  lastScrapedAt       DateTime?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  posts CommunityRadarPost[]
+
+  @@index([accountId, isActive])
+}
+
+model CommunityRadarPost {
+  id              String               @id @default(cuid())
+  configId        String
+  config          CommunityRadarConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  platformPostId  String               @unique
+  content         String               @db.Text
+  authorName      String?
+  engagementScore Float                @default(0)
+  sentimentScore  Float?
+  sentimentLabel  String?
+  storyId         String?
+  postedAt        DateTime
+  scrapedAt       DateTime             @default(now())
+
+  @@index([configId])
+  @@index([storyId])
+}
+
+// ─── Phase 4: Feature Flags ────────────────────────────────────────────────
+
+model FeatureFlag {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  defaultValue Boolean  @default(false)
+  overrides    Json?    // { accounts: { "acc1": true }, users: { "user1": false } }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Phase 5: Push Notifications + Distribution ────────────────────────────
+
+model Device {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique // FCM token
+  platform    String   // web, ios, android
+  isActive    Boolean  @default(true)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NotificationPreference {
+  id          String   @id @default(cuid())
+  userId      String
+  accountId   String
+  channels    Json     // ["push", "email", "slack"]
+  categories  Json?    // null = all
+  minStates   Json     // ["ALERT", "BREAKING"]
+  minScore    Float    @default(0.5)
+  quietHours  Json?    // { start: "22:00", end: "07:00", timezone: "America/Chicago" }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, accountId])
+}
+
+model SlackIntegration {
+  id          String   @id @default(cuid())
+  accountId   String
+  channelId   String
+  channelName String
+  webhookUrl  String
+  states      Json     // which story states trigger
+  categories  Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
+}
+
+// ─── Phase 6: Smart Pulses + Bookmarks + ShowPrep ──────────────────────────
+
+model SmartPulse {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String?
+  name        String
+  description String?
+  topics      Json     // keyword/semantic config
+  filters     Json?    // category, market, min score
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  folder    String?
+  tags      Json?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([userId, storyId])
+  @@index([userId])
+}
+
+model ShowPrepRundown {
+  id        String   @id @default(cuid())
+  accountId String
+  createdBy String
+  name      String
+  showDate  DateTime
+  items     Json     // ordered array of { storyId, notes, duration, talkingPoints }
+  status    String   @default("DRAFT") // DRAFT, FINAL, ARCHIVED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId, showDate(sort: Desc)])
+}
+
+// ─── Phase 7: Widgets + Analytics ──────────────────────────────────────────
+
+model Widget {
+  id        String   @id @default(cuid())
+  accountId String
+  name      String
+  type      String   // PULSE, SMART_PULSE, CATEGORY, BREAKING
+  config    Json     // theme, filters, display options
+  embedCode String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+model StoryAnalytics {
+  id          String   @id @default(cuid())
+  storyId     String
+  views       Int      @default(0)
+  apiHits     Int      @default(0)
+  widgetViews Int      @default(0)
+  shares      Int      @default(0)
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  @@unique([storyId, date])
+}
+
+model DomainScore {
+  id          String   @id @default(cuid())
+  domain      String   @unique
+  score       Float    @default(0)
+  appearances Int      @default(0)
+  lastUpdated DateTime @default(now())
+}
+
+// ─── Collaborative Annotations ─────────────────────────────────────────────
+
+model StoryAnnotation {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String   @default("NOTE") // NOTE, TAG, FLAG, ASSIGNMENT
+  content   String   @db.Text
+  tags      Json?    // e.g. ["urgent", "needs-followup"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storyId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+// ─── Story Prediction Scoring ──────────────────────────────────────────────
+
+model StoryPrediction {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viralProbability Float   // 0-1 probability of going viral
+  peakScorePrediction Float? // predicted peak composite score
+  predictedStatus String?  // predicted final status
+  factors         Json?    // { velocityTrend, sourceDiversity, engagement, ... }
+  model           String   @default("heuristic_v1")
+  createdAt       DateTime @default(now())
+
+  @@index([storyId, createdAt(sort: Desc)])
+}
+
+// ─── Audio Transcription ───────────────────────────────────────────────────
+
+model AudioSource {
+  id            String   @id @default(cuid())
+  accountId     String
+  name          String   // "Police Scanner Feed", "Press Conference"
+  type          String   // STREAM, FILE, URL
+  url           String?
+  isActive      Boolean  @default(true)
+  lastProcessedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transcripts AudioTranscript[]
+
+  @@index([accountId, isActive])
+}
+
+model AudioTranscript {
+  id            String       @id @default(cuid())
+  audioSourceId String
+  audioSource   AudioSource  @relation(fields: [audioSourceId], references: [id], onDelete: Cascade)
+  content       String       @db.Text
+  duration      Int?         // seconds
+  language      String       @default("en")
+  confidence    Float?       // transcription confidence 0-1
+  storyId       String?      // linked story if matched
+  processedAt   DateTime     @default(now())
+
+  @@index([audioSourceId, processedAt(sort: Desc)])
+  @@index([storyId])
+}
+
+// ─── Dashboard Layouts per Role ────────────────────────────────────────────
+
+model DashboardLayout {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String   // "Anchor View", "Assignment Editor", "Producer"
+  role        String?  // optional: lock to a specific UserRole
+  layout      Json     // { panels: [{ type, position, size, config }] }
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+}
+
+// ─── Assignment Desk ───────────────────────────────────────────────────────
+
+model Reporter {
+  id          String   @id @default(cuid())
+  accountId   String
+  userId      String?  // linked to User if they have an account
+  name        String
+  email       String?
+  phone       String?
+  beats       Json?    // ["crime", "politics", "education"]
+  status      String   @default("AVAILABLE") // AVAILABLE, ON_ASSIGNMENT, OFF_DUTY, ON_BREAK
+  currentLat  Float?   // current location for proximity matching
+  currentLon  Float?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments Assignment[]
+
+  @@index([accountId, status])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  accountId   String
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  reporterId  String
+  reporter    Reporter @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  status      String   @default("ASSIGNED") // ASSIGNED, EN_ROUTE, ON_SCENE, FILED, AIRED, CANCELLED
+  priority    String   @default("NORMAL") // URGENT, HIGH, NORMAL, LOW
+  notes       String?  @db.Text
+  deadline    DateTime?
+  filedAt     DateTime?
+  airedAt     DateTime?
+  assignedBy  String?  // userId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@index([reporterId, status])
+  @@index([storyId])
+}
+
+// ─── Shift Handoff ─────────────────────────────────────────────────────────
+
+model ShiftBriefing {
+  id          String   @id @default(cuid())
+  accountId   String
+  shiftName   String   // "Morning", "Afternoon", "Evening", "Overnight"
+  content     String   @db.Text // AI-generated markdown briefing
+  storyCount  Int      @default(0)
+  gapCount    Int      @default(0)
+  model       String   // which LLM generated
+  generatedAt DateTime @default(now())
+
+  @@index([accountId, generatedAt(sort: Desc)])
+}
+
+// ─── One-Click Breaking Package ────────────────────────────────────────────
+
+model BreakingPackage {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  accountId   String
+  broadcastScript String?  @db.Text
+  socialPost      String?  @db.Text
+  pushTitle       String?
+  pushBody        String?
+  webSummary      String?  @db.Text
+  bulletPoints    String?  @db.Text
+  graphicPrompt   String?  // prompt for image generation
+  status          String   @default("GENERATED") // GENERATED, REVIEWED, PUBLISHED
+  publishedTo     Json?    // ["broadcast", "social", "push", "web"]
+  generatedBy     String?
+  createdAt       DateTime @default(now())
+
+  @@index([storyId])
+  @@index([accountId, createdAt(sort: Desc)])
+}
+
+// ─── Public Data Sources ───────────────────────────────────────────────────
+
+model PublicDataFeed {
+  id          String   @id @default(cuid())
+  accountId   String?
+  name        String
+  type        String   // NWS_WEATHER, UTILITY_OUTAGE, COURT_FILING, GOV_AGENDA, TRAFFIC_INCIDENT, POLICE_DISPATCH
+  url         String
+  apiConfig   Json?    // API keys, params, zones
+  isActive    Boolean  @default(true)
+  pollIntervalMin Int  @default(15)
+  lastPolledAt DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  alerts PublicDataAlert[]
+
+  @@index([type, isActive])
+}
+
+model PublicDataAlert {
+  id          String        @id @default(cuid())
+  feedId      String
+  feed        PublicDataFeed @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  externalId  String        @unique // dedup key
+  type        String        // SEVERE_WEATHER, POWER_OUTAGE, TRAFFIC_CLOSURE, COURT_FILING, GOV_AGENDA_ITEM
+  severity    String        @default("INFO") // CRITICAL, WARNING, WATCH, INFO
+  title       String
+  description String?       @db.Text
+  location    String?
+  latitude    Float?
+  longitude   Float?
+  rawData     Json?
+  storyId     String?       // linked to auto-created story
+  detectedAt  DateTime      @default(now())
+  expiresAt   DateTime?
+
+  @@index([type, detectedAt(sort: Desc)])
+  @@index([severity])
+  @@index([feedId])
+}
+
+// ─── Show Deadlines ────────────────────────────────────────────────────────
+
+model ShowDeadline {
+  id          String   @id @default(cuid())
+  accountId   String
+  showName    String   // "5pm News", "6am Morning"
+  airTime     String   // "17:00" (24h format)
+  timezone    String   @default("America/Chicago")
+  daysOfWeek  Json     // [1,2,3,4,5] = Mon-Fri
+  scriptDeadlineMin Int @default(30) // scripts due 30 min before air
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId, isActive])
+}
+
+// ─── RadioGPT ──────────────────────────────────────────────────────────────
+
+model RadioScript {
+  id          String   @id @default(cuid())
+  accountId   String
+  voiceId     String?
+  showName    String   // "Morning Drive", "Afternoon News"
+  format      String   @default("NEWS") // NEWS, TALK, SPORTS, WEATHER
+  storyIds    Json     // array of story IDs used to generate
+  script      String   @db.Text // full generated radio script
+  duration    Int?     // estimated seconds
+  model       String   // which LLM generated it
+  createdAt   DateTime @default(now())
+
+  @@index([accountId, createdAt(sort: Desc)])
+}
+
+// ─── History of the Day ────────────────────────────────────────────────────
+
+model HistoryEvent {
+  id          String   @id @default(cuid())
+  month       Int      // 1-12
+  day         Int      // 1-31
+  year        Int?     // null = recurring
+  title       String
+  description String   @db.Text
+  category    String?  // POLITICS, SCIENCE, CULTURE, SPORTS, LOCAL
+  significance Int     @default(5) // 1-10 importance
+  source      String?  // where this fact came from
+  isLocal     Boolean  @default(false) // local to market
+  createdAt   DateTime @default(now())
+
+  @@index([month, day])
+  @@index([category])
+}
+
+// ─── Stock Price Monitoring ────────────────────────────────────────────────
+
+model StockAlert {
+  id          String   @id @default(cuid())
+  ticker      String   // AAPL, TSLA, etc.
+  companyName String
+  changePercent Float  // e.g. -5.2 or +8.1
+  price       Float
+  previousClose Float
+  direction   String   // UP or DOWN
+  magnitude   String   // MAJOR (>5%), SIGNIFICANT (>3%), NOTABLE (>2%)
+  headline    String?  // auto-generated headline
+  storyId     String?  // linked to auto-created story
+  detectedAt  DateTime @default(now())
+
+  @@index([detectedAt(sort: Desc)])
+  @@index([ticker])
+}
+
+// ─── Collaborative Editing ─────────────────────────────────────────────────
+
+model StoryEditSession {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId      String
+  isActive    Boolean  @default(true)
+  lastHeartbeat DateTime @default(now())
+  cursor      Json?    // { field, position } for showing cursor position
+  createdAt   DateTime @default(now())
+
+  @@index([storyId, isActive])
+  @@index([userId])
+}
+
+// ─── Fact Checking ─────────────────────────────────────────────────────────
+
+model FactCheck {
+  id          String   @id @default(cuid())
+  storyId     String
+  story       Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  claim       String   @db.Text // the claim being checked
+  verdict     String   // VERIFIED, UNVERIFIED, FALSE, MISLEADING, NEEDS_CONTEXT
+  confidence  Float    // 0-1 AI confidence in verdict
+  evidence    String?  @db.Text // supporting evidence
+  sources     Json?    // URLs/references used
+  model       String   @default("heuristic") // which checker produced this
+  checkedBy   String?  // userId if manually verified
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storyId])
+  @@index([verdict])
+}
+
+// ─── Multi-Language Support ────────────────────────────────────────────────
+
+model TranslatedContent {
+  id              String   @id @default(cuid())
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  sourceLanguage  String   @default("en")
+  targetLanguage  String   // es, fr, zh, etc.
+  translatedTitle String
+  translatedSummary String? @db.Text
+  model           String   // which translation service
+  confidence      Float?
+  createdAt       DateTime @default(now())
+
+  @@unique([storyId, targetLanguage])
+  @@index([targetLanguage])
+}
+
+// ─── Coverage Gap Detection ────────────────────────────────────────────────
+// Tracks what stories an account's newsroom has already covered vs missed.
+
+model CoverageFeed {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name            String   // "Our CMS RSS", "Station Website", etc.
+  type            String   // RSS, API, SCRAPE
+  url             String   // Feed URL, API endpoint, or page to scrape
+  authConfig      Json?    // Optional auth: { apiKey, headers, cookies }
+  pollIntervalMin Int      @default(15) // How often to check (minutes)
+  cssSelector     String?  // For SCRAPE type: CSS selector for article links
+  isActive        Boolean  @default(true)
+  lastPolledAt    DateTime?
+  lastError       String?
+  itemCount       Int      @default(0) // Total items fetched
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  matches CoverageMatch[]
+
+  @@index([accountId, isActive])
+}
+
+model CoverageMatch {
+  id              String   @id @default(cuid())
+  coverageFeedId  String
+  coverageFeed    CoverageFeed @relation(fields: [coverageFeedId], references: [id], onDelete: Cascade)
+  storyId         String
+  story           Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  accountId       String
+  // What matched from their feed
+  matchedUrl      String?
+  matchedTitle    String?
+  similarityScore Float    // 0-1 Jaccard similarity
+  isCovered       Boolean  // true = they covered it, false = gap
+  matchedAt       DateTime @default(now())
+
+  @@unique([coverageFeedId, storyId])
+  @@index([accountId, isCovered])
+  @@index([storyId])
+}
+
+// ─── Story Entities (NER) ──────────────────────────────────────────────────
+// Named entities extracted from stories for relationship discovery.
+// Used to find "Related Stories" that share people, organizations, or locations.
+
+model StoryEntity {
+  id         String   @id @default(cuid())
+  storyId    String
+  story      Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  name       String   // normalized entity name (e.g. "Donald Trump", "FBI", "Houston")
+  type       String   // PERSON, ORGANIZATION, LOCATION, EVENT
+  confidence Float    @default(0.5) // 0-1, how confident the extraction is
+  source     String   @default("llm") // "llm", "regex", "manual"
+  createdAt  DateTime @default(now())
+
+  @@unique([storyId, name, type])
+  @@index([name, type])
+  @@index([storyId])
+}
+
+model SystemKnowledge {
+  id        String   @id
+  key       String   @unique
+  content   String   @db.Text
+  category  String   @default("general")
+  updatedBy String?
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([category])
+}
+
+// ─── Editorial Workflow ────────────────────────────────────────────────────
+// Per-tenant customizable workflow stages. Each account defines their own
+// pipeline from Lead → Published. Default stages are seeded on account creation.
+
+model WorkflowStage {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name        String   // e.g., "Lead", "Assigned", "In Progress", "Draft Ready", "Editor Review", "Approved", "Published"
+  slug        String   // e.g., "lead", "assigned", "in-progress"
+  order       Int      // display order (0 = first)
+  color       String   @default("#6B7280") // hex color for UI badges
+  icon        String?  // lucide icon name
+  requiredRole String  @default("VIEWER") // minimum role to move INTO this stage
+  isInitial   Boolean  @default(false) // the starting stage (only one per account)
+  isFinal     Boolean  @default(false) // terminal stage (Published, Killed)
+  autoActions Json?    // array of { type: "notify_slack"|"send_email"|"generate_draft"|"trigger_webhook", config: {} }
+  createdAt   DateTime @default(now())
+
+  @@unique([accountId, slug])
+  @@index([accountId, order])
+}
+
+// Published content: tracks what was published, where, and when
+model PublishedContent {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+
+  platform        String   // "wordpress", "rss", "twitter", "facebook", "linkedin", "tiktok", "youtube", "instagram", "custom_webhook"
+  externalId      String?  // ID on the external platform
+  externalUrl     String?  // URL on the external platform
+  contentType     String   @default("article") // "article", "video", "audio", "social_post", "thread"
+  content         Json?    // the actual content that was published (title, body, media URLs)
+  status          String   @default("PENDING") // PENDING, PUBLISHED, FAILED, SCHEDULED
+  scheduledFor    DateTime?
+  publishedAt     DateTime?
+  error           String?  // error message if failed
+  metadata        Json?    // platform-specific metadata
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([accountId, status])
+  @@index([accountStoryId])
+  @@index([platform])
+}
+
+// Audio spots generated for stories
+model AudioSpot {
+  id              String   @id @default(cuid())
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+
+  title           String
+  script          String   @db.Text  // the script that was read
+  voiceId         String   @default("alloy") // OpenAI TTS voice
+  format          String   @default("30s") // "15s", "30s", "60s", "full"
+  audioUrl        String?  // URL to the generated audio file (stored on S3 or inline base64)
+  audioBase64     String?  @db.Text  // base64-encoded audio if no S3
+  durationMs      Int?
+  model           String   @default("tts-1") // OpenAI model
+  status          String   @default("PENDING") // PENDING, GENERATING, READY, FAILED
+  error           String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([accountStoryId])
+  @@index([accountId])
+}
+
+// Editorial comments on stories (editor sends back to reporter with notes)
+model EditorialComment {
+  id              String   @id @default(cuid())
+  accountStoryId  String
+  accountStory    AccountStory @relation(fields: [accountStoryId], references: [id], onDelete: Cascade)
+  userId          String
+
+  content         String   @db.Text
+  action          String?  // "approve", "reject", "send_back", "comment"
+  fromStage       String?  // stage when comment was made
+  toStage         String?  // stage it moved to
+
+  createdAt       DateTime @default(now())
+
+  @@index([accountStoryId, createdAt])
+}

@@ -829,13 +829,11 @@ export async function storiesRoutes(
         category: true,
         status: true,
         locationName: true,
-        compositeScore: true,
-        breakingScore: true,
-        trendingScore: true,
         sourceCount: true,
         firstSeenAt: true,
         lastUpdatedAt: true,
-        aiSummary: true,
+        // Removed from teaser: compositeScore, breakingScore, trendingScore, aiSummary
+        // Public endpoint should not expose internal scoring or AI-generated content
       };
 
       let stories = await prisma.story.findMany({

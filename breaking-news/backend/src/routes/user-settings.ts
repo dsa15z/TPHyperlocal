@@ -152,12 +152,19 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
     if (!body.success) return reply.status(400).send({ error: 'Validation error' });
 
     try {
-      const sets: string[] = ['"updatedAt" = NOW()'];
-      if (body.data.name) sets.push(`name = '${body.data.name.replace(/'/g, "''")}'`);
-      if (body.data.columns) sets.push(`columns = '${JSON.stringify(body.data.columns).replace(/'/g, "''")}'::jsonb`);
-      if (body.data.filters) sets.push(`filters = '${JSON.stringify(body.data.filters).replace(/'/g, "''")}'::jsonb`);
+      // Use parameterized query to prevent SQL injection
+      const name = body.data.name || null;
+      const columns = body.data.columns ? JSON.stringify(body.data.columns) : null;
+      const filters = body.data.filters ? JSON.stringify(body.data.filters) : null;
 
-      await prisma.$executeRawUnsafe(`UPDATE "UserView" SET ${sets.join(', ')} WHERE id = '${id}' AND "userId" = '${payload.userId}'`);
+      await prisma.$executeRaw`
+        UPDATE "UserView" SET
+          "updatedAt" = NOW(),
+          name = COALESCE(${name}, name),
+          columns = COALESCE(${columns}::jsonb, columns),
+          filters = COALESCE(${filters}::jsonb, filters)
+        WHERE id = ${id} AND "userId" = ${payload.userId}
+      `;
       return reply.send({ message: 'View updated' });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
@@ -249,13 +256,19 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
     }).safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'Validation error' });
 
-    const sets: string[] = ['"updatedAt" = NOW()'];
-    if (body.data.frequency) sets.push(`frequency = '${body.data.frequency}'`);
-    if (body.data.maxStories) sets.push(`"maxStories" = ${body.data.maxStories}`);
-    if (body.data.isActive !== undefined) sets.push(`"isActive" = ${body.data.isActive}`);
-
     try {
-      await prisma.$executeRawUnsafe(`UPDATE "ViewSubscription" SET ${sets.join(', ')} WHERE id = '${id}' AND "userId" = '${payload.userId}'`);
+      const freq = body.data.frequency || null;
+      const maxStories = body.data.maxStories ?? null;
+      const isActive = body.data.isActive ?? null;
+
+      await prisma.$executeRaw`
+        UPDATE "ViewSubscription" SET
+          "updatedAt" = NOW(),
+          frequency = COALESCE(${freq}, frequency),
+          "maxStories" = COALESCE(${maxStories}::int, "maxStories"),
+          "isActive" = COALESCE(${isActive}::boolean, "isActive")
+        WHERE id = ${id} AND "userId" = ${payload.userId}
+      `;
       return reply.send({ message: 'Subscription updated' });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });

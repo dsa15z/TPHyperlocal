@@ -43,7 +43,7 @@ export function BreakingTicker() {
     }
 
     fetchBreaking();
-    const interval = setInterval(fetchBreaking, 15_000);
+    const interval = setInterval(fetchBreaking, 30_000);
     return () => { active = false; clearInterval(interval); };
   }, []);
 

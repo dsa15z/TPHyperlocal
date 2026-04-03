@@ -302,7 +302,7 @@ export function NewsProgressPanel() {
   const { data: status } = useQuery({
     queryKey: ["pipeline-status"],
     queryFn: fetchPipelineStatus,
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
   });
 
   const triggerMutation = useMutation({
