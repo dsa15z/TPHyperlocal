@@ -8,11 +8,15 @@ import { z } from "zod";
 
 const prisma = new PrismaClient();
 
+// ── Backend API Base URL ────────────────────────────────────────────────────
+
+const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3001";
+
 // ── MCP Server ───────────────────────────────────────────────────────────────
 
 const server = new McpServer({
   name: "breaking-news",
-  version: "1.0.0",
+  version: "2.0.0",
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,6 +33,50 @@ function serializeDates<T>(obj: T): T {
     return result as T;
   }
   return obj;
+}
+
+/** Helper to call backend REST API endpoints */
+async function backendFetch(
+  path: string,
+  options: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  } = {},
+): Promise<{ ok: boolean; status: number; data: unknown }> {
+  const url = `${BACKEND_URL}/api/v1${path}`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  // Forward API key if available
+  const apiKey = process.env.BACKEND_API_KEY;
+  if (apiKey) {
+    headers["x-api-key"] = apiKey;
+  }
+
+  const response = await fetch(url, {
+    method: options.method || "GET",
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const data = await response.json().catch(() => ({ error: "Non-JSON response" }));
+  return { ok: response.ok, status: response.status, data };
+}
+
+/** Wrap a backend fetch result into an MCP tool response */
+function backendResult(result: { ok: boolean; status: number; data: unknown }) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify(result.data, null, 2),
+      },
+    ],
+    isError: !result.ok,
+  };
 }
 
 // ── Tool: query_stories ──────────────────────────────────────────────────────

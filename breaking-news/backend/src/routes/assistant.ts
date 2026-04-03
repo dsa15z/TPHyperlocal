@@ -36,6 +36,23 @@ const TOOLS = [
   { name: 'clear_failed_jobs', description: 'Clear failed jobs from a queue', params: 'queue (ingestion/enrichment/clustering/scoring)' },
   { name: 'explain_score', description: 'Explain why a story has its current score and status', params: 'storyId' },
   { name: 'navigate', description: 'Navigate the user to a specific page in the app', params: 'path (e.g. /, /admin/sources, /admin/markets, /stories/{id})' },
+  // ── New tools: Pipeline Operations ──
+  { name: 'heal_source', description: 'Force self-heal on a failing/inactive source. Tries browser UA, proxy-to-direct, alternate URLs', params: 'sourceId' },
+  { name: 'run_queue', description: 'Force-run a specific pipeline queue (re-score stories, re-enrich, etc.)', params: 'queue (ingestion/enrichment/clustering/scoring)' },
+  { name: 'fix_source_markets', description: 'Auto-link sources to their correct markets + create missing database tables', params: 'none' },
+  { name: 'consolidate_sources', description: 'Merge per-market Bing/Google/Event Registry sources into consolidated multi-market sources', params: 'none' },
+  { name: 'backfill_famous', description: 'Scan existing stories for famous person mentions and flag them', params: 'none' },
+  // ── New tools: Story Verification & Analysis ──
+  { name: 'verify_story', description: 'Send story to 2 LLMs (OpenAI + Grok) for independent fact verification', params: 'storyId' },
+  { name: 'get_related_stories', description: 'Find stories sharing 2+ entities (people, orgs, locations) with a given story', params: 'storyId' },
+  { name: 'get_news_director_alerts', description: 'Get proactive editorial alerts from the AI News Director (uncovered stories, famous persons, spreading stories)', params: 'none' },
+  // ── New tools: Workflow & Publishing ──
+  { name: 'workflow_transition', description: 'Move a story to a new workflow stage (lead/assigned/in-progress/draft-ready/editor-review/approved/published/killed)', params: 'accountStoryId, toStage, comment?' },
+  { name: 'get_workflow_stages', description: 'List all workflow stages for the current account', params: 'none' },
+  { name: 'generate_broadcast_package', description: 'One-click: generate TV script + radio spot + social post + web article + push notification for a story', params: 'storyId, formats? (default: tv_30s,radio_30s,social_post,web_article,push_notification)' },
+  { name: 'generate_audio_spot', description: 'Generate a TTS audio spot for a story using OpenAI voices', params: 'accountStoryId, script, voice? (alloy/echo/fable/onyx/nova/shimmer), format? (15s/30s/60s/full)' },
+  { name: 'publish_content', description: 'Publish story content to an external platform', params: 'accountStoryId, platform (twitter/facebook/linkedin/wordpress/custom_webhook), title, body' },
+  { name: 'get_publish_queue', description: 'List pending/scheduled publish jobs for the current account', params: 'none' },
 ];
 
 // ─── Tool Implementations ──────────────────────────────────────────────────
@@ -268,6 +285,166 @@ async function executeTool(toolName: string, args: Record<string, any>, accountU
 
     case 'navigate': {
       return { navigate: args.path, message: `Navigating to ${args.path}` };
+    }
+
+    // ── Pipeline Operations ──────────────────────────────────────────────
+
+    case 'heal_source': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/pipeline/heal-source/${args.sourceId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      return await resp.json();
+    }
+
+    case 'run_queue': {
+      const queue = new Queue(args.queue, { connection: new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', { maxRetriesPerRequest: null }) });
+      const stories = await prisma.story.findMany({ where: { status: { notIn: ['ARCHIVED', 'STALE'] } }, select: { id: true }, take: 500 });
+      let queued = 0;
+      for (const s of stories) {
+        await queue.add(args.queue === 'scoring' ? 'score' : args.queue, { storyId: s.id }, { attempts: 3 }).catch(() => {});
+        queued++;
+      }
+      await queue.close();
+      return { message: `Force-triggered ${args.queue} for ${queued} stories`, queued };
+    }
+
+    case 'fix_source_markets': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/pipeline/fix-source-markets`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      return await resp.json();
+    }
+
+    case 'consolidate_sources': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/pipeline/consolidate-news-sources`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      return await resp.json();
+    }
+
+    case 'backfill_famous': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/pipeline/backfill-famous`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      return await resp.json();
+    }
+
+    // ── Story Verification & Analysis ────────────────────────────────────
+
+    case 'verify_story': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/stories/${args.storyId}/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      return await resp.json();
+    }
+
+    case 'get_related_stories': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/stories/${args.storyId}/related`);
+      return await resp.json();
+    }
+
+    case 'get_news_director_alerts': {
+      try {
+        const redis = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+        const raw = await redis.get('news-director:alerts');
+        await redis.quit();
+        if (raw) return JSON.parse(raw);
+        return { alerts: [], message: 'No active alerts from the News Director' };
+      } catch {
+        return { alerts: [], error: 'Could not read News Director alerts' };
+      }
+    }
+
+    // ── Workflow & Publishing ─────────────────────────────────────────────
+
+    case 'workflow_transition': {
+      const result = await prisma.accountStory.findFirst({
+        where: { id: args.accountStoryId, accountId: accountUser.accountId },
+      });
+      if (!result) return { error: 'Account story not found' };
+
+      await prisma.accountStory.update({
+        where: { id: args.accountStoryId },
+        data: {
+          accountStatus: args.toStage,
+          ...(args.toStage === 'assigned' && args.assignTo ? { assignedTo: args.assignTo, assignedAt: new Date() } : {}),
+          ...(args.toStage === 'published' ? { coveredAt: new Date() } : {}),
+        },
+      });
+
+      if (args.comment) {
+        await prisma.editorialComment.create({
+          data: {
+            accountStoryId: args.accountStoryId,
+            userId: accountUser.userId,
+            content: args.comment,
+            action: 'transition',
+            fromStage: result.accountStatus,
+            toStage: args.toStage,
+          },
+        }).catch(() => {});
+      }
+
+      return { message: `Story moved to "${args.toStage}"`, fromStage: result.accountStatus, toStage: args.toStage };
+    }
+
+    case 'get_workflow_stages': {
+      let stages = await prisma.workflowStage.findMany({
+        where: { accountId: accountUser.accountId },
+        orderBy: { order: 'asc' },
+      });
+      if (stages.length === 0) {
+        return { stages: ['lead', 'assigned', 'in-progress', 'draft-ready', 'editor-review', 'approved', 'published', 'killed'], message: 'Using default stages (not yet customized)' };
+      }
+      return { stages: stages.map(s => ({ name: s.name, slug: s.slug, order: s.order, color: s.color })) };
+    }
+
+    case 'generate_broadcast_package': {
+      const formats = args.formats
+        ? args.formats.split(',').map((f: string) => f.trim())
+        : ['tv_30s', 'radio_30s', 'social_post', 'web_article', 'push_notification'];
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/broadcast-package/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accountUser.token || ''}` },
+        body: JSON.stringify({ storyId: args.storyId, formats }),
+      });
+      return await resp.json();
+    }
+
+    case 'generate_audio_spot': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/workflow/audio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accountUser.token || ''}` },
+        body: JSON.stringify({
+          accountStoryId: args.accountStoryId,
+          script: args.script,
+          voice: args.voice || 'alloy',
+          format: args.format || '30s',
+        }),
+      });
+      return await resp.json();
+    }
+
+    case 'publish_content': {
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/workflow/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accountUser.token || ''}` },
+        body: JSON.stringify({
+          accountStoryId: args.accountStoryId,
+          platform: args.platform,
+          content: { title: args.title, body: args.body },
+        }),
+      });
+      return await resp.json();
+    }
+
+    case 'get_publish_queue': {
+      const items = await prisma.publishedContent.findMany({
+        where: { accountId: accountUser.accountId, status: { in: ['PENDING', 'SCHEDULED'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      return { queue: items, count: items.length };
     }
 
     default:

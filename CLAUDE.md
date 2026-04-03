@@ -57,6 +57,22 @@ The knowledge base consists of four documents:
 
 **After updating any knowledge file**, remind the user to go to AI & Content → Knowledge Base → click "Auto-Generate Schema Docs" to re-populate the database.
 
+### Chatbot Tools & MCP Server Maintenance (MANDATORY — EVERY COMMIT)
+The AI chatbot (assistant.ts) and MCP server (mcp-server/src/index.ts) must stay in sync with ALL backend capabilities.
+
+**When to update (check on EVERY commit):**
+1. New API endpoint added → add corresponding chatbot tool in `backend/src/routes/assistant.ts` (TOOLS array + executeTool switch)
+2. New API endpoint added → add corresponding MCP tool in `mcp-server/src/index.ts`
+3. New pipeline operation added → add chatbot tool + update `knowledge-chatbot-ops.ts` tool list
+4. New workflow/publishing feature → add chatbot tool + MCP tool
+5. Endpoint signature changed → update tool params in TOOLS array + MCP schema
+
+**Current tool count targets:**
+- Chatbot (assistant.ts): 35+ tools covering stories, sources, markets, pipeline, workflow, publishing, audio, verification, analysis
+- MCP server (index.ts): 20+ tools covering read + write operations
+
+**Never let the chatbot or MCP fall behind the API.** If you add a route, add the tool.
+
 ### Data Operations (MANDATORY — RUN AUTOMATICALLY)
 Never expect the user to run data operations, migrations, or consolidation scripts manually.
 When you create an endpoint that fixes/migrates/consolidates data, **trigger it yourself** immediately after deploying.
