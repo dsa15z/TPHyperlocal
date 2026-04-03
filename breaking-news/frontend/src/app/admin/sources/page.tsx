@@ -1161,12 +1161,18 @@ function SourcesPage() {
                         {isColVisible("market") && <td className="px-4 py-3 text-gray-400 text-xs" style={{ width: colWidth("market") }}>
                           {(() => {
                             const mkts = (source as any).markets || [];
-                            if (mkts.length > 0) {
-                              return mkts.length === 1
-                                ? mkts[0].name
-                                : `${mkts[0].name} +${mkts.length - 1}`;
-                            }
-                            return source.market?.name || <span className="text-gray-600">Global</span>;
+                            const count = mkts.length || (source.market ? 1 : 0);
+                            const names = mkts.length > 0
+                              ? mkts.map((m: any) => m.name).join(', ')
+                              : source.market?.name || 'Global';
+                            return (
+                              <span className="group/mkt relative cursor-default">
+                                <span className="font-mono">{count}</span>
+                                <span className="absolute bottom-full left-0 mb-1 px-2 py-1 text-xs bg-gray-900 text-white rounded shadow-lg whitespace-nowrap opacity-0 group-hover/mkt:opacity-100 transition-opacity pointer-events-none z-50 max-w-[300px] truncate">
+                                  {names}
+                                </span>
+                              </span>
+                            );
                           })()}
                         </td>}
                         {isColVisible("health") && (() => {
