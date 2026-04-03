@@ -430,6 +430,38 @@ export async function sourceRoutes(
     return reply.status(200).send({ message: 'Source deleted', id });
   });
 
+  // POST /admin/sources/:id/toggle-market — connect or disconnect a source from a market
+  app.post('/sources/:id/toggle-market', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
+    const body = z.object({
+      marketId: z.string(),
+      connect: z.boolean(),
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Validation error' });
+
+    const { marketId, connect } = body.data;
+
+    try {
+      if (connect) {
+        await prisma.sourceMarket.create({
+          data: { sourceId: id, marketId },
+        }).catch(() => {}); // ignore if already linked
+        return reply.send({ message: 'Source connected to market', connected: true });
+      } else {
+        await prisma.sourceMarket.deleteMany({
+          where: { sourceId: id, marketId },
+        });
+        return reply.send({ message: 'Source disconnected from market', connected: false });
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /admin/sources/test — test a feed URL before saving
   app.post('/sources/test', async (request, reply) => {
     const au = request.accountUser;
