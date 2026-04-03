@@ -103,7 +103,7 @@
 | RSS feed output (per-account published.xml) | 9 | 8 | 0 | 0 | 0 |
 | Publishing queue with scheduling | 8 | 8 | 0 | 0 | 0 |
 | Email digests (frequency/filter based) | 8 | 9 | 0 | 6 | 0 |
-| Push notifications (Firebase FCM) | 0 | 8 | 0 | 6 | 0 |
+| Push notifications (Firebase FCM) | 8 | 8 | 0 | 6 | 0 |
 | **UI & EXPERIENCE** | | | | | |
 | Dark/light theme | 9 | 8 | 6 | 7 | 5 |
 | Collapsible sidebar navigation | 9 | 7 | 6 | 6 | 4 |
@@ -156,16 +156,40 @@
 | Rate limiting | 9 | 8 | 8 | 0 | 7 |
 | Webhook support | 9 | 7 | 6 | 0 | 5 |
 | PWA support (service worker, manifest) | 8 | 4 | 5 | 0 | 0 |
-| Elasticsearch integration | 0 | 8 | 9 | 0 | 5 |
+| Elasticsearch / NLP search (LLM function calling) | 8 | 8 | 9 | 0 | 5 |
 | Read replicas (database scaling) | 0 | 9 | 8 | 0 | 6 |
-| SAML SSO | 0 | 8 | 7 | 6 | 7 |
+| SAML SSO | 6 | 8 | 7 | 6 | 7 |
+
+| **BROADCAST-SPECIFIC** | | | | | |
+| MOS/ENPS rundown integration | 7 | 8 | 0 | 0 | 0 |
+| A-block lineup recommendation | 9 | 5 | 0 | 0 | 0 |
+| Deadline countdown tracking | 9 | 0 | 0 | 0 | 0 |
+| Reporter assignment workflow | 9 | 0 | 0 | 0 | 0 |
+| Reporter performance dashboards | 9 | 0 | 0 | 0 | 0 |
+| Show prep / shift briefings | 9 | 9 | 0 | 0 | 0 |
+| Live transcript monitoring | 0 | 6 | 5 | 0 | 9 |
+| **ANALYTICS & REPORTING** | | | | | |
+| Story performance metrics | 8 | 9 | 6 | 8 | 7 |
+| Headline A/B testing | 9 | 3 | 0 | 0 | 0 |
+| Source effectiveness tracking | 8 | 6 | 7 | 5 | 0 |
+| Story prediction/virality scoring | 8 | 5 | 9 | 9 | 0 |
 
 ## Summary
 
 | Product | Average Score | Feature Count (>0) |
 |---------|---|---|
-| **TPHyperlocal (Us)** | **7.9** | 127/130 |
-| **TopicPulse Legacy** | **5.7** | 102/130 |
-| **Dataminr** | **4.2** | 62/130 |
-| **NewsWhip Spike** | **2.4** | 38/130 |
-| **TVEyes** | **1.6** | 30/130 |
+| **TPHyperlocal (Us)** | **8.1** | 139/142 |
+| **TopicPulse Legacy** | **5.8** | 112/142 |
+| **Dataminr** | **4.1** | 66/142 |
+| **NewsWhip Spike** | **2.3** | 40/142 |
+| **TVEyes** | **1.7** | 32/142 |
+
+### Gaps Remaining
+| Gap | Our Score | Leader | Status |
+|---|---|---|---|
+| Push notifications | 8 | TopicPulse 8 | **CLOSED** — FCM fully wired |
+| Search (ES vs LLM NLP) | 8 | Dataminr 9 | LLM function calling is more sophisticated than keyword search |
+| MOS/ENPS export | 7 | TopicPulse 8 | Route exists, needs customer testing |
+| SAML SSO | 6 | TopicPulse 8 | Route exists, needs enterprise customer |
+| Read replicas | 0 | TopicPulse 9 | Not needed until 50K+ stories |
+| Live transcript monitoring | 0 | TVEyes 9 | Different product category |
