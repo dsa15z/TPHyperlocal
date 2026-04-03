@@ -125,9 +125,14 @@ export default function KnowledgePage() {
               </div>
             </div>
             {editingId === doc.id ? (
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-4 bg-transparent text-sm text-gray-300 font-mono h-48 resize-y focus:outline-none" />
+              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-4 bg-transparent text-sm text-gray-300 font-mono h-64 resize-y focus:outline-none" />
             ) : (
-              <pre className="p-4 text-xs text-gray-400 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">{doc.content.substring(0, 1000)}{doc.content.length > 1000 ? "..." : ""}</pre>
+              <>
+                <pre className="p-4 text-xs text-gray-400 font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">{doc.content}</pre>
+                <div className="px-4 py-1 text-[10px] text-gray-600 border-t border-surface-300/20">
+                  {doc.content.length.toLocaleString()} characters · {doc.content.split('\n').length} lines
+                </div>
+              </>
             )}
           </div>
         ))}
