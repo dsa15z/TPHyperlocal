@@ -157,16 +157,26 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
     if (!source) return;
 
     const meta = (source.metadata || {}) as Record<string, unknown>;
-    const failures = ((meta.consecutiveFailures as number) || 0) + 1;
+    // Ensure failures is always a number (guard against string concatenation)
+    const failures = (parseInt(String(meta.consecutiveFailures || 0), 10) || 0) + 1;
 
-    // At failure threshold, try to self-heal before giving up
-    if (failures === HEAL_AT_FAILURE) {
+    // ── Audit log: record every failure with timestamp ──
+    const auditLog = ((meta.failureLog || []) as Array<{ at: string; reason: string; failure: number }>).slice(-20); // Keep last 20
+    auditLog.push({ at: new Date().toISOString(), reason: reason.substring(0, 200), failure: failures });
+
+    logger.info({ sourceId, name: source.name, failures, reason: reason.substring(0, 100) }, `Source failure #${failures}`);
+
+    // At failure thresholds, try to self-heal (>= so we never miss the trigger)
+    if (failures >= HEAL_AT_FAILURE && failures <= MAX_CONSECUTIVE_FAILURES) {
+      logger.info({ sourceId, name: source.name, failures }, `Self-heal attempt triggered at failure #${failures}`);
+      auditLog.push({ at: new Date().toISOString(), reason: `SELF-HEAL ATTEMPT at failure #${failures}`, failure: failures });
       const healed = await attemptSelfHeal(source);
       if (healed) return; // Source was healed, don't increment failure count
     }
 
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
       // Auto-deactivate
+      auditLog.push({ at: new Date().toISOString(), reason: `AUTO-DEACTIVATED after ${failures} failures`, failure: failures });
       await prisma.source.update({
         where: { id: sourceId },
         data: {
@@ -174,6 +184,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
           metadata: {
             ...meta,
             consecutiveFailures: failures,
+            failureLog: auditLog,
             deactivatedAt: new Date().toISOString(),
             deactivateReason: reason,
             lastFailure: reason,
@@ -189,7 +200,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
       // Increment failure count
       await prisma.source.update({
         where: { id: sourceId },
-        data: { metadata: { ...meta, consecutiveFailures: failures, lastFailure: reason, lastFailureAt: new Date().toISOString() } },
+        data: { metadata: { ...meta, consecutiveFailures: failures, failureLog: auditLog, lastFailure: reason, lastFailureAt: new Date().toISOString() } },
       });
     }
   } catch (err) {
