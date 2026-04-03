@@ -363,6 +363,33 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     },
   });
 
+  // ── Generate embedding at ingestion time (pre-compute for semantic search) ──
+  try {
+    const textForEmbedding = `${post.title || ''} ${post.content.substring(0, 4000)}`;
+    const openaiKey = process.env['OPENAI_API_KEY'];
+    if (openaiKey && textForEmbedding.length > 20) {
+      const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: textForEmbedding.slice(0, 8000) }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (embRes.ok) {
+        const embData = await embRes.json();
+        const embedding = embData.data?.[0]?.embedding;
+        if (embedding && Array.isArray(embedding)) {
+          await prisma.sourcePost.update({
+            where: { id: post.id },
+            data: { embeddingJson: embedding },
+          });
+          logger.info({ sourcePostId: post.id }, 'Stored embedding (1536-dim) on source post');
+        }
+      }
+    }
+  } catch (err) {
+    logger.debug({ sourcePostId: post.id, err: (err as Error).message }, 'Embedding generation skipped (non-fatal)');
+  }
+
   // Enqueue to clustering queue
   const clusteringQueue = new Queue('clustering', {
     connection: getSharedConnection(),

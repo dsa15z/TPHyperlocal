@@ -35,7 +35,12 @@ When refactoring or renaming:
 
 If results or context seem incomplete, say so explicitly instead of guessing.
 
-### RAG Knowledge Base Maintenance (MANDATORY — EVERY COMMIT)
+### RAG + Documentation + MCP/Tools Sync (MANDATORY — EVERY COMMIT)
+**On EVERY commit, you MUST check and update ALL THREE of these systems if relevant:**
+1. **RAG Knowledge Base** — Injected into ALL AI prompts. Stale docs = wrong AI answers.
+2. **Architecture Documentation** — `docs/ai-architecture-portable-guide.md` must reflect current state.
+3. **Chatbot Tools + MCP Server** — Both must expose every API capability. If you add a route, add the tool.
+
 The RAG knowledge base is injected into ALL AI prompts (NLP search, chatbot, content generation).
 Stale RAG docs cause the AI to give wrong answers — treat this as a **build-breaking issue**.
 

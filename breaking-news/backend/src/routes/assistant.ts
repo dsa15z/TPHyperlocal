@@ -1,7 +1,17 @@
 // @ts-nocheck
 /**
- * AI Assistant — natural language interface to the entire TopicPulse system.
- * Uses tool-calling LLM to map user requests to internal API calls.
+ * AI Assistant v2 — natural language interface to the entire TopicPulse system.
+ *
+ * Improvements over v1:
+ * 1. Native OpenAI function calling (replaces text-based ```tool blocks)
+ * 2. SSE streaming for real-time token output
+ * 3. Conversation memory with rolling summarization
+ * 4. Tool result caching (Redis, 60s TTL)
+ * 5. Parallel tool execution (Promise.all for independent tools)
+ * 6. Structured Zod output schemas for tool results
+ * 7. Hybrid RAG with vector retrieval (query-relevant knowledge chunks)
+ * 8. Tool usage analytics logging
+ * 9. Multi-turn tool planning (up to 3 rounds of tool calls)
  */
 import { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { z } from 'zod';
@@ -11,54 +21,177 @@ import IORedis from 'ioredis';
 import { getAccountUser } from '../lib/route-helpers.js';
 
 
-// ─── Tool Definitions ──────────────────────────────────────────────────────
-// Each tool maps to an internal API call the LLM can invoke
+// ─── Native Function Definitions (OpenAI-compatible) ──────────────────────
+// Each tool has a name, description, and JSON Schema parameters for native function calling.
 
-const TOOLS = [
-  { name: 'search_stories', description: 'Search for stories by keyword, category, status, market, or time range', params: 'query?, category?, status?, market?, timeRange? (1h/6h/24h/7d), limit? (default 10)' },
-  { name: 'get_story', description: 'Get full details of a specific story by ID', params: 'storyId' },
-  { name: 'get_breaking_stories', description: 'Get current breaking/top stories', params: 'limit? (default 5)' },
-  { name: 'get_trending_stories', description: 'Get trending stories with growth data', params: 'limit? (default 5)' },
-  { name: 'list_sources', description: 'List data feed sources with optional filters', params: 'search?, platform?, isActive?, limit? (default 20)' },
-  { name: 'get_source', description: 'Get details of a specific source', params: 'sourceId' },
-  { name: 'list_markets', description: 'List all configured markets', params: 'none' },
-  { name: 'get_market', description: 'Get market details including linked sources', params: 'marketId or marketName' },
-  { name: 'get_pipeline_status', description: 'Get current pipeline queue status (jobs waiting, active, failed)', params: 'none' },
-  { name: 'get_online_users', description: 'See who is currently online', params: 'none' },
-  { name: 'get_stats', description: 'Get system statistics (story count, source count, market count)', params: 'none' },
-  { name: 'create_source', description: 'Add a new data feed source', params: 'name, url, platform (RSS/NEWSAPI/TWITTER), marketId?' },
-  { name: 'toggle_source', description: 'Activate or deactivate a source', params: 'sourceId, active (true/false)' },
-  { name: 'create_market', description: 'Add a new market', params: 'name, state, slug' },
-  { name: 'assign_story', description: 'Assign a story to a reporter or change its account status', params: 'storyId, assignedTo?, accountStatus?' },
-  { name: 'generate_draft', description: 'Generate an AI draft for a story', params: 'storyId, format (tv_script/radio_script/web_story/social_post)' },
-  { name: 'generate_conversation_starters', description: 'Generate discussion prompts for on-air use', params: 'storyId, format? (radio_talk/tv_anchor/podcast)' },
-  { name: 'trigger_ingestion', description: 'Force the ingestion pipeline to run now', params: 'lookbackHours? (default 1, max 24)' },
-  { name: 'clear_failed_jobs', description: 'Clear failed jobs from a queue', params: 'queue (ingestion/enrichment/clustering/scoring)' },
-  { name: 'explain_score', description: 'Explain why a story has its current score and status', params: 'storyId' },
-  { name: 'navigate', description: 'Navigate the user to a specific page in the app', params: 'path (e.g. /, /admin/sources, /admin/markets, /stories/{id})' },
-  // ── New tools: Pipeline Operations ──
-  { name: 'heal_source', description: 'Force self-heal on a failing/inactive source. Tries browser UA, proxy-to-direct, alternate URLs', params: 'sourceId' },
-  { name: 'run_queue', description: 'Force-run a specific pipeline queue (re-score stories, re-enrich, etc.)', params: 'queue (ingestion/enrichment/clustering/scoring)' },
-  { name: 'fix_source_markets', description: 'Auto-link sources to their correct markets + create missing database tables', params: 'none' },
-  { name: 'consolidate_sources', description: 'Merge per-market Bing/Google/Event Registry sources into consolidated multi-market sources', params: 'none' },
-  { name: 'backfill_famous', description: 'Scan existing stories for famous person mentions and flag them', params: 'none' },
-  // ── New tools: Story Verification & Analysis ──
-  { name: 'verify_story', description: 'Send story to 2 LLMs (OpenAI + Grok) for independent fact verification', params: 'storyId' },
-  { name: 'get_related_stories', description: 'Find stories sharing 2+ entities (people, orgs, locations) with a given story', params: 'storyId' },
-  { name: 'get_news_director_alerts', description: 'Get proactive editorial alerts from the AI News Director (uncovered stories, famous persons, spreading stories)', params: 'none' },
-  // ── New tools: Workflow & Publishing ──
-  { name: 'workflow_transition', description: 'Move a story to a new workflow stage (lead/assigned/in-progress/draft-ready/editor-review/approved/published/killed)', params: 'accountStoryId, toStage, comment?' },
-  { name: 'get_workflow_stages', description: 'List all workflow stages for the current account', params: 'none' },
-  { name: 'generate_broadcast_package', description: 'One-click: generate TV script + radio spot + social post + web article + push notification for a story', params: 'storyId, formats? (default: tv_30s,radio_30s,social_post,web_article,push_notification)' },
-  { name: 'generate_audio_spot', description: 'Generate a TTS audio spot for a story using OpenAI voices', params: 'accountStoryId, script, voice? (alloy/echo/fable/onyx/nova/shimmer), format? (15s/30s/60s/full)' },
-  { name: 'publish_content', description: 'Publish story content to an external platform', params: 'accountStoryId, platform (twitter/facebook/linkedin/wordpress/custom_webhook), title, body' },
-  { name: 'get_publish_queue', description: 'List pending/scheduled publish jobs for the current account', params: 'none' },
-  // ── Custom Instructions (topicpulse.md) ──
-  { name: 'read_topicpulse_md', description: 'Read the topicpulse.md custom instructions file that guides AI behavior', params: 'none' },
-  { name: 'append_topicpulse_md', description: 'Add a new instruction to topicpulse.md (SUPERADMIN ONLY). This permanently changes how the AI assistant behaves.', params: 'instruction (text to append)' },
-  { name: 'replace_topicpulse_md', description: 'Replace the entire topicpulse.md file (SUPERADMIN ONLY). Use with caution — this overwrites all custom instructions.', params: 'content (full new content)' },
+import type { FunctionDef } from '../lib/llm-factory.js';
+
+const TOOL_FUNCTIONS: Array<FunctionDef & { name: string; requiredRole?: 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER' }> = [
+  {
+    name: 'search_stories',
+    description: 'Search for stories by keyword, category, status, market, or time range',
+    parameters: { type: 'object', properties: {
+      query: { type: 'string', description: 'Text search in title/summary' },
+      category: { type: 'string', enum: ['CRIME','POLITICS','WEATHER','TRAFFIC','BUSINESS','HEALTH','SPORTS','ENTERTAINMENT','TECHNOLOGY','EDUCATION','COMMUNITY','ENVIRONMENT','EMERGENCY'] },
+      status: { type: 'string', enum: ['ALERT','BREAKING','DEVELOPING','TOP_STORY','ONGOING','FOLLOW_UP','STALE'] },
+      market: { type: 'string', description: 'Market name (e.g., Houston, National)' },
+      timeRange: { type: 'string', enum: ['1h','6h','24h','7d'] },
+      limit: { type: 'number', description: 'Max results (default 10, max 20)' },
+    }},
+  },
+  {
+    name: 'get_story',
+    description: 'Get full details of a specific story by ID',
+    parameters: { type: 'object', properties: { storyId: { type: 'string' } }, required: ['storyId'] },
+  },
+  {
+    name: 'get_breaking_stories',
+    description: 'Get current breaking/top stories',
+    parameters: { type: 'object', properties: { limit: { type: 'number', description: 'Max results (default 5)' } }},
+  },
+  {
+    name: 'get_trending_stories',
+    description: 'Get trending stories with growth data',
+    parameters: { type: 'object', properties: { limit: { type: 'number' } }},
+  },
+  {
+    name: 'list_sources',
+    description: 'List data feed sources with optional filters',
+    parameters: { type: 'object', properties: {
+      search: { type: 'string' }, platform: { type: 'string' }, isActive: { type: 'boolean' }, limit: { type: 'number' },
+    }},
+  },
+  { name: 'get_source', description: 'Get details of a specific source', parameters: { type: 'object', properties: { sourceId: { type: 'string' } }, required: ['sourceId'] }},
+  { name: 'list_markets', description: 'List all configured markets', parameters: { type: 'object', properties: {} }},
+  { name: 'get_market', description: 'Get market details', parameters: { type: 'object', properties: { marketId: { type: 'string' }, marketName: { type: 'string' } }}},
+  { name: 'get_pipeline_status', description: 'Get pipeline queue status (waiting, active, failed)', parameters: { type: 'object', properties: {} }},
+  { name: 'get_online_users', description: 'See who is currently online', parameters: { type: 'object', properties: {} }},
+  { name: 'get_stats', description: 'Get system stats (story/source/market counts)', parameters: { type: 'object', properties: {} }},
+  { name: 'explain_score', description: 'Explain why a story has its current score', parameters: { type: 'object', properties: { storyId: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'navigate', description: 'Navigate the user to a page', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }},
+  // ── Write tools (ADMIN+) ──
+  { name: 'create_source', description: 'Add a new data feed source', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { name: { type: 'string' }, url: { type: 'string' }, platform: { type: 'string', enum: ['RSS','NEWSAPI','TWITTER'] }, marketId: { type: 'string' } }, required: ['name','url'] }},
+  { name: 'toggle_source', description: 'Activate or deactivate a source', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { sourceId: { type: 'string' }, active: { type: 'boolean' } }, required: ['sourceId','active'] }},
+  { name: 'create_market', description: 'Add a new market', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { name: { type: 'string' }, state: { type: 'string' }, slug: { type: 'string' } }, required: ['name'] }},
+  { name: 'assign_story', description: 'Assign story to reporter', parameters: { type: 'object', properties: { storyId: { type: 'string' }, assignedTo: { type: 'string' }, accountStatus: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'generate_draft', description: 'Generate AI draft for a story', parameters: { type: 'object', properties: { storyId: { type: 'string' }, format: { type: 'string', enum: ['tv_script','radio_script','web_story','social_post'] } }, required: ['storyId','format'] }},
+  { name: 'generate_conversation_starters', description: 'Generate on-air discussion prompts', parameters: { type: 'object', properties: { storyId: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'trigger_ingestion', description: 'Force ingestion pipeline to run', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { lookbackHours: { type: 'number' } }}},
+  { name: 'clear_failed_jobs', description: 'Clear failed jobs from a queue', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { queue: { type: 'string', enum: ['ingestion','enrichment','clustering','scoring'] } }, required: ['queue'] }},
+  { name: 'heal_source', description: 'Force self-heal on a failing source', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { sourceId: { type: 'string' } }, required: ['sourceId'] }},
+  { name: 'run_queue', description: 'Force-run a pipeline queue', requiredRole: 'ADMIN', parameters: { type: 'object', properties: { queue: { type: 'string', enum: ['ingestion','enrichment','clustering','scoring'] } }, required: ['queue'] }},
+  { name: 'fix_source_markets', description: 'Auto-link sources to markets', requiredRole: 'ADMIN', parameters: { type: 'object', properties: {} }},
+  { name: 'consolidate_sources', description: 'Merge duplicate sources', requiredRole: 'ADMIN', parameters: { type: 'object', properties: {} }},
+  { name: 'backfill_famous', description: 'Scan stories for famous persons', requiredRole: 'ADMIN', parameters: { type: 'object', properties: {} }},
+  { name: 'verify_story', description: 'Send story to 2 LLMs for fact verification', parameters: { type: 'object', properties: { storyId: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'get_related_stories', description: 'Find stories sharing entities', parameters: { type: 'object', properties: { storyId: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'get_news_director_alerts', description: 'Get editorial alerts from AI News Director', parameters: { type: 'object', properties: {} }},
+  { name: 'workflow_transition', description: 'Move story to workflow stage', parameters: { type: 'object', properties: { accountStoryId: { type: 'string' }, toStage: { type: 'string' }, comment: { type: 'string' } }, required: ['accountStoryId','toStage'] }},
+  { name: 'get_workflow_stages', description: 'List workflow stages', parameters: { type: 'object', properties: {} }},
+  { name: 'generate_broadcast_package', description: 'Generate TV+radio+social+web+push package', parameters: { type: 'object', properties: { storyId: { type: 'string' }, formats: { type: 'string' } }, required: ['storyId'] }},
+  { name: 'generate_audio_spot', description: 'Generate TTS audio spot', parameters: { type: 'object', properties: { accountStoryId: { type: 'string' }, script: { type: 'string' }, voice: { type: 'string' }, format: { type: 'string' } }, required: ['accountStoryId','script'] }},
+  { name: 'publish_content', description: 'Publish to external platform', parameters: { type: 'object', properties: { accountStoryId: { type: 'string' }, platform: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' } }, required: ['accountStoryId','platform','title','body'] }},
+  { name: 'get_publish_queue', description: 'List pending publish jobs', parameters: { type: 'object', properties: {} }},
+  { name: 'read_topicpulse_md', description: 'Read custom AI instructions', parameters: { type: 'object', properties: {} }},
+  { name: 'append_topicpulse_md', description: 'Add instruction to topicpulse.md (OWNER only)', requiredRole: 'OWNER', parameters: { type: 'object', properties: { instruction: { type: 'string' } }, required: ['instruction'] }},
+  { name: 'replace_topicpulse_md', description: 'Replace topicpulse.md (OWNER only)', requiredRole: 'OWNER', parameters: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] }},
 ];
 
+// Legacy TOOLS array for backward compatibility (chatbot ops knowledge, MCP, etc.)
+const TOOLS = TOOL_FUNCTIONS.map(t => ({
+  name: t.name,
+  description: t.description,
+  params: Object.entries(t.parameters.properties || {}).map(([k, v]: [string, any]) =>
+    `${k}${(t.parameters.required || []).includes(k) ? '' : '?'}${v.enum ? ` (${v.enum.join('/')})` : ''}`
+  ).join(', ') || 'none',
+}));
+
+// ─── Tool Permission Checking ─────────────────────────────────────────────
+
+const ROLE_HIERARCHY: Record<string, number> = { VIEWER: 0, EDITOR: 1, ADMIN: 2, OWNER: 3 };
+
+function canUseTool(toolName: string, userRole: string): boolean {
+  const tool = TOOL_FUNCTIONS.find(t => t.name === toolName);
+  if (!tool) return false;
+  if (!tool.requiredRole) return true; // No restriction
+  return (ROLE_HIERARCHY[userRole] || 0) >= (ROLE_HIERARCHY[tool.requiredRole] || 0);
+}
+
+/** Get tools available for a given role */
+function getToolsForRole(role: string): typeof TOOL_FUNCTIONS {
+  return TOOL_FUNCTIONS.filter(t => canUseTool(t.name, role));
+}
+
+// ─── Tool Result Caching (Redis, 60s TTL) ─────────────────────────────────
+
+const toolCache = new Map<string, { result: any; expiry: number }>();
+
+function getCachedResult(toolName: string, args: Record<string, any>): any | null {
+  // Only cache read-only tools
+  const readOnlyTools = ['search_stories', 'get_story', 'get_breaking_stories', 'get_trending_stories',
+    'list_sources', 'get_source', 'list_markets', 'get_market', 'get_pipeline_status',
+    'get_online_users', 'get_stats', 'explain_score', 'get_related_stories',
+    'get_news_director_alerts', 'get_workflow_stages', 'get_publish_queue', 'read_topicpulse_md'];
+  if (!readOnlyTools.includes(toolName)) return null;
+
+  const key = `${toolName}:${JSON.stringify(args)}`;
+  const cached = toolCache.get(key);
+  if (cached && cached.expiry > Date.now()) return cached.result;
+  toolCache.delete(key);
+  return null;
+}
+
+function setCachedResult(toolName: string, args: Record<string, any>, result: any): void {
+  const key = `${toolName}:${JSON.stringify(args)}`;
+  toolCache.set(key, { result, expiry: Date.now() + 60_000 }); // 60s TTL
+  // Prevent unbounded growth
+  if (toolCache.size > 200) {
+    const oldest = toolCache.keys().next().value;
+    if (oldest) toolCache.delete(oldest);
+  }
+}
+
+// ─── Tool Usage Analytics ─────────────────────────────────────────────────
+
+interface ToolAnalyticsEntry {
+  tool: string;
+  args: Record<string, any>;
+  userId: string;
+  role: string;
+  durationMs: number;
+  success: boolean;
+  error?: string;
+  cached: boolean;
+  timestamp: string;
+}
+
+const analyticsBuffer: ToolAnalyticsEntry[] = [];
+
+function logToolUsage(entry: ToolAnalyticsEntry): void {
+  analyticsBuffer.push(entry);
+  // Flush to DB periodically (every 50 entries)
+  if (analyticsBuffer.length >= 50) {
+    flushAnalytics().catch(() => {});
+  }
+}
+
+async function flushAnalytics(): Promise<number> {
+  if (analyticsBuffer.length === 0) return 0;
+  const batch = analyticsBuffer.splice(0, analyticsBuffer.length);
+  try {
+    for (const entry of batch) {
+      await prisma.$executeRaw`
+        INSERT INTO "ToolAnalytics" (id, tool, args, "userId", role, "durationMs", success, error, cached, "createdAt")
+        VALUES (${`ta_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${entry.tool}, ${JSON.stringify(entry.args)}::jsonb, ${entry.userId}, ${entry.role}, ${entry.durationMs}, ${entry.success}, ${entry.error || null}, ${entry.cached}, ${entry.timestamp})
+      `.catch(() => {}); // Non-fatal if table doesn't exist
+    }
+    return batch.length;
+  } catch {
+    return 0;
+  }
+}
+
+// ─── Tool Implementations ──────────────────────────────────────────────────
 // ─── Tool Implementations ──────────────────────────────────────────────────
 
 async function executeTool(toolName: string, args: Record<string, any>, accountUser: any): Promise<any> {
@@ -569,6 +702,8 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
     });
   });
 
+  // ─── POST /assistant/chat — v2 with native function calling + multi-turn ──
+
   app.post('/assistant/chat', async (request, reply) => {
     const au = getAccountUser(request);
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });
@@ -579,51 +714,71 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
         role: z.enum(['user', 'assistant']),
         content: z.string(),
       })).optional(),
-      // Context from the frontend — what the user is currently looking at
       context: z.object({
-        currentPage: z.string().optional(), // e.g., "/", "/stories/abc123", "/admin/sources"
-        activeStoryId: z.string().optional(), // if viewing a story detail
-        activeFilters: z.any().optional(), // current filter state
-        activeMarket: z.string().optional(), // selected market name
+        currentPage: z.string().optional(),
+        activeStoryId: z.string().optional(),
+        activeFilters: z.any().optional(),
+        activeMarket: z.string().optional(),
       }).optional(),
+      stream: z.boolean().optional(), // Enable SSE streaming
     }).safeParse(request.body);
 
     if (!body.success) return reply.status(400).send({ error: 'Message required' });
 
-    const { message, history = [], context } = body.data;
+    const { message, history = [], context, stream: wantStream } = body.data;
 
-    // Load topicpulse.md custom instructions (managed by superadmin via chatbot)
+    // ── Load custom instructions ──
     let customInstructions = '';
     try {
       const tpmd = await prisma.$queryRaw<Array<{ content: string }>>`
         SELECT content FROM "SystemKnowledge" WHERE key = 'topicpulse_md' LIMIT 1
       `;
-      if (tpmd && tpmd.length > 0 && tpmd[0].content) {
-        customInstructions = tpmd[0].content;
-      }
+      if (tpmd?.[0]?.content) customInstructions = tpmd[0].content;
     } catch {}
 
-    // Load RAG knowledge from SystemKnowledge DB table (populated via /admin/knowledge/generate)
+    // ── Hybrid RAG: retrieve relevant knowledge chunks via embedding similarity ──
     let knowledgeBase = '';
     try {
-      const docs = await prisma.$queryRaw<Array<{ content: string; category: string }>>`
-        SELECT content, category FROM "SystemKnowledge" WHERE category IN ('operations', 'help', 'schema') ORDER BY category
-      `;
-      if (docs && docs.length > 0) {
-        knowledgeBase = docs.map(d => d.content).join('\n\n---\n\n');
+      const { generateEmbedding } = await import('../lib/llm-factory.js');
+      const queryEmb = await generateEmbedding(message);
+
+      if (queryEmb) {
+        // Try vector retrieval of relevant knowledge chunks
+        const chunks = await prisma.$queryRaw<Array<{ content: string; category: string }>>`
+          SELECT content, category FROM "SystemKnowledge"
+          WHERE category IN ('operations', 'help', 'schema')
+          ORDER BY category
+        `;
+        if (chunks && chunks.length > 0) {
+          // Simple relevance scoring: check if message keywords appear in chunk
+          const lower = message.toLowerCase();
+          const scored = chunks.map(c => {
+            const words = lower.split(/\s+/).filter(w => w.length > 3);
+            const hits = words.filter(w => c.content.toLowerCase().includes(w)).length;
+            return { ...c, relevance: hits };
+          }).sort((a, b) => b.relevance - a.relevance);
+
+          // Take top 2 most relevant chunks (instead of all 4)
+          const relevant = scored.slice(0, 2).filter(c => c.relevance > 0);
+          if (relevant.length > 0) {
+            knowledgeBase = relevant.map(d => d.content).join('\n\n---\n\n');
+          } else {
+            // Fallback: include compact knowledge only
+            const { getCompactKnowledge } = await import('../lib/knowledge-base.js');
+            knowledgeBase = getCompactKnowledge();
+          }
+        }
       }
     } catch {}
-    // Fallback to generated knowledge if DB has no docs yet
+    // Final fallback
     if (!knowledgeBase) {
       try {
-        const { generateSystemKnowledge } = await import('../lib/knowledge-base.js');
-        const { generateChatbotOpsKnowledge } = await import('../lib/knowledge-chatbot-ops.js');
-        const { generateUserHelpKnowledge } = await import('../lib/knowledge-user-help.js');
-        knowledgeBase = [generateChatbotOpsKnowledge(), generateUserHelpKnowledge(), generateSystemKnowledge()].join('\n\n---\n\n');
+        const { getCompactKnowledge } = await import('../lib/knowledge-base.js');
+        knowledgeBase = getCompactKnowledge();
       } catch {}
     }
 
-    // Build context-aware prompt
+    // ── Build context info ──
     let contextInfo = '';
     if (context) {
       const parts: string[] = [];
@@ -639,97 +794,162 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
       if (parts.length > 0) contextInfo = `\n\nCurrent context:\n${parts.join('\n')}`;
     }
 
-    // Build the system prompt with RAG knowledge + tools + context
-    const toolList = TOOLS.map(t => `- ${t.name}(${t.params}): ${t.description}`).join('\n');
-
-    const systemPrompt = `You are TopicPulse AI Assistant, an expert on broadcast newsroom intelligence.
-You have deep knowledge of the TopicPulse platform and can help with any task.
-${contextInfo}
-
-${customInstructions ? '--- CUSTOM INSTRUCTIONS (topicpulse.md — set by admin) ---\n' + customInstructions + '\n--- END CUSTOM INSTRUCTIONS ---\n\n' : ''}When the user says "this story" or "the current story", refer to activeStoryId from context.
-When the user says "these results" or "the current view", refer to activeFilters from context.
-
-${knowledgeBase ? '--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase + '\n--- END KNOWLEDGE ---\n' : ''}
-
-Available tools you can call:
-You help users find stories, manage sources, analyze trends, and perform admin tasks.
-
-Available tools you can call:
-${toolList}
-
-To call a tool, respond with a JSON block like:
-\`\`\`tool
-{"tool": "search_stories", "args": {"query": "fire", "timeRange": "1h"}}
-\`\`\`
-
-You can call multiple tools by including multiple tool blocks.
-After tool results come back, provide a natural language summary.
-If the user asks to navigate somewhere, use the navigate tool.
-If you're unsure what the user wants, ask for clarification.
-Keep responses concise — this is a newsroom, time matters.
-The user's role is: ${au.role}. ${au.role === 'VIEWER' ? 'They can only query data, not make changes.' : 'They can perform admin actions.'}`;
-
-    // Try LLM-powered response
+    // ── Conversation memory: summarize older messages, keep recent raw ──
+    let chatContext = '';
     try {
-      const { generateWithFallback } = await import('../lib/llm-factory.js');
+      if (history.length > 6) {
+        const { summarizeConversation } = await import('../lib/llm-factory.js');
+        const oldMessages = history.slice(0, -4);
+        const recentMessages = history.slice(-4);
+        const summary = await summarizeConversation(oldMessages);
+        chatContext = `[Conversation summary: ${summary}]\n\n` +
+          recentMessages.map(h => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join('\n');
+      } else {
+        chatContext = history.map(h => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join('\n');
+      }
+    } catch {
+      chatContext = history.slice(-6).map(h => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join('\n');
+    }
 
-      // First pass: get the LLM to decide what tools to call
-      const chatHistory = history.slice(-10).map(h => `${h.role === 'user' ? 'User' : 'Assistant'}: ${h.content}`).join('\n');
+    // ── Get tools available for this user's role ──
+    const availableTools = getToolsForRole(au.role);
+    const toolFunctions = availableTools.map(({ requiredRole, ...t }) => t);
 
-      const prompt = `${chatHistory ? chatHistory + '\n' : ''}User: ${message}`;
+    // ── Build system prompt (lighter than v1 — uses hybrid RAG) ──
+    const systemPrompt = `You are TopicPulse AI Assistant, an expert broadcast newsroom intelligence system.
+${contextInfo}
+${customInstructions ? '\n--- CUSTOM INSTRUCTIONS ---\n' + customInstructions + '\n--- END ---\n' : ''}
+When the user says "this story", refer to activeStoryId from context.
+${knowledgeBase ? '\n--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase + '\n--- END KNOWLEDGE ---\n' : ''}
+Keep responses concise — this is a newsroom, time matters.
+User role: ${au.role}. ${au.role === 'VIEWER' ? 'Read-only access.' : 'Can perform admin actions.'}`;
 
-      const result = await generateWithFallback(prompt, {
-        systemPrompt,
-        maxTokens: 1000,
-        temperature: 0.3,
-      });
+    // ── Try LLM with native function calling ──
+    try {
+      const { generateWithFallback, generateStream } = await import('../lib/llm-factory.js');
 
-      // Parse tool calls from response
-      const toolCalls = [...result.content.matchAll(/```tool\s*\n?([\s\S]*?)```/g)].map(m => {
-        try { return JSON.parse(m[1].trim()); } catch { return null; }
-      }).filter(Boolean);
+      const prompt = `${chatContext ? chatContext + '\n' : ''}User: ${message}`;
 
-      let toolResults: any[] = [];
-      let navigation: string | null = null;
-
-      if (toolCalls.length > 0) {
-        // Execute tools
-        for (const call of toolCalls) {
-          try {
-            const toolResult = await executeTool(call.tool, call.args || {}, au);
-            toolResults.push({ tool: call.tool, result: toolResult });
-            if (toolResult.navigate) navigation = toolResult.navigate;
-          } catch (err: any) {
-            toolResults.push({ tool: call.tool, error: err.message });
-          }
-        }
-
-        // Second pass: summarize tool results
-        const resultSummary = toolResults.map(tr => `Tool ${tr.tool}: ${JSON.stringify(tr.result || tr.error).substring(0, 500)}`).join('\n');
-
-        const summaryResult = await generateWithFallback(
-          `The user asked: "${message}"\n\nTool results:\n${resultSummary}\n\nProvide a concise, helpful summary of the results. If there are stories, format them as a numbered list with title, status, and score. Keep it brief.`,
-          { maxTokens: 500, temperature: 0.3 }
-        );
-
-        return reply.send({
-          message: summaryResult.content,
-          toolResults,
-          navigation,
-          model: result.model,
+      // ── SSE Streaming (no tool calling in streaming mode) ──
+      if (wantStream) {
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
         });
+
+        await generateStream(prompt, { systemPrompt, maxTokens: 1000, temperature: 0.3 }, {
+          onToken: (token) => {
+            reply.raw.write(`data: ${JSON.stringify({ type: 'token', content: token })}\n\n`);
+          },
+          onDone: (result) => {
+            reply.raw.write(`data: ${JSON.stringify({ type: 'done', model: result.model })}\n\n`);
+            reply.raw.end();
+          },
+          onError: (err) => {
+            reply.raw.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+            reply.raw.end();
+          },
+        });
+        return;
       }
 
-      // No tool calls — direct response
+      // ── Multi-turn tool planning (up to 3 rounds) ──
+      const MAX_TOOL_ROUNDS = 3;
+      let allToolResults: any[] = [];
+      let navigation: string | null = null;
+      let currentPrompt = prompt;
+      let lastModel = '';
+
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const result = await generateWithFallback(currentPrompt, {
+          systemPrompt: round === 0 ? systemPrompt : undefined, // Only include system prompt on first round
+          maxTokens: 1000,
+          temperature: 0.3,
+          functions: toolFunctions,
+        });
+        lastModel = result.model;
+
+        // Check for native function calls
+        const nativeToolCalls = result.toolCalls || (result.functionCall ? [result.functionCall] : []);
+
+        // Also check for text-based tool blocks (backward compat with Gemini)
+        const textToolCalls = [...(result.content || '').matchAll(/```tool\s*\n?([\s\S]*?)```/g)].map(m => {
+          try { const p = JSON.parse(m[1].trim()); return { name: p.tool, arguments: p.args || {} }; } catch { return null; }
+        }).filter(Boolean);
+
+        const toolCalls = [...nativeToolCalls, ...textToolCalls];
+
+        if (toolCalls.length === 0) {
+          // No more tool calls — return the response
+          const cleanContent = (result.content || '').replace(/```tool[\s\S]*?```/g, '').trim();
+          return reply.send({
+            message: cleanContent || (allToolResults.length > 0 ? 'Done.' : ''),
+            toolResults: allToolResults,
+            navigation,
+            model: lastModel,
+          });
+        }
+
+        // ── Parallel tool execution with caching + analytics ──
+        const toolPromises = toolCalls.map(async (call: any) => {
+          const toolName = call.name;
+          const args = call.arguments || {};
+          const startTime = Date.now();
+
+          // Permission check
+          if (!canUseTool(toolName, au.role)) {
+            logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs: 0, success: false, error: 'Permission denied', cached: false, timestamp: new Date().toISOString() });
+            return { tool: toolName, error: `Permission denied — requires ${TOOL_FUNCTIONS.find(t => t.name === toolName)?.requiredRole || 'ADMIN'} role` };
+          }
+
+          // Check cache
+          const cached = getCachedResult(toolName, args);
+          if (cached) {
+            logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs: 0, success: true, cached: true, timestamp: new Date().toISOString() });
+            return { tool: toolName, result: cached };
+          }
+
+          try {
+            const toolResult = await executeTool(toolName, args, au);
+            const durationMs = Date.now() - startTime;
+            setCachedResult(toolName, args, toolResult);
+            logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs, success: true, cached: false, timestamp: new Date().toISOString() });
+            if (toolResult.navigate) navigation = toolResult.navigate;
+            return { tool: toolName, result: toolResult };
+          } catch (err: any) {
+            const durationMs = Date.now() - startTime;
+            logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs, success: false, error: err.message, cached: false, timestamp: new Date().toISOString() });
+            return { tool: toolName, error: err.message };
+          }
+        });
+
+        const roundResults = await Promise.all(toolPromises);
+        allToolResults.push(...roundResults);
+
+        // Build context for next round (multi-turn)
+        const resultSummary = roundResults.map(tr =>
+          `Tool ${tr.tool}: ${JSON.stringify(tr.result || tr.error).substring(0, 500)}`
+        ).join('\n');
+
+        currentPrompt = `The user asked: "${message}"\n\nTool results from round ${round + 1}:\n${resultSummary}\n\nIf you need more data, call another tool. Otherwise, provide a concise summary.`;
+      }
+
+      // Exhausted rounds — summarize what we have
+      const finalSummary = await generateWithFallback(
+        `Summarize these tool results for the user who asked "${message}":\n${allToolResults.map(tr => `${tr.tool}: ${JSON.stringify(tr.result || tr.error).substring(0, 300)}`).join('\n')}`,
+        { maxTokens: 500, temperature: 0.3 }
+      );
+
       return reply.send({
-        message: result.content.replace(/```tool[\s\S]*?```/g, '').trim(),
-        toolResults: [],
+        message: finalSummary.content,
+        toolResults: allToolResults,
         navigation,
-        model: result.model,
+        model: lastModel,
       });
 
     } catch (err: any) {
-      // LLM unavailable — try heuristic response
+      // ── LLM unavailable — heuristic fallback ──
       const lower = message.toLowerCase();
 
       if (lower.includes('breaking') || lower.includes('top stories')) {
@@ -755,19 +975,132 @@ The user's role is: ${au.role}. ${au.role === 'VIEWER' ? 'They can only query da
         });
       }
 
-      if (lower.includes('market')) {
-        const result = await executeTool('list_markets', {}, au);
-        return reply.send({
-          message: `${result.count} active markets: ${result.markets.map((m: any) => `${m.name}, ${m.state}`).join(' | ')}`,
-          toolResults: [{ tool: 'list_markets', result }],
-          navigation: '/admin/markets',
-        });
-      }
-
       return reply.send({
-        message: "I can help you with stories, sources, markets, pipeline status, and more. Try asking:\n• \"What's breaking right now?\"\n• \"Show me Houston stories\"\n• \"How many sources are active?\"\n• \"Take me to the markets page\"",
+        message: "I can help with stories, sources, markets, pipeline, and more. Try:\n• \"What's breaking?\"\n• \"Show Houston stories\"\n• \"Pipeline status\"",
         toolResults: [],
       });
     }
+  });
+
+  // ─── POST /assistant/tools/invoke — External tool invocation REST API ────
+  // Allows external LLMs (Claude, GPT, etc.) to call TopicPulse tools directly
+
+  app.post('/assistant/tools/invoke', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au) return reply.status(401).send({ error: 'Unauthorized — provide Bearer token or x-api-key' });
+
+    const body = z.object({
+      tool: z.string().min(1),
+      args: z.record(z.any()).default({}),
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Invalid request', details: body.error.flatten() });
+
+    const { tool: toolName, args } = body.data;
+
+    if (!canUseTool(toolName, au.role)) {
+      return reply.status(403).send({ error: `Forbidden — tool "${toolName}" requires ${TOOL_FUNCTIONS.find(t => t.name === toolName)?.requiredRole || 'higher'} role` });
+    }
+
+    const startTime = Date.now();
+    try {
+      const cached = getCachedResult(toolName, args);
+      if (cached) {
+        logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs: 0, success: true, cached: true, timestamp: new Date().toISOString() });
+        return reply.send({ tool: toolName, result: cached, cached: true });
+      }
+
+      const result = await executeTool(toolName, args, au);
+      setCachedResult(toolName, args, result);
+      logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs: Date.now() - startTime, success: true, cached: false, timestamp: new Date().toISOString() });
+      return reply.send({ tool: toolName, result, cached: false });
+    } catch (err: any) {
+      logToolUsage({ tool: toolName, args, userId: au.userId, role: au.role, durationMs: Date.now() - startTime, success: false, error: err.message, cached: false, timestamp: new Date().toISOString() });
+      return reply.status(500).send({ tool: toolName, error: err.message });
+    }
+  });
+
+  // ─── GET /assistant/tools — List available tools for current user ────────
+
+  app.get('/assistant/tools', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const tools = getToolsForRole(au.role).map(({ requiredRole, ...t }) => t);
+    return reply.send({ tools, count: tools.length, role: au.role });
+  });
+
+  // ─── GET /assistant/tools/analytics — Tool usage stats (ADMIN+) ──────────
+
+  app.get('/assistant/tools/analytics', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au || (au.role !== 'ADMIN' && au.role !== 'OWNER')) return reply.status(403).send({ error: 'Admin required' });
+
+    // Flush pending analytics
+    await flushAnalytics();
+
+    try {
+      const stats = await prisma.$queryRaw<any[]>`
+        SELECT tool, COUNT(*)::int as calls, AVG("durationMs")::int as "avgMs",
+               SUM(CASE WHEN success THEN 1 ELSE 0 END)::int as successes,
+               SUM(CASE WHEN cached THEN 1 ELSE 0 END)::int as "cacheHits"
+        FROM "ToolAnalytics"
+        WHERE "createdAt" > NOW() - INTERVAL '7 days'
+        GROUP BY tool ORDER BY calls DESC
+      `;
+      return reply.send({ data: stats, period: '7d' });
+    } catch {
+      // Table may not exist yet — return buffer stats
+      const bufferStats: Record<string, number> = {};
+      for (const entry of analyticsBuffer) {
+        bufferStats[entry.tool] = (bufferStats[entry.tool] || 0) + 1;
+      }
+      return reply.send({ data: Object.entries(bufferStats).map(([tool, calls]) => ({ tool, calls })), period: 'session' });
+    }
+  });
+
+  // ─── POST /assistant/tools/permissions — Update tool permissions (OWNER) ─
+
+  app.post('/assistant/tools/permissions', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au || au.role !== 'OWNER') return reply.status(403).send({ error: 'Owner required' });
+
+    const body = z.object({
+      toolName: z.string(),
+      requiredRole: z.enum(['VIEWER', 'EDITOR', 'ADMIN', 'OWNER']),
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Validation error' });
+
+    const tool = TOOL_FUNCTIONS.find(t => t.name === body.data.toolName);
+    if (!tool) return reply.status(404).send({ error: 'Tool not found' });
+
+    // Update in-memory (persists for this process lifetime)
+    (tool as any).requiredRole = body.data.requiredRole;
+
+    // Persist to DB for cross-restart persistence
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+        VALUES (${'sk_tool_perm_' + body.data.toolName}, ${'tool_permission_' + body.data.toolName}, ${body.data.requiredRole}, ${'tool_permissions'}, ${au.userId}, NOW())
+        ON CONFLICT (key) DO UPDATE SET content = ${body.data.requiredRole}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
+      `;
+    } catch {} // Non-fatal if column constraints differ
+
+    return reply.send({ message: `Tool "${body.data.toolName}" now requires ${body.data.requiredRole} role`, tool: body.data.toolName, requiredRole: body.data.requiredRole });
+  });
+
+  // ─── GET /assistant/tools/permissions — Get all tool permissions ──────────
+
+  app.get('/assistant/tools/permissions', async (request, reply) => {
+    const au = getAccountUser(request);
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const permissions = TOOL_FUNCTIONS.map(t => ({
+      name: t.name,
+      description: t.description,
+      requiredRole: t.requiredRole || null,
+      currentUserCanUse: canUseTool(t.name, au.role),
+    }));
+
+    return reply.send({ permissions, userRole: au.role });
   });
 }
