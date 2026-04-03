@@ -686,6 +686,7 @@ export async function healSource(sourceId: string): Promise<{
 }> {
   return apiFetch(`/api/v1/pipeline/heal-source/${sourceId}`, {
     method: "POST",
+    headers: getAuthHeaders(),
     body: JSON.stringify({}),
   });
 }

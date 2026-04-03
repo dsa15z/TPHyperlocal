@@ -278,6 +278,9 @@ function SourcesPage() {
       setHealResult(data);
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
+    onError: (err: Error) => {
+      setHealResult({ healed: false, log: [{ action: 'Self-heal request failed', result: 'ERROR' }], error: err.message });
+    },
   });
 
   // Bulk selection state
