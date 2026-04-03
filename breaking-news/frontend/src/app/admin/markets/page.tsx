@@ -659,7 +659,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {tvStations.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30">
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
                         <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
                         <span className="text-gray-500 truncate flex-1">{s.network ? `${s.network}` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
@@ -682,7 +682,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {radioStations.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30">
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
                         <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
                         <span className="text-gray-500 truncate flex-1">{s.format ? `(${s.format})` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
@@ -705,7 +705,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 gap-2">
                     {hlSources.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30">
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
                         <span className="text-white">{s.name}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
                         <button
@@ -725,7 +725,7 @@ export default function MarketsPage() {
                   <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Other Sources ({otherSources.length})</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {otherSources.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30">
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
                         <span className="text-white">{s.name}</span>
                         <span className="text-gray-600">{s.platform}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />

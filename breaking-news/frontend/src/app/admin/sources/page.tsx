@@ -161,6 +161,9 @@ function SourcesPage() {
       }
     }
   }, [urlParams]);
+
+  // Auto-open edit modal if linked with editId param (from market sources tab)
+  const editIdFromUrl = urlParams.get("editId");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);

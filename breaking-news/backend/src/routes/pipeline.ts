@@ -1066,11 +1066,18 @@ export async function pipelineRoutes(
         }
 
         // Deactivate the per-market sources (don't delete — preserve history)
-        const idsToDeactivate = perMarketSources.map(s => s.id).filter(id => id !== consolidated.id);
-        const deactivated = await prisma.source.updateMany({
-          where: { id: { in: idsToDeactivate } },
-          data: { isActive: false },
-        });
+        // Delete the per-market duplicates (keep only the consolidated one)
+        const idsToDelete = perMarketSources.map(s => s.id).filter(id => id !== consolidated.id);
+        let deletedCount = 0;
+        for (const sid of idsToDelete) {
+          try {
+            await prisma.sourceMarket.deleteMany({ where: { sourceId: sid } });
+            await prisma.accountSource.deleteMany({ where: { sourceId: sid } });
+            await prisma.source.delete({ where: { id: sid } });
+            deletedCount++;
+          } catch {}
+        }
+        const deactivated = { count: deletedCount };
 
         results.push(`${consolidatedName}: ${perMarketSources.length} sources → 1 consolidated, ${linked} markets linked, ${deactivated.count} deactivated`);
       }
