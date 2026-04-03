@@ -511,11 +511,10 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
 
     logger.info({ sourceId, name: source.name, failures, reason: reason.substring(0, 100) }, `Source failure #${failures}`);
 
-    // At failure thresholds, try to self-heal (attempt at 3 and again at 7)
-    if (failures === HEAL_AT_FAILURE || failures === 7) {
+    // At failure thresholds, try to self-heal (>= so we never miss the trigger)
+    if (failures >= HEAL_AT_FAILURE && failures <= MAX_CONSECUTIVE_FAILURES) {
       logger.info({ sourceId, name: source.name, failures }, `Self-heal attempt triggered at failure #${failures}`);
       auditLog.push({ at: new Date().toISOString(), reason: `SELF-HEAL ATTEMPT at failure #${failures}`, failure: failures });
-
       const healed = await attemptSelfHeal(source);
       if (healed) {
         auditLog.push({ at: new Date().toISOString(), reason: 'SELF-HEAL SUCCESS', failure: failures });
@@ -540,6 +539,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
       auditLog.push({ at: new Date().toISOString(), reason: `AUTO-DEACTIVATED at failure #${failures}: ${reason.substring(0, 100)}`, failure: failures });
 
       // Auto-deactivate
+      auditLog.push({ at: new Date().toISOString(), reason: `AUTO-DEACTIVATED after ${failures} failures`, failure: failures });
       await prisma.source.update({
         where: { id: sourceId },
         data: {
@@ -547,6 +547,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
           metadata: {
             ...meta,
             consecutiveFailures: failures,
+            failureLog: auditLog,
             deactivatedAt: new Date().toISOString(),
             deactivateReason: reason,
             lastFailure: reason,
@@ -563,7 +564,7 @@ async function trackSourceFailure(sourceId: string, reason: string): Promise<voi
       // Increment failure count with audit log
       await prisma.source.update({
         where: { id: sourceId },
-        data: { metadata: { ...meta, consecutiveFailures: failures, lastFailure: reason, lastFailureAt: new Date().toISOString(), failureLog: auditLog } },
+        data: { metadata: { ...meta, consecutiveFailures: failures, failureLog: auditLog, lastFailure: reason, lastFailureAt: new Date().toISOString() } },
       });
     }
   } catch (err) {
