@@ -97,25 +97,47 @@ export async function sourceRoutes(
 
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const [sources, total, activeCount] = await Promise.all([
-      prisma.source.findMany({
-        where,
-        include: {
-          accountSources: {
-            where: { accountId: au.accountId },
-            select: { id: true, isEnabled: true, pollIntervalMs: true },
+    let sources: any[], total: number, activeCount: number;
+    try {
+      [sources, total, activeCount] = await Promise.all([
+        prisma.source.findMany({
+          where,
+          include: {
+            accountSources: {
+              where: { accountId: au.accountId },
+              select: { id: true, isEnabled: true, pollIntervalMs: true },
+            },
+            market: { select: { id: true, name: true } },
+            sourceMarkets: { select: { marketId: true, market: { select: { id: true, name: true, state: true } } } },
+            _count: { select: { posts: true } },
           },
-          market: { select: { id: true, name: true } },
-          sourceMarkets: { select: { marketId: true, market: { select: { id: true, name: true, state: true } } } },
-          _count: { select: { posts: true } },
-        },
-        orderBy: { [sort]: order },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.source.count({ where }),
-      prisma.source.count({ where: { ...where, isActive: true } }),
-    ]);
+          orderBy: { [sort]: order },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.source.count({ where }),
+        prisma.source.count({ where: { ...where, isActive: true } }),
+      ]);
+    } catch (err: any) {
+      // Fallback: simpler query without sourceMarkets (in case relation doesn't exist in this Prisma client)
+      app.log.error({ err: err.message }, 'Sources list query failed — trying simplified query');
+      [sources, total, activeCount] = await Promise.all([
+        prisma.source.findMany({
+          where,
+          include: {
+            market: { select: { id: true, name: true } },
+            _count: { select: { posts: true } },
+          },
+          orderBy: { [sort]: order },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.source.count({ where }),
+        prisma.source.count({ where: { ...where, isActive: true } }),
+      ]);
+      // Add empty arrays for missing relations
+      sources = sources.map((s: any) => ({ ...s, accountSources: [], sourceMarkets: [] }));
+    }
 
     // Get 24h post counts for all returned sources in one query
     const sourceIds = sources.map((s) => s.id);

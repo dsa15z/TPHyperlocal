@@ -133,32 +133,53 @@ export async function marketRoutes(
     // Superadmin (OWNER) sees all markets across all accounts
     const where = au.role === 'OWNER' ? {} : { accountId: au.accountId };
 
-    const [markets, total] = await Promise.all([
-      prisma.market.findMany({
-        where,
-        include: {
-          _count: { select: { sources: true, stories: true, sourceMarkets: true } },
-          account: { select: { name: true } },
-          sources: {
-            select: {
-              id: true,
-              name: true,
-              platform: true,
-              sourceType: true,
-              url: true,
-              isActive: true,
-              trustScore: true,
-              metadata: true,
+    let markets: any[], total: number;
+    try {
+      [markets, total] = await Promise.all([
+        prisma.market.findMany({
+          where,
+          include: {
+            _count: { select: { sources: true, stories: true, sourceMarkets: true } },
+            account: { select: { name: true } },
+            sources: {
+              select: {
+                id: true,
+                name: true,
+                platform: true,
+                sourceType: true,
+                url: true,
+                isActive: true,
+                trustScore: true,
+                metadata: true,
+              },
+              orderBy: { name: 'asc' },
             },
-            orderBy: { name: 'asc' },
           },
-        },
-        orderBy: { createdAt: 'asc' },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.market.count({ where }),
-    ]);
+          orderBy: { createdAt: 'asc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.market.count({ where }),
+      ]);
+    } catch (err: any) {
+      // Fallback: simpler query without sourceMarkets count (in case relation doesn't exist yet)
+      app.log.error({ err: err.message }, 'Markets list query failed — trying simplified query');
+      [markets, total] = await Promise.all([
+        prisma.market.findMany({
+          where,
+          include: {
+            _count: { select: { sources: true, stories: true } },
+            account: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.market.count({ where }),
+      ]);
+      // Add empty sources array
+      markets = markets.map((m: any) => ({ ...m, sources: [] }));
+    }
 
     return reply.status(200).send({
       data: markets.map((m) => ({
@@ -175,7 +196,7 @@ export async function marketRoutes(
         neighborhoods: m.neighborhoods,
         createdAt: m.createdAt,
         updatedAt: m.updatedAt,
-        sourceCount: Math.max(m._count.sources, (m._count as any).sourceMarkets || 0),
+        sourceCount: Math.max(m._count?.sources || 0, (m._count as any)?.sourceMarkets || 0),
         storyCount: m._count.stories,
         // Deduplicate sources by name (Event Registry scheduler created dupes)
         sources: [...new Map(m.sources.map(s => [s.name, s])).values()].map((s) => {
