@@ -304,6 +304,32 @@ export async function moderationRoutes(app: FastifyInstance, _opts: FastifyPlugi
   });
 
   // ═══════════════════════════════════════════════════════════════════════
+  // TOPICPULSE.MD — Custom AI Instructions (OWNER only)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  app.get('/admin/topicpulse-md', async (request, reply) => {
+    try {
+      const docs = await prisma.$queryRaw<any[]>`SELECT content, "updatedAt", "updatedBy" FROM "SystemKnowledge" WHERE key = 'topicpulse_md' LIMIT 1`;
+      return reply.send({ data: docs?.[0] || null });
+    } catch { return reply.send({ data: null }); }
+  });
+
+  app.put('/admin/topicpulse-md', async (request, reply) => {
+    const au = requireAccountUser(request);
+    if (au.role !== 'OWNER') return reply.status(403).send({ error: 'Only superadmin can edit topicpulse.md' });
+    const body = z.object({ content: z.string() }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Content required' });
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+        VALUES ('sk_topicpulse_md', 'topicpulse_md', ${body.data.content}, 'instructions', ${au.userId}, NOW())
+        ON CONFLICT (key) DO UPDATE SET content = ${body.data.content}, "updatedBy" = ${au.userId}, "updatedAt" = NOW()
+      `;
+      return reply.send({ message: 'topicpulse.md updated' });
+    } catch (err: any) { return reply.status(500).send({ error: err.message }); }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
   // ALGORITHM TUNING
   // ═══════════════════════════════════════════════════════════════════════
 

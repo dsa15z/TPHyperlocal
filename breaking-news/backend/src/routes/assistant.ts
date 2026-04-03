@@ -53,6 +53,10 @@ const TOOLS = [
   { name: 'generate_audio_spot', description: 'Generate a TTS audio spot for a story using OpenAI voices', params: 'accountStoryId, script, voice? (alloy/echo/fable/onyx/nova/shimmer), format? (15s/30s/60s/full)' },
   { name: 'publish_content', description: 'Publish story content to an external platform', params: 'accountStoryId, platform (twitter/facebook/linkedin/wordpress/custom_webhook), title, body' },
   { name: 'get_publish_queue', description: 'List pending/scheduled publish jobs for the current account', params: 'none' },
+  // ── Custom Instructions (topicpulse.md) ──
+  { name: 'read_topicpulse_md', description: 'Read the topicpulse.md custom instructions file that guides AI behavior', params: 'none' },
+  { name: 'append_topicpulse_md', description: 'Add a new instruction to topicpulse.md (SUPERADMIN ONLY). This permanently changes how the AI assistant behaves.', params: 'instruction (text to append)' },
+  { name: 'replace_topicpulse_md', description: 'Replace the entire topicpulse.md file (SUPERADMIN ONLY). Use with caution — this overwrites all custom instructions.', params: 'content (full new content)' },
 ];
 
 // ─── Tool Implementations ──────────────────────────────────────────────────
@@ -447,6 +451,84 @@ async function executeTool(toolName: string, args: Record<string, any>, accountU
       return { queue: items, count: items.length };
     }
 
+    // ── topicpulse.md — Custom Instructions ─────────────────────────────
+
+    case 'read_topicpulse_md': {
+      try {
+        const docs = await prisma.$queryRaw<Array<{ content: string; updatedAt: Date }>>`
+          SELECT content, "updatedAt" FROM "SystemKnowledge" WHERE key = 'topicpulse_md' LIMIT 1
+        `;
+        if (docs && docs.length > 0) {
+          return { content: docs[0].content, updatedAt: docs[0].updatedAt, exists: true };
+        }
+        return { content: '', exists: false, message: 'No topicpulse.md file exists yet. A superadmin can create one using append_topicpulse_md.' };
+      } catch {
+        return { content: '', exists: false, error: 'Could not read topicpulse.md' };
+      }
+    }
+
+    case 'append_topicpulse_md': {
+      // Superadmin only
+      if (accountUser.role !== 'OWNER') {
+        return { error: 'Only superadmin (OWNER role) can modify topicpulse.md. Your role: ' + accountUser.role };
+      }
+      if (!args.instruction || !args.instruction.trim()) {
+        return { error: 'Instruction text is required' };
+      }
+
+      try {
+        // Read existing content
+        const existing = await prisma.$queryRaw<Array<{ content: string }>>`
+          SELECT content FROM "SystemKnowledge" WHERE key = 'topicpulse_md' LIMIT 1
+        `;
+        const currentContent = (existing && existing.length > 0) ? existing[0].content : '';
+        const newContent = currentContent
+          ? `${currentContent}\n\n${args.instruction.trim()}`
+          : args.instruction.trim();
+
+        // Upsert
+        await prisma.$executeRaw`
+          INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+          VALUES (${'sk_topicpulse_md'}, ${'topicpulse_md'}, ${newContent}, ${'instructions'}, ${accountUser.userId}, NOW())
+          ON CONFLICT (key) DO UPDATE SET content = ${newContent}, "updatedBy" = ${accountUser.userId}, "updatedAt" = NOW()
+        `;
+
+        return {
+          message: 'Instruction appended to topicpulse.md',
+          newContent,
+          lineCount: newContent.split('\n').length,
+        };
+      } catch (err: any) {
+        return { error: `Failed to update topicpulse.md: ${err.message}` };
+      }
+    }
+
+    case 'replace_topicpulse_md': {
+      // Superadmin only
+      if (accountUser.role !== 'OWNER') {
+        return { error: 'Only superadmin (OWNER role) can modify topicpulse.md. Your role: ' + accountUser.role };
+      }
+      if (!args.content) {
+        return { error: 'Content is required' };
+      }
+
+      try {
+        await prisma.$executeRaw`
+          INSERT INTO "SystemKnowledge" (id, key, content, category, "updatedBy", "updatedAt")
+          VALUES (${'sk_topicpulse_md'}, ${'topicpulse_md'}, ${args.content}, ${'instructions'}, ${accountUser.userId}, NOW())
+          ON CONFLICT (key) DO UPDATE SET content = ${args.content}, "updatedBy" = ${accountUser.userId}, "updatedAt" = NOW()
+        `;
+
+        return {
+          message: 'topicpulse.md replaced',
+          lineCount: args.content.split('\n').length,
+          characterCount: args.content.length,
+        };
+      } catch (err: any) {
+        return { error: `Failed to replace topicpulse.md: ${err.message}` };
+      }
+    }
+
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -510,6 +592,17 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
 
     const { message, history = [], context } = body.data;
 
+    // Load topicpulse.md custom instructions (managed by superadmin via chatbot)
+    let customInstructions = '';
+    try {
+      const tpmd = await prisma.$queryRaw<Array<{ content: string }>>`
+        SELECT content FROM "SystemKnowledge" WHERE key = 'topicpulse_md' LIMIT 1
+      `;
+      if (tpmd && tpmd.length > 0 && tpmd[0].content) {
+        customInstructions = tpmd[0].content;
+      }
+    } catch {}
+
     // Load RAG knowledge from SystemKnowledge DB table (populated via /admin/knowledge/generate)
     let knowledgeBase = '';
     try {
@@ -553,7 +646,7 @@ export async function assistantRoutes(app: FastifyInstance, _opts: FastifyPlugin
 You have deep knowledge of the TopicPulse platform and can help with any task.
 ${contextInfo}
 
-When the user says "this story" or "the current story", refer to activeStoryId from context.
+${customInstructions ? '--- CUSTOM INSTRUCTIONS (topicpulse.md — set by admin) ---\n' + customInstructions + '\n--- END CUSTOM INSTRUCTIONS ---\n\n' : ''}When the user says "this story" or "the current story", refer to activeStoryId from context.
 When the user says "these results" or "the current view", refer to activeFilters from context.
 
 ${knowledgeBase ? '--- PLATFORM KNOWLEDGE ---\n' + knowledgeBase + '\n--- END KNOWLEDGE ---\n' : ''}
