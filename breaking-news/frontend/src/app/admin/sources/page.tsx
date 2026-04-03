@@ -176,6 +176,9 @@ function SourcesPage() {
   const [formUrl, setFormUrl] = useState("");
   const [formMarketIds, setFormMarketIds] = useState<string[]>([]);
   const [formTrustScore, setFormTrustScore] = useState(50);
+  const [formPollInterval, setFormPollInterval] = useState<number | "">(""); // minutes
+  const [formAutoRewrite, setFormAutoRewrite] = useState(false);
+  const [formDisplaySourceName, setFormDisplaySourceName] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -355,6 +358,9 @@ function SourcesPage() {
     setFormUrl("");
     setFormMarketIds([]);
     setFormTrustScore(50);
+    setFormPollInterval("");
+    setFormAutoRewrite(false);
+    setFormDisplaySourceName("");
     setEditingId(null);
     setTestResult(null);
   };
@@ -369,6 +375,11 @@ function SourcesPage() {
     const mktIds = (source as any).marketIds || [];
     setFormMarketIds(mktIds.length > 0 ? mktIds : source.marketId ? [source.marketId] : []);
     setFormTrustScore(Math.round(source.trustScore * 100));
+    // Load per-source settings from metadata
+    const meta = (source.metadata || {}) as Record<string, unknown>;
+    setFormPollInterval((meta.pollIntervalMinutes as number) || "");
+    setFormAutoRewrite(!!(meta.autoRewrite));
+    setFormDisplaySourceName((meta.displaySourceName as string) || "");
     setShowForm(true);
   };
 
@@ -389,13 +400,19 @@ function SourcesPage() {
       platform: formPlatform,
       sourceType: formSourceType,
       url: formUrl.trim(),
-      marketId: formMarketIds.length > 0 ? formMarketIds[0] : undefined, // Primary market (backward compat)
-      marketIds: formMarketIds.length > 0 ? formMarketIds : undefined, // All markets via SourceMarket
+      marketId: formMarketIds.length > 0 ? formMarketIds[0] : undefined,
+      marketIds: formMarketIds.length > 0 ? formMarketIds : undefined,
       trustScore: formTrustScore / 100,
+    };
+    // Extra fields for update (stored in metadata via backend)
+    const extraFields = {
+      ...(formPollInterval !== "" ? { pollIntervalMinutes: Number(formPollInterval) } : {}),
+      autoRewrite: formAutoRewrite,
+      displaySourceName: formDisplaySourceName.trim() || null,
     };
 
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: payload });
+      updateMutation.mutate({ id: editingId, data: { ...payload, ...extraFields } });
     } else {
       createMutation.mutate(payload);
     }
@@ -711,6 +728,51 @@ function SourcesPage() {
                       <span>High trust</span>
                     </div>
                   </div>
+                </div>
+
+                {/* ── Ingestion Settings ────────────────────────────── */}
+                <div className="border-t border-white/5 pt-3 mt-1">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Ingestion Settings</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Poll Interval (min)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1440"
+                        placeholder="Default (5)"
+                        value={formPollInterval}
+                        onChange={(e) => setFormPollInterval(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded text-sm text-gray-200 placeholder-gray-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Display Source Name</label>
+                      <input
+                        type="text"
+                        placeholder="Override source attribution"
+                        value={formDisplaySourceName}
+                        onChange={(e) => setFormDisplaySourceName(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded text-sm text-gray-200 placeholder-gray-600"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formAutoRewrite}
+                          onChange={(e) => setFormAutoRewrite(e.target.checked)}
+                          className="w-4 h-4 rounded accent-accent"
+                        />
+                        <span className="text-xs text-gray-300">Auto-rewrite content</span>
+                      </label>
+                    </div>
+                  </div>
+                  {formAutoRewrite && (
+                    <p className="text-xs text-yellow-400/70 mt-1">
+                      Stories from this source will be rewritten by AI before publishing. The original source will be hidden and replaced with the display name above.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 pt-2 flex-wrap">

@@ -106,8 +106,6 @@ async function scheduleRSSPolls(): Promise<void> {
   const { ingestionQueue } = getQueues();
 
   try {
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-
     // Find the National market ID
     const nationalMarket = await prisma.market.findFirst({
       where: { name: { contains: 'National', mode: 'insensitive' } },
@@ -145,23 +143,28 @@ async function scheduleRSSPolls(): Promise<void> {
       logger.debug('UI idle — polling national RSS only (local sources paused)');
     }
 
-    const rssSources = await prisma.source.findMany({
+    // Fetch all candidate sources — we filter by per-source poll interval in code
+    const allRssCandidates = await prisma.source.findMany({
       where: {
         platform: 'RSS',
         isActive: true,
         OR: sourceConditions,
-        AND: [
-          {
-            OR: [
-              { lastPolledAt: null },
-              { lastPolledAt: { lt: fiveMinAgo } },
-            ],
-          },
-        ],
       },
       orderBy: { lastPolledAt: 'asc' },
-      take: 50,
+      take: 100,
     });
+
+    // Filter by per-source poll interval (metadata.pollIntervalMinutes or default 5 min)
+    const now = Date.now();
+    const rssSources = allRssCandidates.filter((s) => {
+      if (!s.lastPolledAt) return true; // Never polled — always include
+      const meta = (s.metadata || {}) as Record<string, unknown>;
+      const intervalMin = (typeof meta.pollIntervalMinutes === 'number' && meta.pollIntervalMinutes > 0)
+        ? meta.pollIntervalMinutes
+        : 5; // Default 5 minutes
+      const intervalMs = intervalMin * 60 * 1000;
+      return now - new Date(s.lastPolledAt).getTime() >= intervalMs;
+    }).slice(0, 50);
 
     if (rssSources.length === 0) return;
 

@@ -426,112 +426,7 @@ export async function marketRoutes(
     });
   });
 
-  // POST /admin/markets/autofill — MUST also be before /:id routes
-  // (moved up from below)
-
-  // GET /admin/markets/:id — get market details
-  app.get('/markets/:id', async (request, reply) => {
-    const au = request.accountUser;
-    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
-    requireAdmin(au.role);
-
-    const { id } = request.params as { id: string };
-
-    const market = await prisma.market.findFirst({
-      where: { id, accountId: au.accountId },
-      include: {
-        _count: { select: { sources: true, stories: true } },
-      },
-    });
-
-    if (!market) {
-      return reply.status(404).send({ error: 'Market not found' });
-    }
-
-    return reply.status(200).send({
-      id: market.id,
-      name: market.name,
-      slug: market.slug,
-      state: market.state,
-      latitude: market.latitude,
-      longitude: market.longitude,
-      radiusKm: market.radiusKm,
-      timezone: market.timezone,
-      isActive: market.isActive,
-      keywords: market.keywords,
-      neighborhoods: market.neighborhoods,
-      createdAt: market.createdAt,
-      updatedAt: market.updatedAt,
-      sourceCount: market._count.sources,
-      storyCount: market._count.stories,
-    });
-  });
-
-  // PATCH /admin/markets/:id — update market
-  app.patch('/markets/:id', async (request, reply) => {
-    const au = request.accountUser;
-    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
-    requireAdmin(au.role);
-
-    const { id } = request.params as { id: string };
-
-    const parsed = updateMarketSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
-    }
-
-    // Verify market belongs to account
-    const existing = await prisma.market.findFirst({
-      where: { id, accountId: au.accountId },
-    });
-    if (!existing) {
-      return reply.status(404).send({ error: 'Market not found' });
-    }
-
-    const data = parsed.data;
-
-    // If slug is changing, check uniqueness within account
-    if (data.slug && data.slug !== existing.slug) {
-      const slugTaken = await prisma.market.findUnique({
-        where: { accountId_slug: { accountId: au.accountId, slug: data.slug } },
-      });
-      if (slugTaken) {
-        return reply.status(400).send({ error: 'A market with this slug already exists in your account' });
-      }
-    }
-
-    const market = await prisma.market.update({
-      where: { id },
-      data,
-    });
-
-    return reply.status(200).send(market);
-  });
-
-  // DELETE /admin/markets/:id — soft delete (set isActive=false)
-  app.delete('/markets/:id', async (request, reply) => {
-    const au = request.accountUser;
-    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
-    requireAdmin(au.role);
-
-    const { id } = request.params as { id: string };
-
-    const existing = await prisma.market.findFirst({
-      where: { id, accountId: au.accountId },
-    });
-    if (!existing) {
-      return reply.status(404).send({ error: 'Market not found' });
-    }
-
-    const market = await prisma.market.update({
-      where: { id },
-      data: { isActive: false },
-    });
-
-    return reply.status(200).send({ message: 'Market deactivated', id: market.id });
-  });
-
-  // POST /admin/markets/autofill — AI-powered market data autofill
+  // POST /admin/markets/autofill — MUST be before /:id routes
   app.post('/markets/autofill', async (request, reply) => {
     const au = request.accountUser;
     if (!au) return reply.status(401).send({ error: 'Unauthorized' });
@@ -649,4 +544,107 @@ Return ONLY the JSON object, no other text.`;
       });
     }
   });
+
+  // GET /admin/markets/:id — get market details
+  app.get('/markets/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
+
+    const market = await prisma.market.findFirst({
+      where: { id, accountId: au.accountId },
+      include: {
+        _count: { select: { sources: true, stories: true } },
+      },
+    });
+
+    if (!market) {
+      return reply.status(404).send({ error: 'Market not found' });
+    }
+
+    return reply.status(200).send({
+      id: market.id,
+      name: market.name,
+      slug: market.slug,
+      state: market.state,
+      latitude: market.latitude,
+      longitude: market.longitude,
+      radiusKm: market.radiusKm,
+      timezone: market.timezone,
+      isActive: market.isActive,
+      keywords: market.keywords,
+      neighborhoods: market.neighborhoods,
+      createdAt: market.createdAt,
+      updatedAt: market.updatedAt,
+      sourceCount: market._count.sources,
+      storyCount: market._count.stories,
+    });
+  });
+
+  // PATCH /admin/markets/:id — update market
+  app.patch('/markets/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
+
+    const parsed = updateMarketSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation error', details: parsed.error.flatten() });
+    }
+
+    // Verify market belongs to account
+    const existing = await prisma.market.findFirst({
+      where: { id, accountId: au.accountId },
+    });
+    if (!existing) {
+      return reply.status(404).send({ error: 'Market not found' });
+    }
+
+    const data = parsed.data;
+
+    // If slug is changing, check uniqueness within account
+    if (data.slug && data.slug !== existing.slug) {
+      const slugTaken = await prisma.market.findUnique({
+        where: { accountId_slug: { accountId: au.accountId, slug: data.slug } },
+      });
+      if (slugTaken) {
+        return reply.status(400).send({ error: 'A market with this slug already exists in your account' });
+      }
+    }
+
+    const market = await prisma.market.update({
+      where: { id },
+      data,
+    });
+
+    return reply.status(200).send(market);
+  });
+
+  // DELETE /admin/markets/:id — soft delete (set isActive=false)
+  app.delete('/markets/:id', async (request, reply) => {
+    const au = request.accountUser;
+    if (!au) return reply.status(401).send({ error: 'Unauthorized' });
+    requireAdmin(au.role);
+
+    const { id } = request.params as { id: string };
+
+    const existing = await prisma.market.findFirst({
+      where: { id, accountId: au.accountId },
+    });
+    if (!existing) {
+      return reply.status(404).send({ error: 'Market not found' });
+    }
+
+    const market = await prisma.market.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    return reply.status(200).send({ message: 'Market deactivated', id: market.id });
+  });
+
 }

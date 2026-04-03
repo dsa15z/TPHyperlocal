@@ -585,6 +585,37 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     }
   }
 
+  // ── Auto-rewrite: check if source has autoRewrite enabled ──
+  try {
+    const sourceForRewrite = await prisma.source.findUnique({
+      where: { id: post.sourceId },
+      select: { metadata: true, name: true },
+    });
+    const srcMeta = (sourceForRewrite?.metadata || {}) as Record<string, unknown>;
+    if (srcMeta.autoRewrite) {
+      const displayName = (srcMeta.displaySourceName as string) || sourceForRewrite?.name || 'Staff Report';
+      // Queue a first-draft rewrite job
+      const fdQueue = new Queue('first-draft', { connection: getSharedConnection() });
+      await fdQueue.add('rewrite', {
+        storyId,
+        type: 'rewrite',
+        displaySourceName: displayName,
+      }, {
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 3000 },
+      });
+      await fdQueue.close();
+      // Apply display source name override on the story
+      await prisma.$executeRaw`
+        UPDATE "Story" SET summary = CONCAT('[Auto-rewrite pending] ', COALESCE(summary, ''))
+        WHERE id = ${storyId} AND (summary IS NULL OR summary NOT LIKE '[Auto-rewrite%')
+      `;
+      logger.info({ storyId, displayName }, 'Auto-rewrite queued — source has autoRewrite enabled');
+    }
+  } catch (err) {
+    logger.warn({ storyId, err: (err as Error).message }, 'Auto-rewrite check failed (non-fatal)');
+  }
+
   // Enqueue to scoring queue
   const scoringQueue = new Queue('scoring', {
     connection: getSharedConnection(),

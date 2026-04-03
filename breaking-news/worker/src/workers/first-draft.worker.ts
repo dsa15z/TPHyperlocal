@@ -12,6 +12,7 @@ interface FirstDraftJob {
   type: string; // summary, short_summary, rewrite, tweet, bullets, idea_starter
   voiceId?: string;
   userId?: string;
+  displaySourceName?: string; // For auto-rewrite: override the story's source attribution
 }
 
 const PROMPTS: Record<string, { system: string; user: string }> = {
@@ -104,6 +105,32 @@ async function processFirstDraft(job: Job<FirstDraftJob>): Promise<void> {
       tokens: result.tokens,
     },
   });
+
+  // For auto-rewrite sources: apply rewritten content as the story summary
+  // and override source attribution with the display source name
+  const displaySourceName = job.data.displaySourceName;
+  if (type === 'rewrite' && displaySourceName && result.text) {
+    try {
+      await prisma.$executeRaw`
+        UPDATE "Story"
+        SET summary = ${result.text},
+            "aiSummary" = ${result.text},
+            "aiSummaryModel" = ${result.model || 'unknown'},
+            "aiSummaryAt" = NOW()
+        WHERE id = ${storyId}
+      `;
+      // Store display source name in story metadata for frontend to use
+      const existing = await prisma.story.findUnique({ where: { id: storyId }, select: { metadata: true } });
+      const meta = ((existing?.metadata || {}) as Record<string, unknown>);
+      await prisma.story.update({
+        where: { id: storyId },
+        data: { metadata: { ...meta, displaySourceName, autoRewritten: true, rewrittenAt: new Date().toISOString() } },
+      });
+      logger.info({ storyId, displaySourceName }, 'Auto-rewrite applied to story summary with source override');
+    } catch (err) {
+      logger.warn({ storyId, err: (err as Error).message }, 'Failed to apply auto-rewrite to story (non-fatal)');
+    }
+  }
 
   logger.info({
     storyId,

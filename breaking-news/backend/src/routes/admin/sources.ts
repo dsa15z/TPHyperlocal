@@ -32,6 +32,10 @@ const updateSourceSchema = z.object({
   isActive: z.boolean().optional(),
   marketIds: z.array(z.string()).optional(), // Replace market links
   metadata: z.record(z.unknown()).optional().nullable(),
+  // Per-source settings (stored in metadata)
+  pollIntervalMinutes: z.number().int().min(1).max(1440).optional(), // Custom poll frequency
+  autoRewrite: z.boolean().optional(), // Auto-rewrite content before story creation
+  displaySourceName: z.string().max(255).optional().nullable(), // Override displayed source name
 });
 
 const listSourcesSchema = z.object({
@@ -275,8 +279,19 @@ export async function sourceRoutes(
       };
     }
 
-    // Remove marketIds from updateData — it's handled separately via SourceMarket
-    const { marketIds: newMarketIds, ...sourceUpdateData } = updateData;
+    // Extract fields that go into metadata, not top-level Source columns
+    const { marketIds: newMarketIds, pollIntervalMinutes, autoRewrite, displaySourceName, ...sourceUpdateData } = updateData;
+
+    // Merge per-source settings into metadata
+    if (pollIntervalMinutes !== undefined || autoRewrite !== undefined || displaySourceName !== undefined) {
+      const existingMeta = (sourceUpdateData.metadata || existing.metadata || {}) as Record<string, unknown>;
+      sourceUpdateData.metadata = {
+        ...existingMeta,
+        ...(pollIntervalMinutes !== undefined ? { pollIntervalMinutes } : {}),
+        ...(autoRewrite !== undefined ? { autoRewrite } : {}),
+        ...(displaySourceName !== undefined ? { displaySourceName } : {}),
+      };
+    }
 
     // Update primary market (backward compat)
     if (newMarketIds && newMarketIds.length > 0) {

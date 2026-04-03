@@ -1009,3 +1009,51 @@ export async function deleteMarket(id: string): Promise<void> {
     headers: getAuthHeaders(),
   });
 }
+
+// ─── Server-Side View Persistence ──────────────────────────────────────────
+
+export interface ServerView {
+  id: string;
+  name: string;
+  columns: unknown;
+  filters: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchServerViews(): Promise<ServerView[]> {
+  const res = await apiFetch<{ data: ServerView[] }>("/api/v1/user/views", {
+    headers: getAuthHeaders(),
+  });
+  return res.data || [];
+}
+
+export async function createServerView(view: {
+  name: string;
+  columns: unknown;
+  filters: unknown;
+}): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>("/api/v1/user/views", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(view),
+  });
+}
+
+export async function updateServerView(
+  id: string,
+  data: { name?: string; columns?: unknown; filters?: unknown }
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/user/views/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteServerView(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/user/views/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+}

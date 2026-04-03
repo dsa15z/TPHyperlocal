@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
 import clsx from "clsx";
-import { fetchStories, fetchTeaserStories, type StoryFilters, type TeaserResponse } from "@/lib/api";
+import { fetchStories, fetchTeaserStories, fetchServerViews, createServerView, updateServerView, deleteServerView, type StoryFilters, type TeaserResponse } from "@/lib/api";
 import { useUser } from "@/components/UserProvider";
 import {
   type DashboardView,
@@ -69,6 +69,32 @@ function DashboardContent() {
   const [activeViewId, setActiveViewId] = useState(() => loadActiveViewId());
   const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>([]);
   const [hasViewChanges, setHasViewChanges] = useState(false);
+  const [serverViewsLoaded, setServerViewsLoaded] = useState(false);
+
+  // Load views from server on mount (server is source of truth when authenticated)
+  useEffect(() => {
+    let cancelled = false;
+    fetchServerViews()
+      .then((serverViews) => {
+        if (cancelled || !serverViews || serverViews.length === 0) return;
+        const mapped: DashboardView[] = serverViews.map((sv) => ({
+          id: sv.id,
+          name: sv.name,
+          columns: (sv.columns || []) as ColumnConfig[],
+          filters: (sv.filters || {}) as SavedFilters,
+          createdAt: sv.createdAt,
+          updatedAt: sv.updatedAt,
+        }));
+        setViews(mapped);
+        saveViews(mapped); // Cache locally
+        setServerViewsLoaded(true);
+      })
+      .catch(() => {
+        // Not authenticated or API error — use localStorage views (already loaded)
+        setServerViewsLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve active view (fall back to default if not found)
   const activeView =
@@ -157,11 +183,11 @@ function DashboardContent() {
     setHasViewChanges(true);
   }, []);
 
-  // ── View CRUD ───────────────────────────────────────────────────────────
+  // ── View CRUD (syncs to backend + localStorage cache) ─────────────────
   const persistViews = useCallback(
     (updated: DashboardView[]) => {
       setViews(updated);
-      saveViews(updated);
+      saveViews(updated); // localStorage cache
     },
     []
   );
@@ -176,34 +202,47 @@ function DashboardContent() {
 
   const handleSaveCurrentView = useCallback(() => {
     const now = new Date().toISOString();
+    const savedColumns = columnConfig.map((c) => ({ ...c }));
+    const savedFilters = storyFiltersToSaved(filters);
     const updated = views.map((v) =>
       v.id === activeViewId
-        ? {
-            ...v,
-            columns: columnConfig.map((c) => ({ ...c })),
-            filters: storyFiltersToSaved(filters),
-            updatedAt: now,
-          }
+        ? { ...v, columns: savedColumns, filters: savedFilters, updatedAt: now }
         : v
     );
     persistViews(updated);
     setHasViewChanges(false);
+    // Sync to server
+    updateServerView(activeViewId, { columns: savedColumns, filters: savedFilters }).catch(() => {});
   }, [views, activeViewId, columnConfig, filters, persistViews]);
 
   const handleCreateView = useCallback(
     (name: string) => {
       const now = new Date().toISOString();
+      const cols = columnConfig.map((c) => ({ ...c }));
+      const filts = storyFiltersToSaved(filters);
+      const tempId = generateViewId();
       const newView: DashboardView = {
-        id: generateViewId(),
+        id: tempId,
         name,
-        columns: columnConfig.map((c) => ({ ...c })),
-        filters: storyFiltersToSaved(filters),
+        columns: cols,
+        filters: filts,
         createdAt: now,
         updatedAt: now,
       };
       const updated = [...views, newView];
       persistViews(updated);
       handleSelectView(newView.id);
+      // Sync to server — replace temp ID with server-assigned ID
+      createServerView({ name, columns: cols, filters: filts })
+        .then((res) => {
+          if (res?.id && res.id !== tempId) {
+            setViews((prev) => prev.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
+            saveViews(views.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
+            setActiveViewId(res.id);
+            saveActiveViewId(res.id);
+          }
+        })
+        .catch(() => {});
     },
     [views, columnConfig, filters, persistViews, handleSelectView]
   );
@@ -216,6 +255,16 @@ function DashboardContent() {
       const updated = [...views, dup];
       persistViews(updated);
       handleSelectView(dup.id);
+      // Sync to server
+      createServerView({ name: newName, columns: dup.columns, filters: dup.filters })
+        .then((res) => {
+          if (res?.id && res.id !== dup.id) {
+            setViews((prev) => prev.map((v) => v.id === dup.id ? { ...v, id: res.id } : v));
+            setActiveViewId(res.id);
+            saveActiveViewId(res.id);
+          }
+        })
+        .catch(() => {});
     },
     [views, persistViews, handleSelectView]
   );
@@ -226,6 +275,8 @@ function DashboardContent() {
         v.id === viewId ? { ...v, name: newName, updatedAt: new Date().toISOString() } : v
       );
       persistViews(updated);
+      // Sync to server
+      updateServerView(viewId, { name: newName }).catch(() => {});
     },
     [views, persistViews]
   );
@@ -237,6 +288,8 @@ function DashboardContent() {
       if (activeViewId === viewId) {
         handleSelectView(updated[0]?.id || "default");
       }
+      // Sync to server
+      deleteServerView(viewId).catch(() => {});
     },
     [views, activeViewId, persistViews, handleSelectView]
   );
