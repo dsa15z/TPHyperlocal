@@ -84,11 +84,7 @@ async function buildServer() {
 
   // CORS
   await app.register(cors, {
-    origin: process.env['CORS_ORIGIN']?.split(',') ?? [
-      'https://tp-hyperlocal.vercel.app',
-      /\.vercel\.app$/,
-      'http://localhost:3000',
-    ],
+    origin: process.env['CORS_ORIGIN']?.split(',') ?? true, // Allow all origins — auth layer (JWT/API key) is the real protection
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
     credentials: true,

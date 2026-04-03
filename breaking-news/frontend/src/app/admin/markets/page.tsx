@@ -175,13 +175,28 @@ export default function MarketsPage() {
   const disconnectSource = async (sourceId: string) => {
     if (!selectedMarket) return;
     try {
-      await apiFetch(`/api/v1/admin/sources/${sourceId}/toggle-market`, {
+      const result = await apiFetch<any>(`/api/v1/admin/sources/${sourceId}/toggle-market`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({ marketId: selectedMarket.id, connect: false }),
       });
+      // Also remove via legacy marketId FK if applicable
+      try {
+        await apiFetch(`/api/v1/admin/sources/${sourceId}`, {
+          method: "PATCH",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ marketId: null }),
+        });
+      } catch {}
       queryClient.invalidateQueries({ queryKey: ["admin-markets"] });
-    } catch {}
+      // Force re-select the market to refresh sources
+      const freshMarkets = await apiFetch<any>(`/api/v1/admin/markets?limit=100`, { headers: getAuthHeaders() });
+      const fresh = ((freshMarkets as any)?.data || freshMarkets || []).find((m: any) => m.id === selectedMarket.id);
+      if (fresh) setSelectedMarket(fresh);
+    } catch (err) {
+      console.error('Disconnect source failed:', err);
+      alert('Failed to disconnect source. Check console for details.');
+    }
   };
 
   const handleAutofill = () => {
