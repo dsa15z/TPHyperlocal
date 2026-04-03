@@ -146,9 +146,12 @@ model Market {
   id          String  @id @default(cuid())
   accountId   String
   account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  name        String  // "Houston", "Dallas", "Austin"
-  slug        String  // "houston", "dallas", "austin"
-  state       String? // "TX"
+  name        String  // "Houston", "London", "Tokyo"
+  slug        String  // "houston", "london", "tokyo"
+  state       String? // "TX", "England", "Kanto" (province/state/region within country)
+  country     String  @default("US") // ISO 3166-1 alpha-2: US, GB, JP, DE, FR, CA, AU, etc.
+  language    String  @default("en") // ISO 639-1: en, es, fr, de, ja, zh, ar, etc.
+  region      String? // Broader region: "North America", "Europe", "Asia-Pacific", "Latin America"
   latitude    Float
   longitude   Float
   radiusKm    Float   @default(80)

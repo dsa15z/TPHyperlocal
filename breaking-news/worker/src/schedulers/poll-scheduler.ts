@@ -953,7 +953,7 @@ async function scheduleGrokFastPoll(): Promise<void> {
         platform: 'LLM_GROK',
         marketName: marketNames.length <= 3
           ? marketNames.join(', ')
-          : `${marketNames.length} US markets: ${marketNames.slice(0, 5).join(', ')} and ${marketNames.length - 5} more`,
+          : `${marketNames.length} markets: ${marketNames.slice(0, 5).join(', ')} and ${marketNames.length - 5} more`,
         marketKeywords: allKeywords.length > 0 ? allKeywords : [
           'crime', 'shooting', 'accident', 'fire', 'weather', 'flood',
           'traffic', 'police', 'breaking news',
@@ -1074,9 +1074,16 @@ async function scheduleDynamicNewsPoll(): Promise<void> {
           : market.name;
         const encoded = encodeURIComponent(cityState.replace(/\s+/g, '+'));
 
+        // Use market's country/language for international support
+        const lang = (market as any).language || 'en';
+        const country = (market as any).country || 'US';
+        const hl = `${lang}-${country}`; // e.g., en-US, es-MX, fr-FR, ja-JP
+        const gl = country; // e.g., US, GB, JP
+        const ceid = `${country}:${lang}`; // e.g., US:en, GB:en, JP:ja
+
         const feedUrl = isBing
-          ? `https://www.bing.com/news/search?q=${encoded}+news&format=rss`
-          : `https://news.google.com/rss/search?q=${encoded}+local+news&hl=en-US&gl=US&ceid=US:en`;
+          ? `https://www.bing.com/news/search?q=${encoded}+news&format=rss&cc=${country}&setlang=${lang}`
+          : `https://news.google.com/rss/search?q=${encoded}+local+news&hl=${hl}&gl=${gl}&ceid=${ceid}`;
 
         const jobId = `dynamic-rss-${source.id}-${market.id}`;
         try {

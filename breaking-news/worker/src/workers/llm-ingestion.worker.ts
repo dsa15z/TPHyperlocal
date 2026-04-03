@@ -114,7 +114,7 @@ function buildGrokUserPrompt(marketName: string, keywords: string[], allMarkets?
     ? allMarkets.join(', ')
     : marketName;
 
-  return `Search X/Twitter posts from the last 2 hours for breaking news across these US markets: ${marketList}
+  return `Search X/Twitter posts from the last 2 hours for breaking news across these markets: ${marketList}
 
 What breaking news events are people talking about RIGHT NOW on X in any of these cities?
 

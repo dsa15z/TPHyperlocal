@@ -1238,6 +1238,11 @@ export async function pipelineRoutes(
       await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3)`;
       await prisma.$executeRaw`ALTER TABLE "Story" ADD COLUMN IF NOT EXISTS "verificationDetails" JSONB`;
 
+      // International market support
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS "country" TEXT DEFAULT 'US'`;
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS "language" TEXT DEFAULT 'en'`;
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS "region" TEXT`;
+
       // Get all markets
       const markets = await prisma.market.findMany({
         select: { id: true, name: true, state: true, slug: true },

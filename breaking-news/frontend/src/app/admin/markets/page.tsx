@@ -83,6 +83,8 @@ export default function MarketsPage() {
   const [formLon, setFormLon] = useState("");
   const [formRadius, setFormRadius] = useState("50");
   const [formTimezone, setFormTimezone] = useState("America/Chicago");
+  const [formCountry, setFormCountry] = useState("US");
+  const [formLanguage, setFormLanguage] = useState("en");
   const [formKeywords, setFormKeywords] = useState("");
   const [formNeighborhoods, setFormNeighborhoods] = useState("");
 
@@ -213,6 +215,8 @@ export default function MarketsPage() {
     setFormLon("");
     setFormRadius("50");
     setFormTimezone("America/Chicago");
+    setFormCountry("US");
+    setFormLanguage("en");
     setFormKeywords("");
     setFormNeighborhoods("");
   };
@@ -234,6 +238,8 @@ export default function MarketsPage() {
     setFormLon(String(market.longitude));
     setFormRadius(String(market.radiusKm));
     setFormTimezone(market.timezone);
+    setFormCountry((market as any).country || "US");
+    setFormLanguage((market as any).language || "en");
     setFormKeywords(market.keywords?.join(", ") || "");
     setFormNeighborhoods(market.neighborhoods?.join(", ") || "");
     setActiveTab("details");
@@ -255,6 +261,8 @@ export default function MarketsPage() {
     longitude: parseFloat(formLon) || 0,
     radiusKm: parseFloat(formRadius) || 50,
     timezone: formTimezone.trim(),
+    country: formCountry.trim() || "US",
+    language: formLanguage.trim() || "en",
     keywords: formKeywords
       .split(",")
       .map((k) => k.trim())
@@ -591,6 +599,30 @@ export default function MarketsPage() {
                 </div>
 
                 <div>
+                  <label className="block text-sm text-gray-400 mb-1">Country (ISO)</label>
+                  <input
+                    type="text"
+                    value={formCountry}
+                    onChange={(e) => setFormCountry(e.target.value.toUpperCase())}
+                    placeholder="US"
+                    className="filter-input w-full"
+                    maxLength={2}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Language (ISO)</label>
+                  <input
+                    type="text"
+                    value={formLanguage}
+                    onChange={(e) => setFormLanguage(e.target.value.toLowerCase())}
+                    placeholder="en"
+                    className="filter-input w-full"
+                    maxLength={2}
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm text-gray-400 mb-1">Keywords (comma-separated)</label>
                   <input
                     type="text"
@@ -659,7 +691,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {tvStations.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.open(`/admin/sources?editId=${s.id}`, '_blank')}>
                         <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
                         <span className="text-gray-500 truncate flex-1">{s.network ? `${s.network}` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
@@ -682,7 +714,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {radioStations.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.open(`/admin/sources?editId=${s.id}`, '_blank')}>
                         <span className="font-mono font-semibold text-white">{s.callSign || s.name.split(" - ")[0]}</span>
                         <span className="text-gray-500 truncate flex-1">{s.format ? `(${s.format})` : ""} {s.name.split(" - ").slice(1).join(" - ")}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
@@ -705,7 +737,7 @@ export default function MarketsPage() {
                   </h4>
                   <div className="grid grid-cols-1 gap-2">
                     {hlSources.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.open(`/admin/sources?editId=${s.id}`, '_blank')}>
                         <span className="text-white">{s.name}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />
                         <button
@@ -725,7 +757,7 @@ export default function MarketsPage() {
                   <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Other Sources ({otherSources.length})</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {otherSources.map((s) => (
-                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.location.href = `/admin/sources?editId=${s.id}`}>
+                      <div key={s.id} className="group/src flex items-center gap-2 px-2 py-1.5 rounded bg-surface-300/20 text-xs hover:bg-surface-300/30 cursor-pointer" onClick={() => window.open(`/admin/sources?editId=${s.id}`, '_blank')}>
                         <span className="text-white">{s.name}</span>
                         <span className="text-gray-600">{s.platform}</span>
                         <span className={clsx("w-1.5 h-1.5 rounded-full flex-shrink-0", s.isActive ? "bg-green-500" : "bg-gray-600")} />

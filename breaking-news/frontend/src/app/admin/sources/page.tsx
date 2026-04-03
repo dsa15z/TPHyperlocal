@@ -192,6 +192,14 @@ function SourcesPage() {
   });
   const sourcesResponse = sourcesData as any;
   const sources: Source[] = sourcesResponse?.data || [];
+
+  // Auto-open edit modal when linked from market sources tab
+  useEffect(() => {
+    if (editIdFromUrl && sources.length > 0 && !editingId) {
+      const source = sources.find((s: Source) => s.id === editIdFromUrl);
+      if (source) startEdit(source);
+    }
+  }, [editIdFromUrl, sources.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalSources = sourcesResponse?.total || sources.length;
   const activeSources = sourcesResponse?.active || sources.filter((s: any) => s.isActive).length;
   const totalPages = sourcesResponse?.totalPages || 1;
