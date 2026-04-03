@@ -547,6 +547,403 @@ server.tool(
   },
 );
 
+// ── Tool: heal_source ───────────────────────────────────────────────────────
+
+server.tool(
+  "heal_source",
+  "Force self-heal and reactivate a single source. Tests alternate URLs, resets failure counters.",
+  {
+    sourceId: z.string().describe("The unique source ID to heal"),
+  },
+  async ({ sourceId }) => {
+    const result = await backendFetch(`/pipeline/heal-source/${sourceId}`, {
+      method: "POST",
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: toggle_source ─────────────────────────────────────────────────────
+
+server.tool(
+  "toggle_source",
+  "Activate or deactivate a news source",
+  {
+    sourceId: z.string().describe("The unique source ID"),
+    active: z.boolean().describe("true to activate, false to deactivate"),
+  },
+  async ({ sourceId, active }) => {
+    // Use Prisma directly for this simple toggle (same as assistant route)
+    try {
+      const source = await prisma.source.findUnique({ where: { id: sourceId } });
+      if (!source) {
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ error: "Source not found", sourceId }) },
+          ],
+          isError: true,
+        };
+      }
+
+      const updateData: Record<string, unknown> = { isActive: active };
+
+      // When reactivating, reset failure counters so source gets a fresh start
+      if (active && !source.isActive) {
+        const meta = (source.metadata || {}) as Record<string, unknown>;
+        updateData.metadata = {
+          ...meta,
+          consecutiveFailures: 0,
+          reactivatedAt: new Date().toISOString(),
+          deactivateReason: undefined,
+        };
+      }
+
+      await prisma.source.update({
+        where: { id: sourceId },
+        data: updateData,
+      });
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              message: `Source ${active ? "activated" : "deactivated"}`,
+              sourceId,
+              name: source.name,
+              isActive: active,
+            }),
+          },
+        ],
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify({ error: message }) },
+        ],
+        isError: true,
+      };
+    }
+  },
+);
+
+// ── Tool: trigger_ingestion ─────────────────────────────────────────────────
+
+server.tool(
+  "trigger_ingestion",
+  "Trigger the ingestion pipeline for all active sources with a configurable lookback window",
+  {
+    lookbackHours: z
+      .number()
+      .int()
+      .min(1)
+      .max(24)
+      .optional()
+      .describe("Hours to look back for new content (default 1, max 24)"),
+  },
+  async ({ lookbackHours }) => {
+    const result = await backendFetch("/pipeline/trigger", {
+      method: "POST",
+      body: { lookbackHours: lookbackHours ?? 1 },
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: clear_failed_jobs ─────────────────────────────────────────────────
+
+server.tool(
+  "clear_failed_jobs",
+  "Clear all failed jobs from a specific pipeline queue",
+  {
+    queue: z
+      .string()
+      .describe(
+        "Queue name: ingestion, enrichment, clustering, scoring, llm-ingestion, or hyperlocal-intel",
+      ),
+  },
+  async ({ queue }) => {
+    const result = await backendFetch("/pipeline/clear-failed", {
+      method: "POST",
+      body: { queue },
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: run_queue ─────────────────────────────────────────────────────────
+
+server.tool(
+  "run_queue",
+  "Force-run a specific pipeline queue immediately (e.g. ingestion to poll RSS, scoring to re-score stories)",
+  {
+    queue: z
+      .string()
+      .describe(
+        "Queue name: ingestion, enrichment, clustering, scoring, llm-ingestion, or hyperlocal-intel",
+      ),
+  },
+  async ({ queue }) => {
+    const result = await backendFetch("/pipeline/run-queue", {
+      method: "POST",
+      body: { queue },
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: get_pipeline_status ───────────────────────────────────────────────
+
+server.tool(
+  "get_pipeline_status",
+  "Get current status of all pipeline queues including job counts (waiting, active, completed, failed)",
+  {},
+  async () => {
+    const result = await backendFetch("/pipeline/status");
+    return backendResult(result);
+  },
+);
+
+// ── Tool: verify_story ──────────────────────────────────────────────────────
+
+server.tool(
+  "verify_story",
+  "Send a story to multiple LLMs (OpenAI + Grok) for independent fact verification. Returns confidence and reasoning from each model.",
+  {
+    storyId: z.string().describe("The unique story ID to verify"),
+  },
+  async ({ storyId }) => {
+    const result = await backendFetch(`/stories/${storyId}/verify`, {
+      method: "POST",
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: generate_broadcast_package ────────────────────────────────────────
+
+server.tool(
+  "generate_broadcast_package",
+  "Generate a full broadcast package (TV script, radio spot, social post, web article, push notification) from a single story",
+  {
+    storyId: z.string().describe("The story ID to generate content for"),
+    formats: z
+      .array(
+        z.enum([
+          "tv_30s",
+          "tv_60s",
+          "radio_30s",
+          "radio_60s",
+          "web_article",
+          "social_post",
+          "social_thread",
+          "push_notification",
+        ]),
+      )
+      .optional()
+      .describe(
+        "Content formats to generate (defaults to tv_30s, radio_30s, social_post, web_article, push_notification)",
+      ),
+  },
+  async ({ storyId, formats }) => {
+    const body: Record<string, unknown> = { storyId };
+    if (formats && formats.length > 0) body.formats = formats;
+    const result = await backendFetch("/broadcast-package/generate", {
+      method: "POST",
+      body,
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: workflow_transition ───────────────────────────────────────────────
+
+server.tool(
+  "workflow_transition",
+  "Move an account story to a new workflow stage (e.g. triage → assigned → drafting → review → published)",
+  {
+    accountStoryId: z.string().describe("The account story ID"),
+    toStage: z.string().describe("Slug of the target workflow stage"),
+    comment: z.string().optional().describe("Optional editorial comment for the transition"),
+    assignTo: z.string().optional().describe("Optional user ID to assign the story to"),
+  },
+  async ({ accountStoryId, toStage, comment, assignTo }) => {
+    const body: Record<string, unknown> = { accountStoryId, toStage };
+    if (comment) body.comment = comment;
+    if (assignTo) body.assignTo = assignTo;
+    const result = await backendFetch("/workflow/transition", {
+      method: "POST",
+      body,
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: generate_audio ────────────────────────────────────────────────────
+
+server.tool(
+  "generate_audio",
+  "Generate a TTS audio spot for a story via OpenAI text-to-speech",
+  {
+    accountStoryId: z.string().describe("The account story ID"),
+    script: z.string().min(10).describe("The script text to convert to speech"),
+    voice: z
+      .enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+      .optional()
+      .describe("TTS voice (default: alloy)"),
+    format: z
+      .enum(["15s", "30s", "60s", "full"])
+      .optional()
+      .describe("Target duration format (default: 30s)"),
+  },
+  async ({ accountStoryId, script, voice, format }) => {
+    const body: Record<string, unknown> = { accountStoryId, script };
+    if (voice) body.voice = voice;
+    if (format) body.format = format;
+    const result = await backendFetch("/workflow/audio", {
+      method: "POST",
+      body,
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: publish_content ───────────────────────────────────────────────────
+
+server.tool(
+  "publish_content",
+  "Publish content for an account story to an external platform (Twitter, Facebook, WordPress, etc.)",
+  {
+    accountStoryId: z.string().describe("The account story ID"),
+    platform: z
+      .enum([
+        "wordpress",
+        "rss",
+        "twitter",
+        "facebook",
+        "linkedin",
+        "tiktok",
+        "youtube",
+        "instagram",
+        "custom_webhook",
+      ])
+      .describe("Target publishing platform"),
+    content: z
+      .object({
+        title: z.string().describe("Content title"),
+        body: z.string().describe("Content body text"),
+        mediaUrls: z
+          .array(z.string())
+          .optional()
+          .describe("Optional media URLs to include"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Optional tags/hashtags"),
+      })
+      .describe("The content to publish"),
+    scheduledFor: z
+      .string()
+      .optional()
+      .describe("Optional ISO 8601 datetime to schedule publication"),
+  },
+  async ({ accountStoryId, platform, content, scheduledFor }) => {
+    const body: Record<string, unknown> = { accountStoryId, platform, content };
+    if (scheduledFor) body.scheduledFor = scheduledFor;
+    const result = await backendFetch("/workflow/publish", {
+      method: "POST",
+      body,
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: fix_source_markets ────────────────────────────────────────────────
+
+server.tool(
+  "fix_source_markets",
+  "Create missing market tables and link sources to their correct markets by name matching",
+  {},
+  async () => {
+    const result = await backendFetch("/pipeline/fix-source-markets", {
+      method: "POST",
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: consolidate_sources ───────────────────────────────────────────────
+
+server.tool(
+  "consolidate_sources",
+  "Merge per-market duplicate news sources (e.g. Bing/Google) into a single multi-market source",
+  {},
+  async () => {
+    const result = await backendFetch("/pipeline/consolidate-news-sources", {
+      method: "POST",
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: backfill_famous ───────────────────────────────────────────────────
+
+server.tool(
+  "backfill_famous",
+  "Scan existing stories for famous person mentions and backfill detection data",
+  {},
+  async () => {
+    const result = await backendFetch("/pipeline/backfill-famous", {
+      method: "POST",
+    });
+    return backendResult(result);
+  },
+);
+
+// ── Tool: get_news_director_alerts ──────────────────────────────────────────
+
+server.tool(
+  "get_news_director_alerts",
+  "Get current News Director AI alerts from Redis — includes breaking story alerts, source health warnings, and pipeline anomalies",
+  {},
+  async () => {
+    // Read directly from Redis via the backend's assistant/alerts endpoint
+    const result = await backendFetch("/assistant/alerts");
+
+    if (result.ok) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(result.data, null, 2),
+          },
+        ],
+      };
+    }
+
+    // Fallback: try to read the Redis key directly if the endpoint isn't available
+    // This requires ioredis, so we fall back gracefully
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              error: "Could not fetch news director alerts",
+              status: result.status,
+              details: result.data,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+      isError: true,
+    };
+  },
+);
+
 // ── Start Server ─────────────────────────────────────────────────────────────
 
 async function main() {
