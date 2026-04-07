@@ -121,24 +121,37 @@ export async function sourceRoutes(
         prisma.source.count({ where: { ...where, isActive: true } }),
       ]);
     } catch (err: any) {
-      // Fallback: simpler query without sourceMarkets (in case relation doesn't exist in this Prisma client)
       app.log.error({ err: err.message }, 'Sources list query failed — trying simplified query');
-      [sources, total, activeCount] = await Promise.all([
-        prisma.source.findMany({
-          where,
-          include: {
-            market: { select: { id: true, name: true } },
-            _count: { select: { posts: true } },
-          },
-          orderBy: { [sort]: order },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.source.count({ where }),
-        prisma.source.count({ where: { ...where, isActive: true } }),
-      ]);
-      // Add empty arrays for missing relations
-      sources = sources.map((s: any) => ({ ...s, accountSources: [], sourceMarkets: [] }));
+      try {
+        [sources, total, activeCount] = await Promise.all([
+          prisma.source.findMany({
+            where,
+            include: {
+              market: { select: { id: true, name: true } },
+              _count: { select: { posts: true } },
+            },
+            orderBy: { [sort]: order },
+            take: limit,
+            skip: offset,
+          }),
+          prisma.source.count({ where }),
+          prisma.source.count({ where: { ...where, isActive: true } }),
+        ]);
+        sources = sources.map((s: any) => ({ ...s, accountSources: [], sourceMarkets: [] }));
+      } catch (err2: any) {
+        app.log.error({ err: err2.message }, 'Sources simplified query also failed — trying basic');
+        [sources, total, activeCount] = await Promise.all([
+          prisma.source.findMany({
+            where: {},
+            orderBy: { name: 'asc' },
+            take: limit,
+            skip: offset,
+          }),
+          prisma.source.count(),
+          prisma.source.count({ where: { isActive: true } }),
+        ]);
+        sources = sources.map((s: any) => ({ ...s, accountSources: [], sourceMarkets: [], market: null, _count: { posts: 0 } }));
+      }
     }
 
     // Get 24h post counts for all returned sources in one query

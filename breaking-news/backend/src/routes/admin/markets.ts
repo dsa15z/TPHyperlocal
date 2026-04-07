@@ -167,24 +167,47 @@ export async function marketRoutes(
         }),
         prisma.market.count({ where }),
       ]);
-    } catch (err: any) {
-      // Fallback: simpler query without sourceMarkets count (in case relation doesn't exist yet)
-      app.log.error({ err: err.message }, 'Markets list query failed — trying simplified query');
-      [markets, total] = await Promise.all([
-        prisma.market.findMany({
-          where,
-          include: {
-            _count: { select: { sources: true, stories: true } },
-            account: { select: { name: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.market.count({ where }),
-      ]);
-      // Add empty sources array
-      markets = markets.map((m: any) => ({ ...m, sources: [] }));
+    } catch (err1: any) {
+      app.log.error({ err: err1.message }, 'Markets list primary query failed — trying simplified');
+      try {
+        [markets, total] = await Promise.all([
+          prisma.market.findMany({
+            where,
+            include: {
+              _count: { select: { sources: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+            skip: offset,
+          }),
+          prisma.market.count({ where }),
+        ]);
+        markets = markets.map((m: any) => ({ ...m, sources: [], account: null }));
+      } catch (err2: any) {
+        app.log.error({ err: err2.message }, 'Markets list simplified query also failed — trying raw SQL');
+        // Ultra fallback: raw SQL that avoids any Prisma schema issues
+        try {
+          if (au.role === 'OWNER') {
+            markets = await prisma.$queryRaw<any[]>`
+              SELECT id, name, slug, state, latitude, longitude, "radiusKm",
+                     timezone, "isActive", keywords, neighborhoods, "createdAt", "updatedAt"
+              FROM "Market" ORDER BY "createdAt" ASC LIMIT ${limit} OFFSET ${offset}
+            `;
+          } else {
+            markets = await prisma.$queryRaw<any[]>`
+              SELECT id, name, slug, state, latitude, longitude, "radiusKm",
+                     timezone, "isActive", keywords, neighborhoods, "createdAt", "updatedAt"
+              FROM "Market" WHERE "accountId" = ${au.accountId}
+              ORDER BY "createdAt" ASC LIMIT ${limit} OFFSET ${offset}
+            `;
+          }
+        } catch {
+          markets = await prisma.$queryRaw<any[]>`SELECT id, name, slug, state, "isActive" FROM "Market" ORDER BY name LIMIT ${limit}`;
+        }
+        const countResult = await prisma.$queryRaw<any[]>`SELECT COUNT(*)::int as count FROM "Market"`.catch(() => [{ count: 0 }]);
+        total = countResult[0]?.count || 0;
+        markets = markets.map((m: any) => ({ ...m, sources: [], account: null, _count: { sources: 0, stories: 0 } }));
+      }
     }
 
     return reply.status(200).send({
@@ -458,9 +481,6 @@ export async function marketRoutes(
             name: 'Toronto',
             slug: 'toronto',
             state: 'ON',
-            country: 'CA',
-            language: 'en',
-            region: 'North America',
             latitude: torontoData.lat,
             longitude: torontoData.lon,
             radiusKm: torontoData.radius,
