@@ -736,7 +736,7 @@ export function createScoringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 5,
+      concurrency: 20, // Increased from 5 — scoring is CPU-light DB queries
     }
   );
 
