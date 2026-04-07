@@ -1095,6 +1095,22 @@ export async function pipelineRoutes(
   // Global sources → National market, city-named sources → their city market
   app.post('/pipeline/fix-source-markets', async (_request, reply) => {
     try {
+      // Ensure Market has international support columns
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'US'`.catch(() => {});
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'`.catch(() => {});
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS region TEXT`.catch(() => {});
+      // Ensure REDDIT platform enum value exists
+      await prisma.$executeRaw`ALTER TYPE "Platform" ADD VALUE IF NOT EXISTS 'REDDIT'`.catch(() => {});
+      // Ensure ToolAnalytics table exists
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "ToolAnalytics" (
+          id TEXT PRIMARY KEY, tool TEXT NOT NULL, args JSONB,
+          "userId" TEXT NOT NULL, role TEXT NOT NULL, "durationMs" INTEGER DEFAULT 0,
+          success BOOLEAN DEFAULT true, error TEXT, cached BOOLEAN DEFAULT false,
+          "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+        )
+      `.catch(() => {});
+
       // Ensure SourceMarket + StoryEntity + SystemKnowledge tables exist
       await prisma.$executeRaw`
         CREATE TABLE IF NOT EXISTS "SourceMarket" (
@@ -1379,6 +1395,27 @@ export async function pipelineRoutes(
       // Ensure REDDIT enum value exists in DB (may not if migration hasn't run)
       await prisma.$executeRaw`ALTER TYPE "Platform" ADD VALUE IF NOT EXISTS 'REDDIT'`.catch(() => {});
 
+      // Ensure country/language/region columns exist on Market (may not if migration hasn't run)
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'US'`.catch(() => {});
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'`.catch(() => {});
+      await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS region TEXT`.catch(() => {});
+
+      // Ensure ToolAnalytics table exists
+      await prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "ToolAnalytics" (
+          id TEXT PRIMARY KEY,
+          tool TEXT NOT NULL,
+          args JSONB,
+          "userId" TEXT NOT NULL,
+          role TEXT NOT NULL,
+          "durationMs" INTEGER NOT NULL DEFAULT 0,
+          success BOOLEAN NOT NULL DEFAULT true,
+          error TEXT,
+          cached BOOLEAN NOT NULL DEFAULT false,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `.catch(() => {});
+
       // Find an account to attach the market to
       const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
       if (!account) return reply.status(400).send({ error: 'No active account found' });
@@ -1398,6 +1435,9 @@ export async function pipelineRoutes(
         )
         ON CONFLICT ("accountId", slug) DO UPDATE SET "isActive" = true
       `;
+
+      // Set country to CA for Toronto (column may have just been created above)
+      await prisma.$executeRaw`UPDATE "Market" SET country = 'CA' WHERE slug = 'toronto'`.catch(() => {});
 
       // Get the actual market ID (may differ if it already existed)
       const marketRows = await prisma.$queryRaw<any[]>`

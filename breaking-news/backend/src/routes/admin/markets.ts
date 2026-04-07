@@ -580,17 +580,21 @@ export async function marketRoutes(
         ? 'https://api.openai.com/v1/chat/completions'
         : 'https://api.x.ai/v1/chat/completions';
 
-      const prompt = `For the city "${cityName}, ${stateName}" in the United States, return a JSON object with:
+      const prompt = `For the city "${cityName}, ${stateName}", return a JSON object with:
 {
   "latitude": number (city center),
   "longitude": number (city center),
-  "timezone": "America/..." (IANA timezone),
+  "timezone": "IANA timezone string (e.g. America/New_York, America/Toronto, Europe/London)",
   "radiusKm": number (reasonable coverage radius for local news, typically 30-80km),
-  "keywords": ["array of 5-8 local nicknames, abbreviations, county names, and common references"],
+  "country": "ISO 3166-1 alpha-2 country code (e.g. US, CA, GB, AU)",
+  "language": "ISO 639-1 language code (e.g. en, fr, es)",
+  "keywords": ["array of 5-8 local nicknames, abbreviations, county/province names, and common references"],
   "neighborhoods": ["array of 20-40 major neighborhoods, suburbs, and nearby communities that a local news station would cover"]
 }
 
-Be comprehensive with neighborhoods — include the city's major districts, suburbs, and surrounding communities within the coverage area. Keywords should include the city name, abbreviations locals use, county name, and colloquial names.
+This city may be in ANY country, not just the United States. Use the state/province code to determine the country.
+Be comprehensive with neighborhoods — include the city's major districts, suburbs, and surrounding communities within the coverage area.
+Keywords should include the city name, abbreviations locals use, county/province name, and colloquial names.
 
 Return ONLY the JSON object, no other text.`;
 
@@ -630,6 +634,8 @@ Return ONLY the JSON object, no other text.`;
         longitude: parsed.longitude || 0,
         timezone: parsed.timezone || 'America/Chicago',
         radiusKm: parsed.radiusKm || 50,
+        country: parsed.country || 'US',
+        language: parsed.language || 'en',
         keywords: parsed.keywords || [cityName.toLowerCase()],
         neighborhoods: parsed.neighborhoods || [],
         slug: cityName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
