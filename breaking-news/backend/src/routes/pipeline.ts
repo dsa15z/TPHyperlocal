@@ -370,7 +370,15 @@ export async function pipelineRoutes(
       let jobName = 'rss_poll';
       let jobData: Record<string, any> = { type: 'rss_poll', sourceId: source.id, feedUrl: source.url };
 
-      if (platform === 'NEWSAPI') {
+      if (platform === 'REDDIT') {
+        jobName = 'reddit_poll';
+        const meta = source.metadata as Record<string, any> | null;
+        const subreddits = (meta?.subreddits || []) as string[];
+        if (subreddits.length === 0) {
+          return reply.status(400).send({ error: 'Reddit source has no subreddits configured in metadata' });
+        }
+        jobData = { type: 'reddit_poll', sourceId: source.id, subreddits };
+      } else if (platform === 'NEWSAPI') {
         jobName = 'newsapi_poll';
         const meta = source.metadata as Record<string, any> | null;
         jobData = { type: 'newsapi_poll', sourceId: source.id, query: meta?.query || source.name };
@@ -1550,11 +1558,22 @@ export async function pipelineRoutes(
         await createSource(f);
       }
 
+      // Debug: report actual Reddit source state from DB
+      let redditDebug: any = null;
+      try {
+        const redditSources = await prisma.$queryRaw<any[]>`
+          SELECT id, name, platform, "isActive", "lastPolledAt", metadata->>'subreddits' as subreddits
+          FROM "Source" WHERE name LIKE '%Reddit%' LIMIT 5
+        `;
+        redditDebug = redditSources;
+      } catch (e: any) { redditDebug = { error: e.message }; }
+
       return reply.send({
         message: `Toronto market created with ${created.length} sources`,
         marketId: market.id,
         marketName: 'Toronto',
         sources: created,
+        redditDebug,
       });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
