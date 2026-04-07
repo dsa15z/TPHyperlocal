@@ -110,6 +110,12 @@ const KNOWN_CITIES: Record<string, {
     keywords: ['atlanta', 'atl', 'hotlanta', 'fulton county', 'dekalb county'],
     neighborhoods: ['Downtown', 'Midtown', 'Buckhead', 'Virginia-Highland', 'Little Five Points', 'Decatur', 'East Atlanta', 'Grant Park', 'Inman Park', 'Old Fourth Ward', 'West End', 'Kirkwood', 'Poncey-Highland', 'Cabbagetown', 'Edgewood', 'Sandy Springs', 'Roswell', 'Marietta', 'Dunwoody', 'Brookhaven'],
   },
+  // ── International Markets ──
+  'toronto_on': {
+    lat: 43.6532, lon: -79.3832, tz: 'America/Toronto', radius: 60,
+    keywords: ['toronto', 'gta', 'the six', 'the 6ix', 'yyz', 'tdot', 'peel region', 'york region', 'durham region', 'halton region', 'ontario'],
+    neighborhoods: ['Downtown', 'Midtown', 'North York', 'Scarborough', 'Etobicoke', 'East York', 'Yorkville', 'The Annex', 'Kensington Market', 'Queen West', 'King West', 'Liberty Village', 'Leslieville', 'The Beaches', 'Danforth', 'Roncesvalles', 'High Park', 'Parkdale', 'Junction', 'Bloor West Village', 'Forest Hill', 'Lawrence Park', 'Leaside', 'Don Mills', 'Willowdale', 'Thornhill', 'Richmond Hill', 'Markham', 'Vaughan', 'Mississauga', 'Brampton', 'Oakville', 'Burlington', 'Ajax', 'Pickering', 'Oshawa', 'Whitby', 'Milton', 'Newmarket', 'Aurora', 'Caledon'],
+  },
 };
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -439,6 +445,63 @@ export async function marketRoutes(
         name: nf.name, url: nf.url, trustScore: nf.trust, isGlobal: false,
         metadata: nf.meta,
       }, [nationalId]);
+    }
+
+    // ── Toronto (international market with Reddit source) ──
+    try {
+      const torontoData = KNOWN_CITIES['toronto_on'];
+      if (torontoData) {
+        const torontoMarket = await prisma.market.upsert({
+          where: { accountId_slug: { accountId: au.accountId, slug: 'toronto' } },
+          create: {
+            accountId: au.accountId,
+            name: 'Toronto',
+            slug: 'toronto',
+            state: 'ON',
+            country: 'CA',
+            language: 'en',
+            region: 'North America',
+            latitude: torontoData.lat,
+            longitude: torontoData.lon,
+            radiusKm: torontoData.radius,
+            timezone: torontoData.tz,
+            keywords: torontoData.keywords,
+            neighborhoods: torontoData.neighborhoods,
+          },
+          update: {},
+        });
+        marketsSeeded++;
+
+        // Reddit consolidated source for Toronto
+        const redditSubreddits = ['Toronto', 'Ontario', 'askTO', 'TorontoRealEstate', 'FoodToronto', 'torontoraptors', 'leafs', 'BlueJays', 'Mississauga', 'Brampton', 'Markham', 'PersonalFinanceCanada', 'TorontoDriving'];
+        await createAndLink({
+          platform: 'REDDIT' as any, sourceType: 'RSS_FEED' as any,
+          name: 'Reddit Toronto (13 subreddits)', url: 'https://www.reddit.com/r/Toronto',
+          trustScore: 0.55, isGlobal: false,
+          metadata: { subreddits: redditSubreddits, type: 'reddit-consolidated' },
+        }, [torontoMarket.id]);
+
+        // Toronto RSS news sources
+        const torontoFeeds = [
+          { name: 'CBC Toronto', url: 'https://www.cbc.ca/cmlink/rss-canada-toronto', trust: 0.90, meta: { type: 'news', network: 'CBC' } },
+          { name: 'CTV Toronto', url: 'https://toronto.ctvnews.ca/rss/ctv-news-toronto-1.822319', trust: 0.88, meta: { type: 'news', network: 'CTV' } },
+          { name: 'Global News Toronto', url: 'https://globalnews.ca/toronto/feed/', trust: 0.85, meta: { type: 'news', network: 'Global' } },
+          { name: 'Toronto Star', url: 'https://www.thestar.com/search/?f=rss&t=article&c=news/gta*&l=50&s=start_time&sd=desc', trust: 0.85, meta: { type: 'newspaper' } },
+          { name: 'Toronto Sun', url: 'https://torontosun.com/feed', trust: 0.75, meta: { type: 'newspaper' } },
+          { name: 'BlogTO', url: 'https://www.blogto.com/feed/', trust: 0.65, meta: { type: 'blog', subtype: 'local' } },
+          { name: 'CP24', url: 'https://www.cp24.com/rss/topstories', trust: 0.88, meta: { type: 'news', network: 'CP24' } },
+          { name: 'Google News - Toronto', url: 'https://news.google.com/rss/search?q=Toronto+Ontario+news&hl=en-CA&gl=CA&ceid=CA:en', trust: 0.75, meta: { type: 'google-news', subtype: 'local' } },
+        ];
+        for (const tf of torontoFeeds) {
+          await createAndLink({
+            platform: 'RSS' as any, sourceType: 'NEWS_ORG' as any,
+            name: tf.name, url: tf.url, trustScore: tf.trust, isGlobal: false,
+            metadata: tf.meta,
+          }, [torontoMarket.id]);
+        }
+      }
+    } catch (err: any) {
+      app.log.warn({ err: err.message }, 'Toronto market seed failed (non-fatal)');
     }
 
     return reply.status(201).send({
