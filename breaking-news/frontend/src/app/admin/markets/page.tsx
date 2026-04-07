@@ -13,6 +13,7 @@ import {
   Radio,
   Tv,
   Globe,
+  Search,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -91,6 +92,7 @@ export default function MarketsPage() {
   const { columns: marketCols, updateColumns: setMarketCols, visibleColumns } = useTableColumns("markets", MARKET_COLUMNS);
   const isCol = (id: string) => visibleColumns.some(c => c.id === id);
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
@@ -98,8 +100,21 @@ export default function MarketsPage() {
     queryKey: ["admin-markets", page],
     queryFn: () => apiFetch<any>(`/api/v1/admin/markets?limit=${pageSize}&offset=${(page - 1) * pageSize}`, { headers: getAuthHeaders() }),
   });
-  const markets: Market[] = (marketsData as any)?.data || marketsData || [];
-  const totalMarkets = (marketsData as any)?.total || markets.length;
+  const allMarkets: Market[] = (marketsData as any)?.data || marketsData || [];
+  // Client-side search filter
+  const markets = searchQuery.trim()
+    ? allMarkets.filter((m: Market) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          m.name?.toLowerCase().includes(q) ||
+          m.slug?.toLowerCase().includes(q) ||
+          m.state?.toLowerCase().includes(q) ||
+          (m.keywords as string[] || []).some((k: string) => k.toLowerCase().includes(q)) ||
+          (m.neighborhoods as string[] || []).some((n: string) => n.toLowerCase().includes(q))
+        );
+      })
+    : allMarkets;
+  const totalMarkets = (marketsData as any)?.total || allMarkets.length;
   const totalPages = Math.max(1, Math.ceil(totalMarkets / pageSize));
 
   // Auto-seed default markets if none exist
@@ -324,6 +339,18 @@ export default function MarketsPage() {
               Add Market
             </button>
           </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search markets by name, state, keywords, or neighborhoods..."
+            className="w-full pl-9 pr-4 py-2 bg-surface-200 border border-surface-300 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent/50"
+          />
         </div>
 
         {/* Table */}
