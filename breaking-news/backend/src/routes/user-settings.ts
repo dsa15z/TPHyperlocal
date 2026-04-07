@@ -102,6 +102,20 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
     const payload = getPayload(request);
     if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
 
+    // Ensure UserView table exists
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "UserView" (
+        id TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        name TEXT NOT NULL,
+        columns JSONB DEFAULT '[]',
+        filters JSONB DEFAULT '{}',
+        "createdAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+      )
+    `.catch(() => {});
+    await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "UserView_userId_idx" ON "UserView"("userId")`.catch(() => {});
+
     try {
       const views = await prisma.$queryRaw<any[]>`
         SELECT * FROM "UserView"

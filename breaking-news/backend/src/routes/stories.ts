@@ -600,6 +600,7 @@ export async function storiesRoutes(
             }
           })() : Prisma.empty}
           ${marketSql}
+          ${marketIds && !marketIds.includes('__national__') ? Prisma.sql`AND (s."marketId" IN (${Prisma.join(marketIds.split(',').map(s => s.trim()).filter(Boolean))}) OR EXISTS (SELECT 1 FROM "SourceMarket" sm WHERE sm."sourceId" = s.id AND sm."marketId" IN (${Prisma.join(marketIds.split(',').map(s => s.trim()).filter(Boolean))})))` : Prisma.empty}
         GROUP BY s.id, s.name, s.platform
         ORDER BY count DESC
       `,
