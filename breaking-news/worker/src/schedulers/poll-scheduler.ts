@@ -164,11 +164,11 @@ async function scheduleRSSPolls(): Promise<void> {
         : 5; // Default 5 minutes
       const intervalMs = intervalMin * 60 * 1000;
       return now - new Date(s.lastPolledAt).getTime() >= intervalMs;
-    }).slice(0, 50);
+    }).slice(0, 150); // Poll up to 150 sources per cycle (was 50)
 
     if (rssSources.length === 0) return;
 
-    logger.info({ count: rssSources.length }, 'Scheduling RSS poll jobs (staggered)');
+    logger.info({ count: rssSources.length }, 'Scheduling RSS poll jobs');
 
     let queued = 0;
     for (const source of rssSources) {
