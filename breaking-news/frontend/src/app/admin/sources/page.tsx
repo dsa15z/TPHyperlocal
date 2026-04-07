@@ -335,6 +335,18 @@ function SourcesPage() {
 
   const handleBulkActivate = () => bulkMutation.mutate({ action: "activate" });
   const handleBulkDeactivate = () => bulkMutation.mutate({ action: "deactivate" });
+
+  // Bulk poll — poll all selected sources now
+  const [bulkPolling, setBulkPolling] = useState(false);
+  const handleBulkPoll = async () => {
+    setBulkPolling(true);
+    try {
+      await Promise.all(Array.from(selectedIds).map(id => pollSourceNow(id).catch(() => {})));
+      queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
+    } finally {
+      setBulkPolling(false);
+    }
+  };
   const handleBulkDelete = () => {
     if (!confirm(`Delete ${selectedIds.size} sources? This removes all their posts and story links. Cannot be undone.`)) return;
     bulkMutation.mutate({ action: "delete" });
@@ -942,6 +954,25 @@ function SourcesPage() {
                     </button>
                   )}
 
+                  {/* Poll Now button (for existing sources) */}
+                  {editingId && (
+                    <button
+                      onClick={() => pollMutation.mutate(editingId)}
+                      disabled={pollMutation.isPending}
+                      className={clsx(
+                        "px-4 py-2 border border-accent/50 text-accent hover:bg-accent/10 text-sm font-medium rounded-lg transition-colors flex items-center gap-2",
+                        pollMutation.isPending && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      {pollMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      {pollMutation.isPending ? "Polling..." : "Poll Now"}
+                    </button>
+                  )}
+
                   {/* Test Feed button */}
                   <button
                     onClick={handleTestFeed}
@@ -1141,6 +1172,14 @@ function SourcesPage() {
             </span>
             <div className="h-4 w-px bg-surface-300/50" />
 
+            <button
+              onClick={handleBulkPoll}
+              disabled={bulkPolling}
+              className="filter-btn flex items-center gap-1.5 text-xs text-accent hover:border-accent/50"
+            >
+              {bulkPolling ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+              {bulkPolling ? "Polling..." : "Poll Now"}
+            </button>
             <button
               onClick={handleBulkActivate}
               disabled={bulkMutation.isPending}
