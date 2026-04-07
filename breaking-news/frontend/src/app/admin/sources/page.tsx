@@ -492,8 +492,18 @@ function SourcesPage() {
 
     const effectiveMarkets = getEffectiveSelection(selectedMarkets);
     if (effectiveMarkets && effectiveMarkets.length > 0) {
-      const sourceMarket = s.marketId || "__global__";
-      if (!effectiveMarkets.includes(sourceMarket)) return false;
+      // Check both legacy marketId and M:N sourceMarkets
+      const sourceMarketIds = new Set<string>();
+      if (s.marketId) sourceMarketIds.add(s.marketId);
+      if (!s.marketId && !(s as any).marketIds?.length && !(s as any).sourceMarkets?.length) sourceMarketIds.add("__global__");
+      // Add markets from sourceMarkets M:N relation (returned by API)
+      for (const sm of ((s as any).sourceMarkets || [])) {
+        if (sm.marketId) sourceMarketIds.add(sm.marketId);
+      }
+      for (const mid of ((s as any).marketIds || [])) {
+        sourceMarketIds.add(mid);
+      }
+      if (!effectiveMarkets.some(m => sourceMarketIds.has(m))) return false;
     }
     if (effectiveMarkets && effectiveMarkets.length === 0) return false;
 
