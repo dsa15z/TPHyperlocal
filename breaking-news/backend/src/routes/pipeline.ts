@@ -1461,18 +1461,40 @@ export async function pipelineRoutes(
       // (avoids Prisma enum mismatch — REDDIT may not exist in DB enum yet)
       const created: string[] = [];
       async function createSource(data: any) {
-        // Check if exists
-        const existing = await prisma.$queryRaw<any[]>`
-          SELECT id FROM "Source" WHERE name = ${data.name} AND platform = ${data.platform}::"Platform" LIMIT 1
+        // Check if exists — by exact platform match first, then by name alone (handles RSS→REDDIT migration)
+        let existing = await prisma.$queryRaw<any[]>`
+          SELECT id, platform FROM "Source" WHERE name = ${data.name} AND platform = ${data.platform}::"Platform" LIMIT 1
         `.catch(() => []);
 
+        // Also check by name only (source may have been created with RSS fallback for REDDIT)
+        if (existing.length === 0) {
+          existing = await prisma.$queryRaw<any[]>`
+            SELECT id, platform FROM "Source" WHERE name = ${data.name} LIMIT 1
+          `.catch(() => []);
+        }
+
         if (existing.length > 0) {
+          const existingId = existing[0].id;
+          const existingPlatform = existing[0].platform;
+          // Fix platform if it was created with RSS fallback but should be REDDIT
+          if (data.platform === 'REDDIT' && existingPlatform === 'RSS') {
+            await prisma.$executeRaw`UPDATE "Source" SET platform = 'REDDIT'::"Platform" WHERE id = ${existingId}`.catch(() => {});
+            // Also ensure metadata has subreddits
+            if (data.metadata?.subreddits) {
+              await prisma.$executeRaw`
+                UPDATE "Source" SET metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{subreddits}', ${JSON.stringify(data.metadata.subreddits)}::jsonb)
+                WHERE id = ${existingId}
+              `.catch(() => {});
+            }
+            created.push(`${data.name} (fixed platform RSS→REDDIT, linked)`);
+          } else {
+            created.push(`${data.name} (already existed, linked)`);
+          }
           await prisma.$executeRaw`
             INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt")
-            VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${existing[0].id}, ${market.id}, NOW())
+            VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${existingId}, ${market.id}, NOW())
             ON CONFLICT ("sourceId", "marketId") DO NOTHING
           `.catch(() => {});
-          created.push(`${data.name} (already existed, linked)`);
           return;
         }
 
