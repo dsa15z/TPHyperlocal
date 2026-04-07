@@ -350,6 +350,23 @@ function SourcesPage() {
   const [isTesting, setIsTesting] = useState(false);
 
   const handleTestFeed = async () => {
+    // Reddit doesn't need a URL — it uses subreddits
+    if (formPlatform === "REDDIT") {
+      const subs = formSubreddits.split(/[,\n]+/).map(s => s.trim().replace(/^r\//, '').replace(/^\/r\//, '')).filter(Boolean);
+      if (subs.length === 0) return;
+      setIsTesting(true);
+      setTestResult(null);
+      try {
+        const result = await testSource("", "REDDIT", { subreddits: subs });
+        setTestResult(result);
+      } catch (err: any) {
+        setTestResult({ success: false, error: err.message || "Test failed", url: "" });
+      } finally {
+        setIsTesting(false);
+      }
+      return;
+    }
+
     if (!formUrl.trim() || !formPlatform) return;
     setIsTesting(true);
     setTestResult(null);
@@ -918,10 +935,10 @@ function SourcesPage() {
                   {/* Test Feed button */}
                   <button
                     onClick={handleTestFeed}
-                    disabled={!formUrl.trim() || !formPlatform || isTesting}
+                    disabled={(formPlatform === "REDDIT" ? !formSubreddits.trim() : !formUrl.trim()) || !formPlatform || isTesting}
                     className={clsx(
                       "px-4 py-2 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 text-sm font-medium rounded-lg transition-colors flex items-center gap-2",
-                      (!formUrl.trim() || !formPlatform || isTesting) && "opacity-50 cursor-not-allowed"
+                      ((formPlatform === "REDDIT" ? !formSubreddits.trim() : !formUrl.trim()) || !formPlatform || isTesting) && "opacity-50 cursor-not-allowed"
                     )}
                   >
                     {isTesting ? (

@@ -527,15 +527,57 @@ export async function sourceRoutes(
     requireAdmin(au.role);
 
     const body = z.object({
-      url: z.string().min(1),
+      url: z.string().optional(),
       platform: platformEnum,
+      subreddits: z.array(z.string()).optional(),
     }).safeParse(request.body);
 
     if (!body.success) {
       return reply.status(400).send({ error: 'Validation error', details: body.error.flatten() });
     }
 
-    const { url, platform } = body.data;
+    const { url, platform, subreddits } = body.data;
+
+    // ── Reddit test: check first subreddit via JSON API ──
+    if (platform === 'REDDIT') {
+      const subs = (subreddits || []).map(s => s.replace(/^r\//, '').replace(/^\/r\//, '').trim()).filter(Boolean);
+      if (subs.length === 0) {
+        return reply.send({ success: false, error: 'No subreddits specified' });
+      }
+
+      const testSub = subs[0];
+      try {
+        const res = await fetch(`https://www.reddit.com/r/${testSub}/new.json?limit=3&raw_json=1`, {
+          headers: {
+            'User-Agent': 'TopicPulse/1.0 (news aggregation; +https://topicpulse.ai)',
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!res.ok) {
+          return reply.send({
+            success: false,
+            error: `Reddit returned HTTP ${res.status} for r/${testSub}. ${res.status === 403 ? 'Subreddit may be private or banned.' : res.status === 404 ? 'Subreddit not found.' : ''}`,
+          });
+        }
+
+        const data = await res.json();
+        const posts = data?.data?.children || [];
+
+        return reply.send({
+          success: true,
+          platform: 'REDDIT',
+          subredditsChecked: subs.length,
+          testSubreddit: `r/${testSub}`,
+          postsFound: posts.length,
+          sampleTitles: posts.slice(0, 3).map((p: any) => p.data?.title || 'Untitled'),
+          allSubreddits: subs.map(s => `r/${s}`),
+        });
+      } catch (err: any) {
+        return reply.send({ success: false, error: `Failed to reach Reddit: ${err.message}` });
+      }
+    }
 
     if (platform === 'RSS') {
       // Use browser UA to avoid 403 blocks from news sites

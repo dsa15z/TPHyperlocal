@@ -777,11 +777,11 @@ export interface TestSourceResult {
   statusCode?: number;
 }
 
-export async function testSource(url: string, platform: string): Promise<TestSourceResult> {
+export async function testSource(url: string, platform: string, extra?: { subreddits?: string[] }): Promise<TestSourceResult> {
   return apiFetch<TestSourceResult>("/api/v1/admin/sources/test", {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ url, platform }),
+    body: JSON.stringify({ url: url || undefined, platform, ...extra }),
   });
 }
 
