@@ -490,78 +490,80 @@ export async function storiesRoutes(
       }
     }
 
-    const [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
-      prisma.story.findMany({
-        where,
-        orderBy: { [sort]: order },
-        take: limit,
-        skip: offset,
-        include: {
-          storySources: {
-            include: {
-              sourcePost: {
-                select: {
-                  id: true,
-                  authorName: true,
-                  url: true,
-                  publishedAt: true,
-                  source: {
-                    select: { name: true, platform: true },
+    let stories: any[], total: number, categoryFacets: any[], statusFacets: any[], sourceData: any[];
+    try {
+      [stories, total, categoryFacets, statusFacets, sourceData] = await Promise.all([
+        prisma.story.findMany({
+          where,
+          orderBy: { [sort]: order },
+          take: limit,
+          skip: offset,
+          include: {
+            storySources: {
+              include: {
+                sourcePost: {
+                  select: {
+                    id: true,
+                    authorName: true,
+                    url: true,
+                    publishedAt: true,
+                    source: {
+                      select: { name: true, platform: true },
+                    },
                   },
                 },
               },
+              orderBy: { similarityScore: 'desc' },
+              take: 5,
             },
-            orderBy: { similarityScore: 'desc' },
-            take: 5,
-          },
-          coverageMatches: {
-            select: {
-              isCovered: true,
-              accountId: true,
-              coverageFeed: { select: { name: true } },
-            },
-          },
-          scoreSnapshots: {
-            select: { compositeScore: true, snapshotAt: true },
-            orderBy: { snapshotAt: 'desc' as const },
-            take: 12,
-          },
-          parentStory: {
-            select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
-          },
-          followUps: {
-            select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
-            where: { mergedIntoId: null },
-            orderBy: { firstSeenAt: 'desc' },
-            take: 10,
-          },
-          _count: {
-            select: { storySources: true },
-          },
-          // Include account derivative if authenticated
-          ...(accountId ? {
-            accountStories: {
-              where: { accountId },
+            coverageMatches: {
               select: {
-                id: true,
-                editedTitle: true,
-                editedSummary: true,
-                accountStatus: true,
-                assignedTo: true,
-                notes: true,
-                coveredAt: true,
-                tags: true,
-                aiDrafts: true,
-                aiScripts: true,
-                aiVideos: true,
+                isCovered: true,
+                accountId: true,
+                coverageFeed: { select: { name: true } },
               },
-              take: 1,
             },
-          } : {}),
-        },
-      }),
-      prisma.story.count({ where }),
-      prisma.story.groupBy({
+            scoreSnapshots: {
+              select: { compositeScore: true, snapshotAt: true },
+              orderBy: { snapshotAt: 'desc' as const },
+              take: 12,
+            },
+            parentStory: {
+              select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+            },
+            followUps: {
+              select: { id: true, title: true, status: true, compositeScore: true, firstSeenAt: true },
+              where: { mergedIntoId: null },
+              orderBy: { firstSeenAt: 'desc' },
+              take: 10,
+            },
+            _count: {
+              select: { storySources: true },
+            },
+            // Include account derivative if authenticated
+            ...(accountId ? {
+              accountStories: {
+                where: { accountId },
+                select: {
+                  id: true,
+                  editedTitle: true,
+                  editedSummary: true,
+                  accountStatus: true,
+                  assignedTo: true,
+                  notes: true,
+                  coveredAt: true,
+                  tags: true,
+                  aiDrafts: true,
+                  aiScripts: true,
+                  aiVideos: true,
+                },
+                take: 1,
+              },
+            } : {}),
+          },
+        }),
+        prisma.story.count({ where }),
+        prisma.story.groupBy({
         by: ['category'],
         where: { ...catFacetWhere, category: { not: null } },
         _count: { _all: true },
@@ -602,8 +604,50 @@ export async function storiesRoutes(
         ORDER BY count DESC
       `,
     ]);
-
-    // Compute trend direction for each story from snapshots
+    } catch (primaryErr: any) {
+      // Fallback: simplified query without relations that may not exist in DB
+      app.log.error({ err: primaryErr.message }, 'Stories primary query failed — using simplified fallback');
+      try {
+        [stories, total] = await Promise.all([
+          prisma.story.findMany({
+            where,
+            orderBy: { [sort]: order },
+            take: limit,
+            skip: offset,
+            include: {
+              storySources: {
+                include: { sourcePost: { select: { id: true, url: true, publishedAt: true, source: { select: { name: true, platform: true } } } } },
+                orderBy: { similarityScore: 'desc' },
+                take: 5,
+              },
+              _count: { select: { storySources: true } },
+            },
+          }),
+          prisma.story.count({ where }),
+        ]);
+        // Empty facets + fill missing relations
+        stories = stories.map((s: any) => ({ ...s, coverageMatches: [], scoreSnapshots: [], parentStory: null, followUps: [], accountStories: [] }));
+      } catch (fallbackErr: any) {
+        app.log.error({ err: fallbackErr.message }, 'Stories fallback query also failed — trying raw SQL');
+        // Ultra fallback: raw SQL
+        const safeSort = ['compositeScore','breakingScore','trendingScore','firstSeenAt','lastUpdatedAt'].includes(sort) ? sort : 'compositeScore';
+        const safeOrder = order === 'asc' ? 'ASC' : 'DESC';
+        stories = await prisma.$queryRaw<any[]>`
+          SELECT id, title, summary, "aiSummary", status, category, "locationName", neighborhood,
+                 "breakingScore", "trendingScore", "confidenceScore", "localityScore", "compositeScore",
+                 "sourceCount", "firstSeenAt", "lastUpdatedAt"
+          FROM "Story" WHERE "mergedIntoId" IS NULL
+          ORDER BY ${Prisma.raw(`"${safeSort}"`)} ${Prisma.raw(safeOrder)}
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+        const countResult = await prisma.$queryRaw<any[]>`SELECT COUNT(*)::int as count FROM "Story" WHERE "mergedIntoId" IS NULL`;
+        total = countResult[0]?.count || 0;
+        stories = stories.map((s: any) => ({ ...s, storySources: [], coverageMatches: [], scoreSnapshots: [], _count: { storySources: s.sourceCount || 0 } }));
+      }
+      categoryFacets = [];
+      statusFacets = [];
+      sourceData = [];
+    }
     let filteredStories = stories;
     if (trend && trend !== 'all') {
       filteredStories = stories.filter((s: any) => {
