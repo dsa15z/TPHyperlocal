@@ -757,8 +757,10 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   });
   const meta = (sourceMeta?.metadata || {}) as Record<string, unknown>;
 
-  // Build headers with rotating UA + conditional fetch (HTTP caching)
-  const headers = buildFetchHeaders();
+  // Build headers — use browser UA if self-healing flagged it, otherwise rotate
+  const useBrowserUA = !!(meta.useBrowserUA);
+  const preferredUA = (meta.healedUA as string) || undefined;
+  const headers = buildFetchHeaders(useBrowserUA ? BROWSER_UA : preferredUA);
   if (meta.lastETag) headers['If-None-Match'] = meta.lastETag as string;
   if (meta.lastModified) headers['If-Modified-Since'] = meta.lastModified as string;
 

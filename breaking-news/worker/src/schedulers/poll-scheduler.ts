@@ -1365,6 +1365,79 @@ async function scheduleRedditPolls(): Promise<void> {
 
 const intervals: NodeJS.Timeout[] = [];
 
+// ─── Inactive Source Re-scan ──────────────────────────────────────────────
+// Periodically test inactive sources to see if they've come back online.
+// If a source starts working again, reactivate it.
+
+async function rescheduleInactiveSources(): Promise<void> {
+  try {
+    const inactiveSources = await prisma.source.findMany({
+      where: {
+        isActive: false,
+        platform: 'RSS',
+        url: { not: null },
+      },
+      select: { id: true, name: true, url: true, metadata: true },
+      take: 10, // Test 10 at a time to be polite
+    });
+
+    if (inactiveSources.length === 0) return;
+
+    let reactivated = 0;
+    for (const source of inactiveSources) {
+      if (!source.url) continue;
+      const meta = (source.metadata || {}) as Record<string, unknown>;
+
+      // Only retest sources deactivated > 6 hours ago
+      const deactivatedAt = meta.deactivatedAt as string;
+      if (deactivatedAt && Date.now() - new Date(deactivatedAt).getTime() < 6 * 60 * 60 * 1000) continue;
+
+      try {
+        const resp = await fetch(source.url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (resp.ok) {
+          const text = await resp.text();
+          if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+            // Source is back! Reactivate it.
+            await prisma.source.update({
+              where: { id: source.id },
+              data: {
+                isActive: true,
+                metadata: {
+                  ...meta,
+                  consecutiveFailures: 0,
+                  reactivatedAt: new Date().toISOString(),
+                  reactivationReason: 'auto-rescan',
+                  useBrowserUA: true,
+                },
+              },
+            });
+            reactivated++;
+            logger.info({ sourceId: source.id, name: source.name }, 'Auto-reactivated inactive source — it\'s working again');
+          }
+        }
+      } catch {
+        // Still broken — skip
+      }
+
+      // Small delay between checks
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (reactivated > 0) {
+      logger.info({ reactivated, tested: inactiveSources.length }, 'Inactive source re-scan complete');
+    }
+  } catch (err) {
+    logger.error({ err: (err as Error).message }, 'rescheduleInactiveSources error');
+  }
+}
+
 /**
  * Set up all recurring scheduled jobs
  */
@@ -1462,6 +1535,10 @@ export function startSchedulers(): void {
   // Reddit: every 5 minutes (consolidated multi-subreddit sources)
   const redditInterval = setInterval(scheduleRedditPolls, 5 * 60 * 1000);
   intervals.push(redditInterval);
+
+  // Inactive source re-scan: every 2 hours (reactivate sources that come back online)
+  const rescanInterval = setInterval(rescheduleInactiveSources, 2 * 60 * 60 * 1000);
+  intervals.push(rescanInterval);
 
   // News Director: every 5 minutes (proactive editorial intelligence)
   const newsDirectorInterval = setInterval(scheduleNewsDirectorEvaluation, 5 * 60 * 1000);
