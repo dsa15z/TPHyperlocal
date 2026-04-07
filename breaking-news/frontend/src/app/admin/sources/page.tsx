@@ -1,6 +1,17 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+
+// Simple error boundary to prevent full page crashes in the modal
+class ErrorBoundary extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: any) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  componentDidCatch(error: Error) { console.error('Source modal error:', error); }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -655,6 +666,7 @@ function SourcesPage() {
           title={editingId ? `Edit: ${formName}` : "Add New Data Feed"}
           width="max-w-4xl"
         >
+        <ErrorBoundary fallback={<div className="p-8 text-center text-red-400">Something went wrong rendering this source. <button className="underline ml-2" onClick={() => { setShowForm(false); resetForm(); }}>Close</button></div>}>
 
           {/* Tabs — only show in edit mode */}
           {editingId && (
@@ -1128,14 +1140,14 @@ function SourcesPage() {
                       <div className="max-h-40 overflow-y-auto space-y-1">
                         {failureLog.slice().reverse().map((entry, i) => (
                           <div key={i} className={clsx("text-[11px] flex items-start gap-2 px-2 py-1 rounded",
-                            entry.reason.includes('SELF-HEAL SUCCESS') ? "bg-green-500/10 text-green-400" :
-                            entry.reason.includes('SELF-HEAL') ? "bg-purple-500/10 text-purple-400" :
-                            entry.reason.includes('AUTO-DEACTIVATED') ? "bg-red-500/10 text-red-400" :
+                            (entry.reason || '').includes('SELF-HEAL SUCCESS') ? "bg-green-500/10 text-green-400" :
+                            (entry.reason || '').includes('SELF-HEAL') ? "bg-purple-500/10 text-purple-400" :
+                            (entry.reason || '').includes('AUTO-DEACTIVATED') ? "bg-red-500/10 text-red-400" :
                             "bg-surface-200/30 text-gray-400"
                           )}>
-                            <span className="text-gray-600 flex-shrink-0 tabular-nums">{new Date(entry.at).toLocaleTimeString()}</span>
-                            <span className="text-gray-600 flex-shrink-0">#{entry.failure}</span>
-                            <span className="truncate">{entry.reason}</span>
+                            <span className="text-gray-600 flex-shrink-0 tabular-nums">{entry.at ? new Date(entry.at).toLocaleTimeString() : '?'}</span>
+                            <span className="text-gray-600 flex-shrink-0">#{entry.failure ?? '?'}</span>
+                            <span className="truncate">{entry.reason || 'Unknown'}</span>
                           </div>
                         ))}
                       </div>
@@ -1146,6 +1158,7 @@ function SourcesPage() {
             )}
           </>
           )}
+        </ErrorBoundary>
         </Modal>
 
         {/* Search + Filters */}
