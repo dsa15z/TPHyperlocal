@@ -566,7 +566,6 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
 
   // Build pastScores snapshot BEFORE the update (was causing ReferenceError)
   const pastScores = (story.pastScores || {}) as Record<string, any>;
-  const now = Date.now();
   pastScores[String(now)] = {
     composite: compositeScore,
     social: socialScore,
