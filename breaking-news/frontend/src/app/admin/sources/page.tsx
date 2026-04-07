@@ -1068,6 +1068,31 @@ function SourcesPage() {
                   </div>
                 )}
 
+                {/* Poll Audit Trail */}
+                {editingId && (() => {
+                  const source = sources.find((s: Source) => s.id === editingId);
+                  const pollLog = ((source?.metadata as any)?.pollLog || []) as Array<{ at: string; status: string; fetched: number; ingested: number; error?: string; subreddits?: number }>;
+                  if (pollLog.length === 0) return null;
+                  return (
+                    <div className="border-t border-white/5 pt-3 mt-3">
+                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Poll History (last 48h)</h4>
+                      <div className="max-h-32 overflow-y-auto space-y-0.5">
+                        {pollLog.slice().reverse().map((entry, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[11px] text-gray-400">
+                            <span className={entry.status === 'success' ? 'text-green-400' : entry.status === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+                              {entry.status === 'success' ? '✓' : entry.status === 'error' ? '✗' : '◐'}
+                            </span>
+                            <span className="text-gray-500 w-28 flex-shrink-0">{new Date(entry.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>{entry.ingested} new / {entry.fetched} fetched</span>
+                            {entry.subreddits && <span className="text-gray-600">({entry.subreddits} subs)</span>}
+                            {entry.error && <span className="text-red-400 truncate">{entry.error}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Failure Audit Log */}
                 {/* Heal result */}
                 {healResult && (

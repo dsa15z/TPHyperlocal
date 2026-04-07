@@ -37,6 +37,42 @@ const UA_POOL = [
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 ];
 
+// ─── Poll Audit Trail ───────────────────────────────────────────────────────
+// Logs each poll to source.metadata.pollLog (kept to last 48h / 100 entries)
+
+async function logPollAudit(sourceId: string, result: {
+  status: 'success' | 'partial' | 'error';
+  fetched: number;
+  ingested: number;
+  error?: string;
+  subreddits?: number;
+}) {
+  try {
+    const source = await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } });
+    const meta = ((source?.metadata || {}) as Record<string, unknown>);
+    const pollLog = ((meta.pollLog || []) as Array<any>);
+
+    // Add new entry
+    pollLog.push({
+      at: new Date().toISOString(),
+      ...result,
+    });
+
+    // Keep last 100 entries or 48h, whichever is fewer
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+    const trimmed = pollLog
+      .filter((e: any) => !e.at || new Date(e.at).getTime() > cutoff)
+      .slice(-100);
+
+    await prisma.source.update({
+      where: { id: sourceId },
+      data: { metadata: { ...meta, pollLog: trimmed } },
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
 /** Get a random browser User-Agent from the pool */
 function getRandomUA(): string {
   return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
@@ -959,6 +995,8 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   await enrichmentQueue.close();
   await extractionQueue.close();
 
+  await logPollAudit(sourceId, { status: ingested > 0 ? 'success' : 'partial', fetched: items.length, ingested });
+
   logger.info({ sourceId, ingested, total: items.length }, 'RSS poll complete');
 }
 
@@ -1256,7 +1294,7 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
 
   await enrichmentQueue.close();
 
-  // Reset failure count on success
+  // Reset failure count on success + audit log
   const meta = ((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata || {}) as Record<string, unknown>;
   await prisma.source.update({
     where: { id: sourceId },
@@ -1265,6 +1303,8 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
       metadata: { ...meta, consecutiveFailures: 0, lastRedditPoll: new Date().toISOString(), lastRedditIngested: totalIngested },
     },
   });
+
+  await logPollAudit(sourceId, { status: totalIngested > 0 ? 'success' : 'partial', fetched: totalFetched, ingested: totalIngested, subreddits: subreddits.length });
 
   logger.info({ sourceId, subreddits: subreddits.length, fetched: totalFetched, ingested: totalIngested }, 'Reddit poll complete');
 }
