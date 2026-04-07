@@ -93,8 +93,19 @@ export default function MarketsPage() {
   const isCol = (id: string) => visibleColumns.some(c => c.id === id);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortCol, setSortCol] = useState<string>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
 
   // When searching, fetch ALL markets so search works across pages
   const fetchLimit = searchQuery.trim() ? 500 : pageSize;
@@ -126,6 +137,22 @@ export default function MarketsPage() {
     if (seenSlugs.has(m.slug)) return false;
     seenSlugs.add(m.slug);
     return true;
+  });
+  // Sort markets
+  markets.sort((a: Market, b: Market) => {
+    let av: any, bv: any;
+    switch (sortCol) {
+      case "name": av = a.name || ""; bv = b.name || ""; break;
+      case "state": av = a.state || ""; bv = b.state || ""; break;
+      case "active": av = a.isActive ? 1 : 0; bv = b.isActive ? 1 : 0; break;
+      case "sources": av = a.sourceCount ?? 0; bv = b.sourceCount ?? 0; break;
+      case "radius": av = a.radiusKm ?? 0; bv = b.radiusKm ?? 0; break;
+      default: av = a.name || ""; bv = b.name || "";
+    }
+    if (typeof av === "string") { av = av.toLowerCase(); bv = (bv as string).toLowerCase(); }
+    if (av < bv) return sortDir === "asc" ? -1 : 1;
+    if (av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
   });
   const totalMarkets = searchQuery.trim() ? markets.length : ((marketsData as any)?.total || rawMarkets.length);
   const totalPages = searchQuery.trim() ? 1 : Math.max(1, Math.ceil(totalMarkets / pageSize));
@@ -396,12 +423,12 @@ export default function MarketsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-surface-300/50">
-                    {isCol("name") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Name</th>}
-                    {isCol("state") && <th className="text-left px-4 py-3 text-gray-400 font-medium">State</th>}
+                    {isCol("name") && <th className="text-left px-4 py-3 text-gray-400 font-medium cursor-pointer hover:text-white select-none" onClick={() => handleSort("name")}>Name {sortCol === "name" && (sortDir === "asc" ? "↑" : "↓")}</th>}
+                    {isCol("state") && <th className="text-left px-4 py-3 text-gray-400 font-medium cursor-pointer hover:text-white select-none" onClick={() => handleSort("state")}>State {sortCol === "state" && (sortDir === "asc" ? "↑" : "↓")}</th>}
                     {isCol("coords") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Lat / Lon</th>}
-                    {isCol("radius") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Radius</th>}
-                    {isCol("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Active</th>}
-                    {isCol("sources") && <th className="text-left px-4 py-3 text-gray-400 font-medium">Sources</th>}
+                    {isCol("radius") && <th className="text-left px-4 py-3 text-gray-400 font-medium cursor-pointer hover:text-white select-none" onClick={() => handleSort("radius")}>Radius {sortCol === "radius" && (sortDir === "asc" ? "↑" : "↓")}</th>}
+                    {isCol("active") && <th className="text-left px-4 py-3 text-gray-400 font-medium cursor-pointer hover:text-white select-none" onClick={() => handleSort("active")}>Active {sortCol === "active" && (sortDir === "asc" ? "↑" : "↓")}</th>}
+                    {isCol("sources") && <th className="text-left px-4 py-3 text-gray-400 font-medium cursor-pointer hover:text-white select-none" onClick={() => handleSort("sources")}>Sources {sortCol === "sources" && (sortDir === "asc" ? "↑" : "↓")}</th>}
                     {isCol("actions") && <th className="text-right px-4 py-3 text-gray-400 font-medium">Actions</th>}
                   </tr>
                 </thead>

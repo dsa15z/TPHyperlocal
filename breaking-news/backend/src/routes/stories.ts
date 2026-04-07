@@ -316,6 +316,23 @@ export async function storiesRoutes(
         for (const term of [...new Set(containsTerms)]) {
           orConditions.push({ locationName: { contains: term, mode: 'insensitive' as const } });
         }
+
+        // Also match stories whose sources are linked to the selected market(s)
+        // This catches stories from "CBC Toronto" even if locationName is generic
+        orConditions.push({
+          storySources: {
+            some: {
+              sourcePost: {
+                source: {
+                  OR: [
+                    { marketId: { in: ids } },
+                    { sourceMarkets: { some: { marketId: { in: ids } } } },
+                  ],
+                },
+              },
+            },
+          },
+        });
       }
 
       if (orConditions.length > 0) {
