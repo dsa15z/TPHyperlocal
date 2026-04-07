@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
-    "start": "node dist/index.js",
+    "start": "(prisma db push --skip-generate 2>&1 || echo 'prisma db push failed - non-fatal'); node dist/index.js",
     "db:generate": "prisma generate --schema=../backend/prisma/schema.prisma"
   },
   "dependencies": {
