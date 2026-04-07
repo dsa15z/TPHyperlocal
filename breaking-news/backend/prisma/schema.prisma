@@ -1384,3 +1384,23 @@ model EditorialComment {
 
   @@index([accountStoryId, createdAt])
 }
+
+// ─── Tool Analytics ──────────────────────────────────────────────────────────
+// Tracks every AI tool invocation for usage monitoring and optimization
+
+model ToolAnalytics {
+  id         String   @id @default(cuid())
+  tool       String   // Tool name (e.g., search_stories, heal_source)
+  args       Json?    // Tool arguments
+  userId     String
+  role       String   // User role at time of call
+  durationMs Int      // Execution time in milliseconds
+  success    Boolean  @default(true)
+  error      String?  // Error message if failed
+  cached     Boolean  @default(false) // Whether result was from cache
+  createdAt  DateTime @default(now())
+
+  @@index([tool, createdAt])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}

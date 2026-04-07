@@ -1,6 +1,6 @@
 # TopicPulse AI Architecture v2 — Portable Implementation Guide
 
-*Last updated: 2026-04-03*
+*Last updated: 2026-04-07*
 
 ## Overview
 

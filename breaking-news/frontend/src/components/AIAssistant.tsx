@@ -205,37 +205,98 @@ export function AIAssistant() {
     setInput("");
     setIsLoading(true);
 
+    const requestBody = {
+      message: userMessage.content,
+      history: updatedMessages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+      context: getContext(),
+    };
+
+    // Decide streaming vs non-streaming:
+    // Use non-streaming when tool calls are likely (questions about data, admin tasks)
+    // Use streaming for conversational/open-ended messages
+    const looksLikeToolCall = /\b(show|find|list|get|how many|what|status|breaking|trending|create|add|heal|clear|trigger|navigate)\b/i.test(userMessage.content);
+    const useStream = !looksLikeToolCall;
+
     try {
-      const response = await apiFetch<{
-        message: string;
-        toolResults?: any[];
-        navigation?: string | null;
-        model?: string;
-      }>("/api/v1/assistant/chat", {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          message: userMessage.content,
-          history: updatedMessages.slice(-10).map(m => ({ role: m.role, content: m.content })),
-          context: getContext(),
-        }),
-      });
+      if (useStream) {
+        // ── SSE Streaming ──
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+        const headers = { "Content-Type": "application/json", ...getAuthHeaders() };
+        const res = await fetch(`${apiBase}/api/v1/assistant/chat`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ ...requestBody, stream: true }),
+        });
 
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: response.message,
-        toolResults: response.toolResults,
-        navigation: response.navigation,
-        timestamp: Date.now(),
-      };
+        if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
 
-      const finalMessages = [...updatedMessages, assistantMessage];
-      setMessages(finalMessages);
-      saveHistory(finalMessages);
+        // Create a placeholder assistant message that we'll update as tokens arrive
+        const streamMsg: Message = { role: "assistant", content: "", timestamp: Date.now() };
+        const streamMessages = [...updatedMessages, streamMsg];
+        setMessages(streamMessages);
 
-      // Auto-navigate if the assistant says to
-      if (response.navigation) {
-        setTimeout(() => router.push(response.navigation!), 1500);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullContent = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "token") {
+                fullContent += data.content;
+                streamMsg.content = fullContent;
+                setMessages([...updatedMessages, { ...streamMsg }]);
+              } else if (data.type === "error") {
+                streamMsg.content = fullContent + `\n\n(Error: ${data.message})`;
+                setMessages([...updatedMessages, { ...streamMsg }]);
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+
+        streamMsg.content = fullContent;
+        const finalMessages = [...updatedMessages, { ...streamMsg }];
+        setMessages(finalMessages);
+        saveHistory(finalMessages);
+      } else {
+        // ── Non-streaming (for tool calls) ──
+        const response = await apiFetch<{
+          message: string;
+          toolResults?: any[];
+          navigation?: string | null;
+          model?: string;
+        }>("/api/v1/assistant/chat", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(requestBody),
+        });
+
+        const assistantMessage: Message = {
+          role: "assistant",
+          content: response.message,
+          toolResults: response.toolResults,
+          navigation: response.navigation,
+          timestamp: Date.now(),
+        };
+
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+        saveHistory(finalMessages);
+
+        // Auto-navigate if the assistant says to
+        if (response.navigation) {
+          setTimeout(() => router.push(response.navigation!), 1500);
+        }
       }
     } catch (err: any) {
       const errorMessage: Message = {
