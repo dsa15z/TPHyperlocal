@@ -300,9 +300,22 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   const entityLocation = entities.locations.length > 0 ? entities.locations[0] : undefined;
 
   // Prefer neighborhood over city-level location for maximum granularity
-  let locationName = neighborhoods.length > 0
-    ? neighborhoods[0]
-    : (entityLocation || extractedLocation || undefined);
+  // Qualify neighborhoods with market name to avoid ambiguity (e.g., "Downtown, Toronto" not just "Downtown")
+  const marketName = post.source?.market?.name;
+  let locationName: string | undefined;
+  if (neighborhoods.length > 0) {
+    const nb = neighborhoods[0];
+    // Only qualify if the neighborhood is generic (short or common name) and market is known
+    const isGeneric = ['Downtown', 'Midtown', 'Uptown', 'East Side', 'West Side', 'North Side', 'South Side'].some(g => nb.toLowerCase() === g.toLowerCase());
+    locationName = (isGeneric && marketName) ? `${nb}, ${marketName}` : nb;
+  } else if (entityLocation) {
+    locationName = entityLocation;
+  } else if (extractedLocation) {
+    locationName = extractedLocation;
+  } else if (marketName && marketName !== 'National') {
+    // Fallback: use the source's market name as location
+    locationName = marketName;
+  }
 
   // Build structured entity list from regex extraction
   let structuredEntities: { name: string; type: string; confidence: number }[] = [
