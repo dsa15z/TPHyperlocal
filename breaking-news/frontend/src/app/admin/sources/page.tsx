@@ -431,7 +431,10 @@ function SourcesPage() {
     setFormPollInterval((meta.pollIntervalMinutes as number) || "");
     setFormAutoRewrite(!!(meta.autoRewrite));
     setFormDisplaySourceName((meta.displaySourceName as string) || "");
-    setFormSubreddits(((meta.subreddits as string[]) || []).join(", "));
+    // Subreddits may be an array or a JSON string
+    let subs = meta.subreddits;
+    if (typeof subs === 'string') { try { subs = JSON.parse(subs); } catch {} }
+    setFormSubreddits(Array.isArray(subs) ? subs.join(", ") : "");
     setModalTab("details");
     setShowForm(true);
   };
@@ -1346,12 +1349,13 @@ function SourcesPage() {
                 </thead>
                 <tbody>
                   {filtered.map((source: Source) => {
-                    const deactivation = getDeactivationInfo(source);
+                    let deactivation: any = null;
+                    try { deactivation = getDeactivationInfo(source); } catch {}
                     const isSelected = selectedIds.has(source.id);
                     return (
                       <tr
                         key={source.id}
-                        onClick={() => startEdit(source)}
+                        onClick={() => { try { startEdit(source); } catch (e) { console.error('startEdit error:', e, source); } }}
                         className={clsx(
                           "border-b border-surface-300/30 hover:bg-surface-300/20 transition-colors cursor-pointer",
                           !source.isActive && "opacity-70",

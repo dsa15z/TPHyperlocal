@@ -170,7 +170,7 @@ export async function sourceRoutes(
 
     return reply.status(200).send({
       data: sources.map((s) => {
-        const accountSource = s.accountSources[0] ?? null;
+        const accountSource = (s.accountSources || [])[0] ?? null;
         return {
           id: s.id,
           platform: s.platform,
@@ -182,9 +182,9 @@ export async function sourceRoutes(
           isActive: s.isActive,
           isGlobal: s.isGlobal,
           marketId: s.marketId,
-          market: s.market,
+          market: s.market || null,
           marketIds: (s as any).sourceMarkets?.map((sm: any) => sm.marketId) || [],
-          markets: (s as any).sourceMarkets?.map((sm: any) => sm.market) || [],
+          markets: (s as any).sourceMarkets?.map((sm: any) => sm.market).filter(Boolean) || [],
           metadata: s.metadata,
           lastPolledAt: s.lastPolledAt,
           createdAt: s.createdAt,
