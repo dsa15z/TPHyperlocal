@@ -978,7 +978,7 @@ export async function triggerCoverageCheck(id: string): Promise<unknown> {
 // ─── Admin: Markets ─────────────────────────────────────────────────────────
 
 export async function fetchMarkets(): Promise<unknown[]> {
-  return apiFetch<unknown[]>("/api/v1/admin/markets", {
+  return apiFetch<unknown[]>("/api/v1/admin/markets?limit=500", {
     headers: getAuthHeaders(),
   });
 }

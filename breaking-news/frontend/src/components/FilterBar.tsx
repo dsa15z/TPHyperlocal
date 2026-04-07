@@ -112,10 +112,24 @@ export function FilterBar({ onFiltersChange, facets }: FilterBarProps) {
     isActive: boolean;
   }>;
 
-  // Superadmin sees all markets; regular users see only their account's markets
-  const availableMarkets = isSuperAdmin
-    ? allMarkets.filter((m) => m.isActive)
-    : userMarkets.filter((m: any) => m.isActive);
+  // Merge both sources — superadmin sees all, regular users see their account markets
+  // Deduplicate by ID in case both lists overlap
+  const mergedMarketMap = new Map<string, any>();
+  for (const m of userMarkets.filter((m: any) => m.isActive)) {
+    mergedMarketMap.set(m.id, m);
+  }
+  if (isSuperAdmin) {
+    for (const m of allMarkets.filter((m) => m.isActive)) {
+      mergedMarketMap.set(m.id, m);
+    }
+  }
+  // Also include allMarkets if user has admin role (may not be flagged as superAdmin)
+  if (allMarkets.length > userMarkets.length) {
+    for (const m of allMarkets.filter((m) => m.isActive)) {
+      mergedMarketMap.set(m.id, m);
+    }
+  }
+  const availableMarkets = Array.from(mergedMarketMap.values());
 
   const marketOptions = [
     { value: "__national__", label: "National" },
