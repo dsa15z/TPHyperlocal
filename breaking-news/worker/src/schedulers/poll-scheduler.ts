@@ -1307,6 +1307,62 @@ async function scheduleNewsDirectorEvaluation(): Promise<void> {
   }
 }
 
+// ─── Reddit Polling ──────────────────────────────────────────────────────────
+// Polls Reddit sources — each source has metadata.subreddits (array of subreddit names).
+// One source = many subreddits, all ingested into the same source for clustering.
+
+async function scheduleRedditPolls(): Promise<void> {
+  if (!(await isUIActive())) { logger.debug('UI idle — skipping scheduleRedditPolls'); return; }
+
+  const { ingestionQueue } = getQueues();
+
+  try {
+    const now = Date.now();
+    const redditSources = await prisma.source.findMany({
+      where: {
+        platform: 'REDDIT',
+        isActive: true,
+      },
+      select: { id: true, metadata: true, lastPolledAt: true },
+    });
+
+    let queued = 0;
+    for (const source of redditSources) {
+      // Respect per-source poll interval
+      const meta = (source.metadata || {}) as Record<string, unknown>;
+      const intervalMin = (typeof meta.pollIntervalMinutes === 'number' && meta.pollIntervalMinutes > 0)
+        ? meta.pollIntervalMinutes
+        : 5;
+      if (source.lastPolledAt && now - new Date(source.lastPolledAt).getTime() < intervalMin * 60 * 1000) continue;
+
+      const subreddits = (meta.subreddits as string[]) || [];
+      if (subreddits.length === 0) continue;
+
+      const jobId = `reddit-poll-${source.id}`;
+      try {
+        await ingestionQueue.add('reddit_poll', {
+          type: 'reddit_poll',
+          sourceId: source.id,
+          subreddits,
+        }, {
+          jobId,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+          removeOnComplete: { age: 1800 },
+          removeOnFail: { age: 3600 },
+        });
+        queued++;
+      } catch { /* duplicate job */ }
+    }
+
+    if (queued > 0) {
+      logger.info({ queued }, 'Scheduled Reddit poll jobs');
+    }
+  } catch (err) {
+    logger.error({ err: (err as Error).message }, 'scheduleRedditPolls error');
+  }
+}
+
 const intervals: NodeJS.Timeout[] = [];
 
 /**
@@ -1403,12 +1459,17 @@ export function startSchedulers(): void {
   const syncInterval = setInterval(scheduleAccountStorySync, 5 * 60 * 1000);
   intervals.push(syncInterval);
 
+  // Reddit: every 5 minutes (consolidated multi-subreddit sources)
+  const redditInterval = setInterval(scheduleRedditPolls, 5 * 60 * 1000);
+  intervals.push(redditInterval);
+
   // News Director: every 5 minutes (proactive editorial intelligence)
   const newsDirectorInterval = setInterval(scheduleNewsDirectorEvaluation, 5 * 60 * 1000);
   intervals.push(newsDirectorInterval);
 
   // Run initial polls immediately on startup
   void scheduleRSSPolls();
+  void scheduleRedditPolls();
   void scheduleNewsAPIPolls();
   void scheduleFacebookPagePolls();
   void scheduleTwitterPolls();

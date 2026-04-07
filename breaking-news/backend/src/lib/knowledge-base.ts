@@ -67,7 +67,7 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 
 ### Source
 - id, name, platform, url, trustScore (0-1), isActive, lastPolledAt
-- platform: one of RSS, NEWSAPI, NEWSCATCHER, TWITTER, FACEBOOK, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
+- platform: one of RSS, REDDIT, NEWSAPI, NEWSCATCHER, TWITTER, FACEBOOK, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
 - Sources are linked to markets via SourceMarket join table (M:N)
 - A source can serve multiple markets (e.g., AP News serves all)
 
@@ -255,7 +255,7 @@ coveredAt (DateTime?), coverageFeedId (String?), aiDrafts (Json?), aiScripts (Js
 aiVideos (Json?), research (Json?), tags (Json?), lastSyncedAt (DateTime), baseSnapshotAt (DateTime?).
 
 ### Enums
-Platform: FACEBOOK, TWITTER, RSS, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
+Platform: FACEBOOK, TWITTER, RSS, REDDIT, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
 SourceType: NEWS_ORG, GOV_AGENCY, PUBLIC_PAGE, RSS_FEED, API_PROVIDER, LLM_PROVIDER
 StoryStatus: ALERT, BREAKING, DEVELOPING, TOP_STORY, ONGOING, FOLLOW_UP, STALE, ARCHIVED
 

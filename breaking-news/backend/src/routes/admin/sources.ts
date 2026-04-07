@@ -6,7 +6,7 @@ import { prisma } from '../../lib/prisma.js';
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
 const platformEnum = z.enum([
-  'FACEBOOK', 'TWITTER', 'RSS', 'NEWSAPI', 'GDELT',
+  'FACEBOOK', 'TWITTER', 'RSS', 'REDDIT', 'NEWSAPI', 'GDELT',
   'LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI', 'MANUAL',
 ]);
 
@@ -23,6 +23,7 @@ const createSourceSchema = z.object({
   marketIds: z.array(z.string()).optional(), // M:N market IDs via SourceMarket
   trustScore: z.number().min(0).max(1).default(0.5),
   metadata: z.record(z.unknown()).optional(),
+  subreddits: z.array(z.string()).optional(), // Reddit: subreddit names to poll
 });
 
 const updateSourceSchema = z.object({
@@ -36,6 +37,7 @@ const updateSourceSchema = z.object({
   pollIntervalMinutes: z.number().int().min(1).max(1440).optional(), // Custom poll frequency
   autoRewrite: z.boolean().optional(), // Auto-rewrite content before story creation
   displaySourceName: z.string().max(255).optional().nullable(), // Override displayed source name
+  subreddits: z.array(z.string()).optional(), // Reddit: list of subreddit names to poll
 });
 
 const listSourcesSchema = z.object({
@@ -231,15 +233,20 @@ export async function sourceRoutes(
       });
     }
 
+    // Merge subreddits into metadata for Reddit sources
+    const mergedMetadata = data.subreddits
+      ? { ...(data.metadata || {}), subreddits: data.subreddits }
+      : data.metadata ?? undefined;
+
     const source = await prisma.source.create({
       data: {
         platform: data.platform as any,
         sourceType: data.sourceType as any,
         name: data.name,
-        url: data.url,
+        url: data.platform === 'REDDIT' ? `https://www.reddit.com/r/${(data.subreddits || [])[0] || 'news'}` : data.url,
         marketId: data.marketIds?.[0] || data.marketId, // Primary market (backward compat)
         trustScore: data.trustScore,
-        metadata: data.metadata ?? undefined,
+        metadata: mergedMetadata,
         isGlobal: false,
       },
     });
@@ -302,15 +309,16 @@ export async function sourceRoutes(
     }
 
     // Extract fields that go into metadata, not top-level Source columns
-    const { marketIds: newMarketIds, pollIntervalMinutes, autoRewrite, displaySourceName, ...sourceUpdateData } = updateData;
+    const { marketIds: newMarketIds, pollIntervalMinutes, autoRewrite, displaySourceName, subreddits, ...sourceUpdateData } = updateData;
 
     // Merge per-source settings into metadata
-    if (pollIntervalMinutes !== undefined || autoRewrite !== undefined || displaySourceName !== undefined) {
+    if (pollIntervalMinutes !== undefined || autoRewrite !== undefined || displaySourceName !== undefined || subreddits !== undefined) {
       const existingMeta = (sourceUpdateData.metadata || existing.metadata || {}) as Record<string, unknown>;
       sourceUpdateData.metadata = {
         ...existingMeta,
         ...(pollIntervalMinutes !== undefined ? { pollIntervalMinutes } : {}),
         ...(autoRewrite !== undefined ? { autoRewrite } : {}),
+        ...(subreddits !== undefined ? { subreddits } : {}),
         ...(displaySourceName !== undefined ? { displaySourceName } : {}),
       };
     }

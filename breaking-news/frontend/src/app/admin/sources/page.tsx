@@ -72,6 +72,7 @@ interface Market {
 const PLATFORMS = [
   { value: "RSS", label: "RSS Feed", icon: <Rss className="w-4 h-4" />, description: "Add an RSS/Atom feed URL to poll for articles" },
   { value: "NEWSAPI", label: "API (News)", icon: <Newspaper className="w-4 h-4" />, description: "News API sources (Event Registry, NewsAPI.org, HyperLocal Intel, Newscatcher)" },
+  { value: "REDDIT", label: "Reddit", icon: <Globe className="w-4 h-4" />, description: "Multi-subreddit news feed. Add multiple subreddits as one consolidated source." },
   { value: "TWITTER", label: "Twitter/X", icon: <Globe className="w-4 h-4" />, description: "Twitter API v2 search or list monitoring" },
   { value: "FACEBOOK", label: "Facebook", icon: <Globe className="w-4 h-4" />, description: "Facebook Graph API page monitoring" },
   { value: "GDELT", label: "GDELT", icon: <Globe className="w-4 h-4" />, description: "Free global event/news validation layer" },
@@ -95,6 +96,7 @@ const SOURCE_TYPES = [
 
 const PLATFORM_COLORS: Record<string, string> = {
   RSS: "text-orange-400 bg-orange-500/10",
+  REDDIT: "text-orange-400 bg-orange-500/10",
   NEWSAPI: "text-blue-400 bg-blue-500/10",
   NEWSCATCHER: "text-blue-400 bg-blue-500/10",
   PERIGON: "text-blue-400 bg-blue-500/10",
@@ -179,6 +181,7 @@ function SourcesPage() {
   const [formPollInterval, setFormPollInterval] = useState<number | "">(""); // minutes
   const [formAutoRewrite, setFormAutoRewrite] = useState(false);
   const [formDisplaySourceName, setFormDisplaySourceName] = useState("");
+  const [formSubreddits, setFormSubreddits] = useState(""); // comma-separated subreddit names
 
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -364,6 +367,7 @@ function SourcesPage() {
     setFormPollInterval("");
     setFormAutoRewrite(false);
     setFormDisplaySourceName("");
+    setFormSubreddits("");
     setEditingId(null);
     setTestResult(null);
   };
@@ -383,13 +387,14 @@ function SourcesPage() {
     setFormPollInterval((meta.pollIntervalMinutes as number) || "");
     setFormAutoRewrite(!!(meta.autoRewrite));
     setFormDisplaySourceName((meta.displaySourceName as string) || "");
+    setFormSubreddits(((meta.subreddits as string[]) || []).join(", "));
     setShowForm(true);
   };
 
   // Auto-set source type based on platform
   const handlePlatformChange = (platform: string) => {
     setFormPlatform(platform);
-    if (platform === "RSS") setFormSourceType("RSS_FEED");
+    if (platform === "RSS" || platform === "REDDIT") setFormSourceType("RSS_FEED");
     else if (platform === "NEWSAPI" || platform === "GDELT") setFormSourceType("API_PROVIDER");
     else if (platform.startsWith("LLM_")) setFormSourceType("LLM_PROVIDER");
     else if (platform === "FACEBOOK" || platform === "TWITTER") setFormSourceType("PUBLIC_PAGE");
@@ -408,16 +413,22 @@ function SourcesPage() {
       trustScore: formTrustScore / 100,
     };
     // Extra fields for update (stored in metadata via backend)
+    const subreddits = formSubreddits.split(/[,\n]+/).map(s => s.trim().replace(/^r\//, '').replace(/^\/r\//, '')).filter(Boolean);
     const extraFields = {
       ...(formPollInterval !== "" ? { pollIntervalMinutes: Number(formPollInterval) } : {}),
       autoRewrite: formAutoRewrite,
+      ...(formPlatform === "REDDIT" && subreddits.length > 0 ? { subreddits } : {}),
       displaySourceName: formDisplaySourceName.trim() || null,
     };
 
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: { ...payload, ...extraFields } });
     } else {
-      createMutation.mutate(payload);
+      // Include subreddits in create for Reddit sources
+      const createPayload = formPlatform === "REDDIT" && subreddits.length > 0
+        ? { ...payload, subreddits }
+        : payload;
+      createMutation.mutate(createPayload as any);
     }
   };
 
@@ -637,6 +648,7 @@ function SourcesPage() {
                     />
                   </div>
 
+                  {formPlatform !== "REDDIT" && (
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">
                       {formPlatform === "RSS"
@@ -663,6 +675,26 @@ function SourcesPage() {
                       className="filter-input w-full"
                     />
                   </div>
+                  )}
+
+                  {formPlatform === "REDDIT" && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Subreddits (comma-separated) *
+                    </label>
+                    <textarea
+                      value={formSubreddits}
+                      onChange={(e) => setFormSubreddits(e.target.value)}
+                      placeholder="news, worldnews, localnews, houston, BreakingNews"
+                      rows={3}
+                      className="filter-input w-full resize-y"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Enter subreddit names without r/ prefix. All subreddits are polled as one consolidated source.
+                      {formSubreddits && ` (${formSubreddits.split(/[,\n]+/).filter(s => s.trim()).length} subreddits)`}
+                    </p>
+                  </div>
+                  )}
 
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">

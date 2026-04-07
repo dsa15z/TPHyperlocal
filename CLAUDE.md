@@ -187,7 +187,7 @@ Static routes (e.g. `/markets/seed`, `/markets/autofill`) MUST be registered BEF
 ### Prisma / Database
 - Always check `schema.prisma` for field names before writing queries — never assume field names.
 - The `Source` model has NO `accountId` — use the `AccountSource` join table.
-- The `Platform` enum values are: FACEBOOK, TWITTER, RSS, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL. Never use values outside this list.
+- The `Platform` enum values are: FACEBOOK, TWITTER, RSS, REDDIT, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL. Never use values outside this list.
 - Queue instances must always be closed after use: `await queue.close()`.
 
 ### Queue Patterns

@@ -668,7 +668,13 @@ interface TwitterPollJob {
   bearerToken?: string;
 }
 
-type IngestionJob = RSSPollJob | NewsAPIPollJob | FacebookPagePollJob | TwitterPollJob;
+interface RedditPollJob {
+  type: 'reddit_poll';
+  sourceId: string;
+  subreddits: string[]; // e.g. ['news', 'worldnews', 'localhouston']
+}
+
+type IngestionJob = RSSPollJob | NewsAPIPollJob | FacebookPagePollJob | TwitterPollJob | RedditPollJob;
 
 // RSS item shape after parsing
 interface RSSItem {
@@ -1133,6 +1139,134 @@ async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
   logger.info({ sourceId, query, ingested, total: tweets.length }, 'Twitter poll complete');
 }
 
+// ─── Reddit Handler ─────────────────────────────────────────────────────────
+// Polls multiple subreddits from a single consolidated source.
+// Uses Reddit's public JSON API (no auth needed for public subreddits).
+// Each source has metadata.subreddits = ['news', 'worldnews', 'houston', ...]
+
+async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
+  const { sourceId, subreddits } = job.data;
+  logger.info({ sourceId, subreddits, count: subreddits.length }, 'Polling Reddit subreddits');
+
+  const enrichmentQueue = new Queue('enrichment', { connection: getSharedConnection() });
+  let totalIngested = 0;
+  let totalFetched = 0;
+
+  for (const sub of subreddits) {
+    const subreddit = sub.replace(/^r\//, '').replace(/^\/r\//, '').trim();
+    if (!subreddit) continue;
+
+    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=25&raw_json=1`;
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': `TopicPulse/1.0 (news aggregation bot; +https://topicpulse.ai)`,
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (response.status === 429) {
+        logger.warn({ sourceId, subreddit }, 'Reddit rate limited — skipping subreddit');
+        continue;
+      }
+
+      if (!response.ok) {
+        logger.warn({ sourceId, subreddit, status: response.status }, 'Reddit fetch failed');
+        continue;
+      }
+
+      const data = await response.json();
+      const posts = data?.data?.children || [];
+      totalFetched += posts.length;
+
+      for (const item of posts) {
+        const post = item.data;
+        if (!post || post.stickied || post.is_self === false && !post.selftext) {
+          // Skip link-only posts with no text content (we want text-based news)
+          if (!post?.title) continue;
+        }
+
+        try {
+          const platformPostId = `reddit::${post.id}`;
+          const existing = await prisma.sourcePost.findUnique({ where: { platformPostId } });
+          if (existing) continue;
+
+          // Build content: title + selftext for text posts, title + url for link posts
+          const content = post.selftext
+            ? `${post.title}\n\n${post.selftext.substring(0, 3000)}`
+            : post.title;
+          const contentHash = generateContentHash(content);
+
+          // Content-hash dedup
+          const existingByContent = await prisma.sourcePost.findFirst({
+            where: { sourceId, contentHash },
+          });
+          if (existingByContent) continue;
+
+          const permalink = `https://www.reddit.com${post.permalink}`;
+          const externalUrl = post.url && !post.url.includes('reddit.com') ? post.url : permalink;
+
+          const sourcePost = await prisma.sourcePost.create({
+            data: {
+              sourceId,
+              platformPostId,
+              content,
+              contentHash,
+              title: post.title?.substring(0, 500) || 'Reddit Post',
+              url: externalUrl,
+              authorName: post.author || 'unknown',
+              authorId: post.author_fullname || null,
+              engagementLikes: post.ups || 0,
+              engagementShares: post.num_crossposts || 0,
+              engagementComments: post.num_comments || 0,
+              publishedAt: new Date(post.created_utc * 1000),
+              rawData: {
+                subreddit: post.subreddit,
+                subreddit_name: post.subreddit_name_prefixed,
+                score: post.score,
+                upvote_ratio: post.upvote_ratio,
+                domain: post.domain,
+                flair: post.link_flair_text,
+                is_self: post.is_self,
+                permalink,
+              },
+            },
+          });
+
+          await enrichmentQueue.add('enrich', { sourcePostId: sourcePost.id });
+          totalIngested++;
+        } catch (err) {
+          if ((err as any).code === 'P2002') continue; // Dedup
+          logger.error({ sourceId, subreddit, postId: post.id, err: (err as Error).message }, 'Failed to ingest Reddit post');
+        }
+      }
+
+      // Small delay between subreddits to be polite
+      if (subreddits.indexOf(sub) < subreddits.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (err) {
+      logger.error({ sourceId, subreddit, err: (err as Error).message }, 'Failed to fetch subreddit');
+    }
+  }
+
+  await enrichmentQueue.close();
+
+  // Reset failure count on success
+  const meta = ((await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata || {}) as Record<string, unknown>;
+  await prisma.source.update({
+    where: { id: sourceId },
+    data: {
+      lastPolledAt: new Date(),
+      metadata: { ...meta, consecutiveFailures: 0, lastRedditPoll: new Date().toISOString(), lastRedditIngested: totalIngested },
+    },
+  });
+
+  logger.info({ sourceId, subreddits: subreddits.length, fetched: totalFetched, ingested: totalIngested }, 'Reddit poll complete');
+}
+
 async function handleFacebookPagePoll(job: Job<FacebookPagePollJob>): Promise<void> {
   const { sourceId, pageId, accessToken } = job.data;
 
@@ -1250,6 +1384,9 @@ export function createIngestionWorker(): Worker {
           break;
         case 'twitter_poll':
           await handleTwitterPoll(job as Job<TwitterPollJob>);
+          break;
+        case 'reddit_poll':
+          await handleRedditPoll(job as Job<RedditPollJob>);
           break;
         default:
           logger.error({ type: (job.data as IngestionJob).type }, 'Unknown ingestion job type');
