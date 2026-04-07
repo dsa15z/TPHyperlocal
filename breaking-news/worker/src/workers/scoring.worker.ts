@@ -419,15 +419,98 @@ function determineStatus(
   return currentStatus === 'DEVELOPING' ? 'DEVELOPING' : 'ONGOING';
 }
 
+// ─── Fast In-Memory Score Calculators (single DB fetch) ────────────────────
+// These operate on pre-fetched source data — no additional DB queries needed.
+
+function calculateBreakingScoreFast(sources: any[], now: number): number {
+  const thirtyMinAgo = now - WINDOWS.BREAKING;
+  const fifteenMinAgo = now - WINDOWS.RECENT;
+
+  const recentSources = sources.filter(s => new Date(s.addedAt).getTime() >= thirtyMinAgo);
+  const veryRecentCount = recentSources.filter(s => new Date(s.addedAt).getTime() >= fifteenMinAgo).length;
+  const velocityScore = Math.min(1.0, veryRecentCount / 3);
+
+  // Source diversity: unique platforms in recent window
+  const platforms = new Set(recentSources.map(s => s.sourcePost?.source?.platform).filter(Boolean));
+  const diversityScore = Math.min(1.0, platforms.size / 3);
+
+  // Trust-weighted velocity
+  const trustWeighted = recentSources.reduce((sum, s) => sum + (s.sourcePost?.source?.trustScore || 0.5), 0);
+  const trustScore = recentSources.length > 0 ? Math.min(1.0, trustWeighted / (recentSources.length * 0.7)) : 0;
+
+  return 0.5 * velocityScore + 0.3 * diversityScore + 0.2 * trustScore;
+}
+
+function calculateTrendingScoreFast(sources: any[], story: any, now: number): { score: number; growthPercent15: number; growthPercent60: number } {
+  const oneHourAgo = now - WINDOWS.TRENDING;
+  const twoHoursAgo = now - WINDOWS.MEDIUM;
+  const fifteenMinAgo = now - WINDOWS.RECENT;
+
+  const last15 = sources.filter(s => new Date(s.addedAt).getTime() >= fifteenMinAgo).length;
+  const last60 = sources.filter(s => new Date(s.addedAt).getTime() >= oneHourAgo).length;
+  const prev60 = sources.filter(s => {
+    const t = new Date(s.addedAt).getTime();
+    return t >= twoHoursAgo && t < oneHourAgo;
+  }).length;
+
+  const growthPercent15 = calculateGrowthPercent(last15, Math.max(1, last60 - last15));
+  const growthPercent60 = calculateGrowthPercent(last60, Math.max(1, prev60));
+
+  const ageMs = now - new Date(story.firstSeenAt).getTime();
+  const category = story.category || 'OTHER';
+  const decayMultiplier = getCategoryDecayMultiplier(category, ageMs);
+
+  const rawTrending = Math.min(1.0, (growthPercent60 > 0 ? 0.4 : 0) + (growthPercent15 > 50 ? 0.3 : growthPercent15 > 0 ? 0.15 : 0) + (last60 >= 3 ? 0.3 : last60 / 10));
+  return { score: rawTrending * decayMultiplier, growthPercent15, growthPercent60 };
+}
+
+function calculateConfidenceScoreFast(sources: any[]): number {
+  if (sources.length === 0) return 0;
+  const uniqueSourceIds = new Set(sources.map(s => s.sourcePost?.source?.id).filter(Boolean));
+  const diversityScore = Math.min(1.0, uniqueSourceIds.size / 5);
+
+  const avgTrust = sources.reduce((sum, s) => sum + (s.sourcePost?.source?.trustScore || 0.5), 0) / sources.length;
+  const platforms = new Set(sources.map(s => s.sourcePost?.source?.platform).filter(Boolean));
+  const platformDiversity = Math.min(1.0, platforms.size / 3);
+
+  return 0.4 * diversityScore + 0.35 * avgTrust + 0.25 * platformDiversity;
+}
+
+function calculateLocalityScoreFast(story: any): number {
+  const hasLocation = !!story.locationName && story.locationName !== 'National';
+  const hasNeighborhood = !!story.neighborhood;
+  if (!hasLocation && !hasNeighborhood) return 0.2; // National story
+  return hasNeighborhood ? 1.0 : 0.7;
+}
+
+function calculateSocialScoreFast(sources: any[]): { socialScore: number; rawSocialTotal: number } {
+  let totalLikes = 0, totalShares = 0, totalComments = 0;
+  for (const ss of sources) {
+    totalLikes += ss.sourcePost?.engagementLikes || 0;
+    totalShares += ss.sourcePost?.engagementShares || 0;
+    totalComments += ss.sourcePost?.engagementComments || 0;
+  }
+  const rawSocialTotal = 2 * (totalShares + totalLikes) + totalComments + sources.length;
+  return { socialScore: Math.min(1.0, rawSocialTotal / 200), rawSocialTotal };
+}
+
 // ─── Main Processing ────────────────────────────────────────────────────────
 
 async function processScoring(job: Job<ScoringJob>): Promise<void> {
   const { storyId } = job.data;
 
-  logger.info({ storyId }, 'Scoring story');
-
+  // Single DB fetch: story + all sources with engagement data
   const story = await prisma.story.findUnique({
     where: { id: storyId },
+    include: {
+      storySources: {
+        include: {
+          sourcePost: {
+            include: { source: { select: { id: true, name: true, platform: true, trustScore: true } } },
+          },
+        },
+      },
+    },
   });
 
   if (!story) {
@@ -435,14 +518,15 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     return;
   }
 
-  // Calculate all scores (including social engagement from TopicPulse)
-  const [breakingScore, trendingResult, confidenceScore, localityScore, socialResult] = await Promise.all([
-    calculateBreakingScore(storyId),
-    calculateTrendingScore(storyId),
-    calculateConfidenceScore(storyId),
-    calculateLocalityScore(storyId),
-    calculateSocialScore(storyId),
-  ]);
+  const sources = story.storySources || [];
+  const now = Date.now();
+
+  // Calculate all scores in-memory (no additional DB queries)
+  const breakingScore = calculateBreakingScoreFast(sources, now);
+  const trendingResult = calculateTrendingScoreFast(sources, story, now);
+  const confidenceScore = calculateConfidenceScoreFast(sources);
+  const localityScore = calculateLocalityScoreFast(story);
+  const socialResult = calculateSocialScoreFast(sources);
 
   const trendingScore = trendingResult.score;
   const socialScore = socialResult.socialScore;
@@ -736,7 +820,7 @@ export function createScoringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 20, // Increased from 5 — scoring is CPU-light DB queries
+      concurrency: 50, // High concurrency — each job now makes only 2 DB calls (was 18)
     }
   );
 
