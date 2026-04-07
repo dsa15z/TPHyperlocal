@@ -547,32 +547,63 @@ export async function sourceRoutes(
 
       const testSub = subs[0];
       try {
-        const res = await fetch(`https://www.reddit.com/r/${testSub}/new.json?limit=3&raw_json=1`, {
-          headers: {
-            'User-Agent': 'TopicPulse/1.0 (news aggregation; +https://topicpulse.ai)',
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(10000),
-        });
+        // Try OAuth first (works from cloud servers), fall back to unauthenticated
+        let posts: any[] = [];
+        let usedOAuth = false;
+        const clientId = process.env['REDDIT_CLIENT_ID'];
+        const clientSecret = process.env['REDDIT_CLIENT_SECRET'];
 
-        if (!res.ok) {
-          return reply.send({
-            success: false,
-            error: `Reddit returned HTTP ${res.status} for r/${testSub}. ${res.status === 403 ? 'Subreddit may be private or banned.' : res.status === 404 ? 'Subreddit not found.' : ''}`,
-          });
+        if (clientId && clientSecret) {
+          try {
+            const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+            const tokenRes = await fetch('https://www.reddit.com/api/v1/access_token', {
+              method: 'POST',
+              headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'TopicPulse/1.0' },
+              body: 'grant_type=client_credentials',
+              signal: AbortSignal.timeout(10000),
+            });
+            if (tokenRes.ok) {
+              const tokenData = await tokenRes.json();
+              const res = await fetch(`https://oauth.reddit.com/r/${testSub}/new?limit=3&raw_json=1`, {
+                headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'User-Agent': 'TopicPulse/1.0' },
+                signal: AbortSignal.timeout(10000),
+              });
+              if (res.ok) {
+                const data = await res.json();
+                posts = data?.data?.children || [];
+                usedOAuth = true;
+              } else if (res.status === 404) {
+                return reply.send({ success: false, error: `Subreddit r/${testSub} not found.` });
+              }
+            }
+          } catch { /* fall through to unauthenticated */ }
         }
 
-        const data = await res.json();
-        const posts = data?.data?.children || [];
+        if (!usedOAuth) {
+          const res = await fetch(`https://www.reddit.com/r/${testSub}/new.json?limit=3&raw_json=1`, {
+            headers: { 'User-Agent': 'TopicPulse/1.0 (news aggregation platform)', 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!res.ok) {
+            return reply.send({
+              success: false,
+              error: `Reddit returned HTTP ${res.status} for r/${testSub}. ${res.status === 403 ? 'Set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET env vars for OAuth access (free at reddit.com/prefs/apps).' : res.status === 404 ? 'Subreddit not found.' : ''}`,
+            });
+          }
+          const data = await res.json();
+          posts = data?.data?.children || [];
+        }
 
         return reply.send({
-          success: true,
+          success: posts.length > 0,
           platform: 'REDDIT',
+          auth: usedOAuth ? 'oauth' : 'unauthenticated',
           subredditsChecked: subs.length,
           testSubreddit: `r/${testSub}`,
           postsFound: posts.length,
           sampleTitles: posts.slice(0, 3).map((p: any) => p.data?.title || 'Untitled'),
           allSubreddits: subs.map(s => `r/${s}`),
+          ...(posts.length === 0 ? { error: 'No posts found. If using OAuth, verify credentials. If unauthenticated, Reddit may be blocking cloud server requests — add REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET.' } : {}),
         });
       } catch (err: any) {
         return reply.send({ success: false, error: `Failed to reach Reddit: ${err.message}` });

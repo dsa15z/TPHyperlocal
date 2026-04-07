@@ -1184,6 +1184,92 @@ async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
 // Uses Reddit's public JSON API (no auth needed for public subreddits).
 // Each source has metadata.subreddits = ['news', 'worldnews', 'houston', ...]
 
+// ─── Reddit OAuth Helper ─────────────────────────────────────────────────────
+// Reddit blocks unauthenticated server requests (403 from cloud IPs).
+// OAuth "script" app type gives 60 req/min for free.
+// Env vars: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
+// Falls back to unauthenticated if no credentials (works from residential IPs).
+
+let redditAccessToken: string | null = null;
+let redditTokenExpiry = 0;
+
+async function getRedditToken(): Promise<string | null> {
+  const clientId = process.env['REDDIT_CLIENT_ID'];
+  const clientSecret = process.env['REDDIT_CLIENT_SECRET'];
+  if (!clientId || !clientSecret) return null;
+
+  if (redditAccessToken && Date.now() < redditTokenExpiry) return redditAccessToken;
+
+  try {
+    const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const res = await fetch('https://www.reddit.com/api/v1/access_token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'TopicPulse/1.0 (news aggregation platform)',
+      },
+      body: 'grant_type=client_credentials',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    redditAccessToken = data.access_token;
+    redditTokenExpiry = Date.now() + (data.expires_in - 60) * 1000; // Refresh 60s early
+    return redditAccessToken;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRedditSubreddit(subreddit: string): Promise<any[]> {
+  const token = await getRedditToken();
+
+  // OAuth path (reliable from cloud servers)
+  if (token) {
+    const res = await fetch(`https://oauth.reddit.com/r/${subreddit}/new?limit=25&raw_json=1`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'TopicPulse/1.0 (news aggregation platform)',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data?.data?.children || [];
+    }
+    if (res.status === 401) {
+      // Token expired, clear and retry once
+      redditAccessToken = null;
+      const newToken = await getRedditToken();
+      if (newToken) {
+        const retry = await fetch(`https://oauth.reddit.com/r/${subreddit}/new?limit=25&raw_json=1`, {
+          headers: { 'Authorization': `Bearer ${newToken}`, 'User-Agent': 'TopicPulse/1.0 (news aggregation platform)' },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (retry.ok) {
+          const data = await retry.json();
+          return data?.data?.children || [];
+        }
+      }
+    }
+    // Log non-200 for debugging
+    logger.warn({ subreddit, status: res.status }, 'Reddit OAuth request failed');
+  }
+
+  // Fallback: unauthenticated (works from residential IPs, blocked from most cloud servers)
+  const res = await fetch(`https://www.reddit.com/r/${subreddit}/new.json?limit=25&raw_json=1`, {
+    headers: {
+      'User-Agent': 'TopicPulse/1.0 (news aggregation platform; contact: support@topicpulse.ai)',
+      'Accept': 'application/json',
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Reddit HTTP ${res.status} for r/${subreddit}`);
+  const data = await res.json();
+  return data?.data?.children || [];
+}
+
 async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
   const { sourceId, subreddits } = job.data;
   logger.info({ sourceId, subreddits, count: subreddits.length }, 'Polling Reddit subreddits');
@@ -1196,29 +1282,8 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
     const subreddit = sub.replace(/^r\//, '').replace(/^\/r\//, '').trim();
     if (!subreddit) continue;
 
-    const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=25&raw_json=1`;
-
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': `TopicPulse/1.0 (news aggregation bot; +https://topicpulse.ai)`,
-          'Accept': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (response.status === 429) {
-        logger.warn({ sourceId, subreddit }, 'Reddit rate limited — skipping subreddit');
-        continue;
-      }
-
-      if (!response.ok) {
-        logger.warn({ sourceId, subreddit, status: response.status }, 'Reddit fetch failed');
-        continue;
-      }
-
-      const data = await response.json();
-      const posts = data?.data?.children || [];
+      const posts = await fetchRedditSubreddit(subreddit);
       totalFetched += posts.length;
 
       for (const item of posts) {
