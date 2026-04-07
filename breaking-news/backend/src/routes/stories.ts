@@ -284,41 +284,11 @@ export async function storiesRoutes(
       if (ids.length > 0) {
         const markets = await prisma.market.findMany({
           where: { id: { in: ids } },
-          select: { name: true, state: true, keywords: true, neighborhoods: true },
+          select: { name: true, state: true, keywords: true },
         });
 
-        const exactTerms: string[] = [];
-        const containsTerms: string[] = [];
-
-        for (const m of markets) {
-          exactTerms.push(m.name.toLowerCase());
-          containsTerms.push(m.name.toLowerCase());
-          if (m.state) exactTerms.push(m.state.toLowerCase());
-
-          const keywords = (m.keywords || []) as string[];
-          for (const kw of keywords) {
-            const normalized = kw.toLowerCase().trim();
-            if (normalized.split(/\s+/).length >= 2) exactTerms.push(normalized);
-            if (normalized.length >= 6) exactTerms.push(normalized);
-          }
-
-          const neighborhoods = (m.neighborhoods || []) as string[];
-          for (const nb of neighborhoods) {
-            const normalized = nb.toLowerCase().trim();
-            if (normalized.split(/\s+/).length >= 2 || normalized.length >= 8) exactTerms.push(normalized);
-          }
-        }
-
-        for (const term of [...new Set(exactTerms)]) {
-          orConditions.push({ locationName: { equals: term, mode: 'insensitive' as const } });
-          orConditions.push({ neighborhood: { equals: term, mode: 'insensitive' as const } });
-        }
-        for (const term of [...new Set(containsTerms)]) {
-          orConditions.push({ locationName: { contains: term, mode: 'insensitive' as const } });
-        }
-
-        // Also match stories whose sources are linked to the selected market(s)
-        // This catches stories from "CBC Toronto" even if locationName is generic
+        // Primary filter: stories from sources linked to the selected market(s)
+        // This is the most reliable — a Toronto source only produces Toronto stories
         orConditions.push({
           storySources: {
             some: {
@@ -333,6 +303,23 @@ export async function storiesRoutes(
             },
           },
         });
+
+        // Secondary filter: location name contains the city name (e.g., "Downtown, Toronto")
+        // Only match on city name and unique keywords — NOT neighborhoods (too generic)
+        for (const m of markets) {
+          // City name match: "Toronto" in locationName
+          orConditions.push({ locationName: { contains: m.name, mode: 'insensitive' as const } });
+
+          // Qualified location match: "Downtown, Toronto" or "Toronto, ON"
+          const keywords = (m.keywords || []) as string[];
+          for (const kw of keywords) {
+            const normalized = kw.trim();
+            // Only use keywords that are unique enough (6+ chars, multi-word, or market-specific)
+            if (normalized.length >= 6 && !['downtown', 'midtown', 'uptown', 'east side', 'west side'].includes(normalized.toLowerCase())) {
+              orConditions.push({ locationName: { equals: normalized, mode: 'insensitive' as const } });
+            }
+          }
+        }
       }
 
       if (orConditions.length > 0) {
