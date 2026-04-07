@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { type SortingState } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, Table2, Search, Download, X } from "lucide-react";
 import clsx from "clsx";
 import { fetchStories, fetchTeaserStories, fetchServerViews, createServerView, updateServerView, deleteServerView, type StoryFilters, type TeaserResponse } from "@/lib/api";
 import { useUser } from "@/components/UserProvider";
@@ -129,6 +129,12 @@ function DashboardContent() {
 
   // ── View mode (table vs cards) ─────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+
+  // ── Multiselect + CSV export ──────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Clear selection when page/filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Data fetching ───────────────────────────────────────────────────────
   const { data, isLoading, isError, error } = useQuery({
@@ -301,6 +307,39 @@ function DashboardContent() {
   const total = data?.total || 0;
   const facets = data?.facets;
 
+  // ── CSV Export ────────────────────────────────────────────────────────
+  const exportToCSV = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    const selected = stories.filter((s: any) => selectedIds.has(s.id));
+    if (selected.length === 0) return;
+
+    const headers = ["Title", "Status", "Category", "Location", "Score", "Breaking", "Trending", "Confidence", "Sources", "First Seen", "Last Updated", "Summary", "ID"];
+    const rows = selected.map((s: any) => [
+      `"${(s.title || "").replace(/"/g, '""')}"`,
+      s.status,
+      s.category || "",
+      s.location || "",
+      Math.round((s.composite_score || 0) * 100),
+      Math.round((s.breaking_score || 0) * 100),
+      Math.round((s.trending_score || 0) * 100),
+      Math.round((s.confidence_score || 0) * 100),
+      s.source_count || 0,
+      s.first_seen ? new Date(s.first_seen).toISOString() : "",
+      s.last_updated ? new Date(s.last_updated).toISOString() : "",
+      `"${(s.ai_summary || s.summary || "").replace(/"/g, '""').replace(/\n/g, " ")}"`,
+      s.id,
+    ]);
+
+    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `topicpulse-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [selectedIds, stories]);
+
   return (
     <div className="min-h-screen">
       <main className="max-w-[1600px] mx-auto px-4 md:px-6 py-6 space-y-4">
@@ -359,15 +398,37 @@ function DashboardContent() {
         {/* Filter bar */}
         <FilterBar onFiltersChange={handleFiltersChange} facets={facets} />
 
-        {/* Results count */}
+        {/* Results count + export bar */}
         {!isLoading && (
           <div className="flex items-center justify-between text-sm text-gray-500">
             <span>{total} leads found</span>
-            {total > 0 && (
-              <span>
-                Page {currentPage} of {totalPages}
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium">
+                  <span>{selectedIds.size} selected</span>
+                  <button
+                    onClick={exportToCSV}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-accent/20 hover:bg-accent/30 transition-colors"
+                    title="Export selected to CSV"
+                  >
+                    <Download className="w-3 h-3" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="p-0.5 rounded hover:bg-accent/20 transition-colors"
+                    title="Clear selection"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              {total > 0 && (
+                <span>
+                  Page {currentPage} of {totalPages}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -413,6 +474,8 @@ function DashboardContent() {
                 columnConfig={columnConfig}
                 onColumnResize={handleColumnResize}
                 onColumnReorder={handleColumnReorder}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
               />
             </div>
           )

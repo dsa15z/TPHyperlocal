@@ -86,6 +86,10 @@ interface StoryTableProps {
   onColumnResize?: (columnId: string, newWidth: number) => void;
   /** Called when columns are reordered via drag in the grid header */
   onColumnReorder?: (fromId: string, toId: string) => void;
+  /** Selected story IDs for multiselect export */
+  selectedIds?: Set<string>;
+  /** Called when selection changes */
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 const columnHelper = createColumnHelper<Story>();
@@ -438,30 +442,73 @@ export function StoryTable({
   columnConfig,
   onColumnResize,
   onColumnReorder,
+  selectedIds,
+  onSelectionChange,
 }: StoryTableProps) {
   const [dragColId, setDragColId] = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<string | null>(null);
+  const hasSelection = !!selectedIds && !!onSelectionChange;
+
+  const toggleSelect = (id: string) => {
+    if (!onSelectionChange || !selectedIds) return;
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onSelectionChange(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (!onSelectionChange || !selectedIds) return;
+    if (selectedIds.size === stories.length) {
+      onSelectionChange(new Set());
+    } else {
+      onSelectionChange(new Set(stories.map(s => s.id)));
+    }
+  };
+
   const columns = useMemo(() => {
     const allDefs = buildColumnDefs();
 
+    // Build the checkbox column if selection is enabled
+    const checkboxCol: ColumnDef<Story, any> = columnHelper.display({
+      id: "_select",
+      header: () => (
+        <input
+          type="checkbox"
+          checked={selectedIds ? selectedIds.size === stories.length && stories.length > 0 : false}
+          onChange={toggleSelectAll}
+          className="w-3.5 h-3.5 rounded accent-accent cursor-pointer"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selectedIds?.has(row.original.id) ?? false}
+          onChange={() => toggleSelect(row.original.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-3.5 h-3.5 rounded accent-accent cursor-pointer"
+        />
+      ),
+      size: 32,
+      enableSorting: false,
+    });
+
+    let baseCols: ColumnDef<Story, any>[];
+
     if (!columnConfig) {
-      // No config — show all columns in default order
-      return Object.values(allDefs);
+      baseCols = Object.values(allDefs);
+    } else {
+      baseCols = columnConfig
+        .filter((cfg) => cfg.visible)
+        .map((cfg) => {
+          const def = allDefs[cfg.id];
+          if (!def) return null;
+          return { ...def, size: cfg.width };
+        })
+        .filter(Boolean) as ColumnDef<Story, any>[];
     }
 
-    // Build columns from config: only visible, in config order, with config widths
-    return columnConfig
-      .filter((cfg) => cfg.visible)
-      .map((cfg) => {
-        const def = allDefs[cfg.id];
-        if (!def) return null;
-        return {
-          ...def,
-          size: cfg.width,
-        };
-      })
-      .filter(Boolean) as ColumnDef<Story, any>[];
-  }, [columnConfig]);
+    return hasSelection ? [checkboxCol, ...baseCols] : baseCols;
+  }, [columnConfig, hasSelection, selectedIds, stories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const table = useReactTable({
     data: stories,
