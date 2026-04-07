@@ -307,38 +307,60 @@ function DashboardContent() {
   const total = data?.total || 0;
   const facets = data?.facets;
 
-  // ── CSV Export ────────────────────────────────────────────────────────
+  // ── CSV Export (uses current view columns) ─────────────────────────────
   const exportToCSV = useCallback(() => {
     if (selectedIds.size === 0) return;
     const selected = stories.filter((s: any) => selectedIds.has(s.id));
     if (selected.length === 0) return;
 
-    const headers = ["Title", "Status", "Category", "Location", "Score", "Breaking", "Trending", "Confidence", "Sources", "First Seen", "Last Updated", "Summary", "ID"];
-    const rows = selected.map((s: any) => [
-      `"${(s.title || "").replace(/"/g, '""')}"`,
-      s.status,
-      s.category || "",
-      s.location || "",
-      Math.round((s.composite_score || 0) * 100),
-      Math.round((s.breaking_score || 0) * 100),
-      Math.round((s.trending_score || 0) * 100),
-      Math.round((s.confidence_score || 0) * 100),
-      s.source_count || 0,
-      s.first_seen ? new Date(s.first_seen).toISOString() : "",
-      s.last_updated ? new Date(s.last_updated).toISOString() : "",
-      `"${(s.ai_summary || s.summary || "").replace(/"/g, '""').replace(/\n/g, " ")}"`,
-      s.id,
-    ]);
+    // Map column IDs to CSV header + value extractor
+    const columnExporters: Record<string, { header: string; value: (s: any, idx?: number) => string }> = {
+      rank: { header: "#", value: (_s, i) => String((i ?? 0) + 1) },
+      famous: { header: "Famous Person", value: (s) => s.hasFamousPerson ? (s.famousPersonNames?.join("; ") || "Yes") : "" },
+      verified: { header: "Verified", value: (s) => s.verificationStatus === "VERIFIED" ? "Yes" : s.source_count >= 3 ? "Multi-source" : s.source_count === 1 ? "Single source" : "" },
+      status: { header: "Status", value: (s) => s.status || "" },
+      title: { header: "Title", value: (s) => s.title || "" },
+      category: { header: "Category", value: (s) => s.category || "" },
+      location: { header: "Location", value: (s) => s.location || "" },
+      score: { header: "Score", value: (s) => String(Math.round((s.composite_score || 0) * 100)) },
+      trend: { header: "Trend", value: (s) => s.trend || "" },
+      coverage: { header: "Covered", value: (s) => s.coverage?.some((c: any) => c.isCovered) ? "Yes" : "" },
+      first_seen: { header: "First Seen", value: (s) => s.first_seen ? new Date(s.first_seen).toISOString() : "" },
+      last_updated: { header: "Updated", value: (s) => s.last_updated ? new Date(s.last_updated).toISOString() : "" },
+      breaking_score: { header: "Breaking", value: (s) => String(Math.round((s.breaking_score || 0) * 100)) },
+      trending_score: { header: "Trending", value: (s) => String(Math.round((s.trending_score || 0) * 100)) },
+      confidence_score: { header: "Confidence", value: (s) => String(Math.round((s.confidence_score || 0) * 100)) },
+      locality_score: { header: "Locality", value: (s) => String(Math.round((s.locality_score || 0) * 100)) },
+    };
 
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    // Use visible columns from current view, in view order
+    const visibleCols = columnConfig.filter(c => c.visible && columnExporters[c.id]);
+    // Always include ID at the end + summary
+    const headers = [...visibleCols.map(c => columnExporters[c.id].header), "Summary", "ID"];
+    const rows = selected.map((s: any, i: number) => {
+      const cells = visibleCols.map(c => {
+        const raw = columnExporters[c.id].value(s, i);
+        // Escape CSV: wrap in quotes if contains comma, quote, or newline
+        if (raw.includes(",") || raw.includes('"') || raw.includes("\n")) {
+          return `"${raw.replace(/"/g, '""')}"`;
+        }
+        return raw;
+      });
+      // Append summary + ID
+      const summary = (s.ai_summary || s.summary || "").replace(/"/g, '""').replace(/\n/g, " ");
+      cells.push(`"${summary}"`, s.id);
+      return cells.join(",");
+    });
+
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }); // BOM for Excel
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `topicpulse-leads-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [selectedIds, stories]);
+  }, [selectedIds, stories, columnConfig]);
 
   return (
     <div className="min-h-screen">
