@@ -167,6 +167,7 @@ function SourcesPage() {
   // Auto-open edit modal if linked with editId param (from market sources tab)
   const editIdFromUrl = urlParams.get("editId");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [modalTab, setModalTab] = useState<"details" | "stories">("details");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
@@ -273,6 +274,20 @@ function SourcesPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-sources"] });
     },
   });
+
+  // Fetch stories for the currently editing source (lazy — only when Stories tab active)
+  const { data: sourceStoriesData, isLoading: storiesLoading } = useQuery({
+    queryKey: ["source-stories", editingId],
+    queryFn: () => editingId
+      ? apiFetch<any>(`/api/v1/stories?sourceIds=${editingId}&limit=50&sort=compositeScore&order=desc`, { headers: getAuthHeaders() })
+      : null,
+    enabled: !!editingId && modalTab === "stories",
+    staleTime: 30_000,
+  });
+  const sourceStories = (sourceStoriesData?.data || sourceStoriesData?.stories || []) as Array<{
+    id: string; title: string; status: string; category: string; location: string;
+    composite_score: number; source_count: number; first_seen: string;
+  }>;
 
   const [healResult, setHealResult] = useState<any>(null);
   const healMutation = useMutation({
@@ -388,7 +403,13 @@ function SourcesPage() {
     setFormAutoRewrite(!!(meta.autoRewrite));
     setFormDisplaySourceName((meta.displaySourceName as string) || "");
     setFormSubreddits(((meta.subreddits as string[]) || []).join(", "));
+    setModalTab("details");
     setShowForm(true);
+  };
+
+  const startEditStories = (source: Source) => {
+    startEdit(source);
+    setModalTab("stories");
   };
 
   // Auto-set source type based on platform
@@ -589,10 +610,74 @@ function SourcesPage() {
         <Modal
           isOpen={showForm}
           onClose={() => { setShowForm(false); resetForm(); }}
-          title={editingId ? "Edit Data Feed" : "Add New Data Feed"}
+          title={editingId ? `Edit: ${formName}` : "Add New Data Feed"}
           width="max-w-4xl"
         >
 
+          {/* Tabs — only show in edit mode */}
+          {editingId && (
+            <div className="flex gap-1 border-b border-surface-300/50 mb-4 -mt-2">
+              <button
+                onClick={() => setModalTab("details")}
+                className={clsx("px-4 py-2 text-sm font-medium border-b-2 transition-colors", modalTab === "details" ? "border-accent text-accent" : "border-transparent text-gray-400 hover:text-white")}
+              >
+                Details
+              </button>
+              <button
+                onClick={() => setModalTab("stories")}
+                className={clsx("px-4 py-2 text-sm font-medium border-b-2 transition-colors", modalTab === "stories" ? "border-accent text-accent" : "border-transparent text-gray-400 hover:text-white")}
+              >
+                Stories ({sourceStories.length || "..."})
+              </button>
+            </div>
+          )}
+
+          {/* ── Stories Tab ── */}
+          {editingId && modalTab === "stories" && (
+            <div className="space-y-2">
+              {storiesLoading && <div className="text-center py-8 text-gray-500"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading stories...</div>}
+              {!storiesLoading && sourceStories.length === 0 && (
+                <div className="text-center py-8 text-gray-500">No stories found from this source.</div>
+              )}
+              {!storiesLoading && sourceStories.length > 0 && (
+                <div className="max-h-[60vh] overflow-y-auto space-y-1">
+                  {sourceStories.map((story: any, i: number) => (
+                    <a
+                      key={story.id}
+                      href={`/stories/${story.id}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-300/30 transition-colors group"
+                    >
+                      <span className="text-xs text-gray-600 w-5 text-right">{i + 1}</span>
+                      <span className={clsx(
+                        "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase flex-shrink-0",
+                        story.status === "BREAKING" || story.status === "ALERT" ? "text-red-400 bg-red-500/10" :
+                        story.status === "DEVELOPING" ? "text-yellow-400 bg-yellow-500/10" :
+                        story.status === "TOP_STORY" ? "text-blue-400 bg-blue-500/10" :
+                        "text-gray-400 bg-gray-500/10"
+                      )}>
+                        {story.status}
+                      </span>
+                      <span className="text-sm text-gray-200 group-hover:text-white flex-1 truncate">{story.title}</span>
+                      <span className="text-xs text-gray-500 flex-shrink-0">{story.category || ""}</span>
+                      <span className="text-xs text-gray-500 flex-shrink-0">{story.location || ""}</span>
+                      <span className={clsx(
+                        "text-xs font-mono flex-shrink-0 w-8 text-right",
+                        (story.composite_score || story.compositeScore || 0) >= 0.5 ? "text-green-400" : "text-gray-500"
+                      )}>
+                        {Math.round(((story.composite_score || story.compositeScore || 0)) * 100)}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Details Tab (original form content) ── */}
+          {(!editingId || modalTab === "details") && (
+          <>
             {/* Step 1: Choose platform */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-300">
@@ -973,6 +1058,8 @@ function SourcesPage() {
                 })()}
               </div>
             )}
+          </>
+          )}
         </Modal>
 
         {/* Search + Filters */}
@@ -1312,8 +1399,14 @@ function SourcesPage() {
                           </div>
                         </td>}
                         {isColVisible("stories") && <td className="px-4 py-3 tabular-nums" style={{ width: colWidth("stories") }}>
-                          <span className="text-white text-sm">{source.totalPosts ?? 0}</span>
-                          <span className="text-gray-600 text-xs">/{source.recentPosts ?? 0}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startEditStories(source); }}
+                            className="hover:text-accent transition-colors cursor-pointer"
+                            title="View stories from this source"
+                          >
+                            <span className="text-white text-sm">{source.totalPosts ?? 0}</span>
+                            <span className="text-gray-600 text-xs">/{source.recentPosts ?? 0}</span>
+                          </button>
                         </td>}
                         {isColVisible("active") && <td className="px-4 py-3" style={{ width: colWidth("active") }}>
                           <button
