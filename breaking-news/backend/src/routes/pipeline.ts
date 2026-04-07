@@ -1416,6 +1416,18 @@ export async function pipelineRoutes(
         )
       `.catch(() => {});
 
+      // Deduplicate Toronto markets — keep only the one with the most sources linked
+      await prisma.$executeRaw`
+        DELETE FROM "Market" WHERE slug = 'toronto' AND id NOT IN (
+          SELECT m.id FROM "Market" m
+          LEFT JOIN "Source" s ON s."marketId" = m.id
+          WHERE m.slug = 'toronto'
+          GROUP BY m.id
+          ORDER BY COUNT(s.id) DESC
+          LIMIT 1
+        )
+      `.catch(() => {});
+
       // Find an account to attach the market to
       const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
       if (!account) return reply.status(400).send({ error: 'No active account found' });

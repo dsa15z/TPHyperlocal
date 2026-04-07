@@ -96,26 +96,39 @@ export default function MarketsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
+  // When searching, fetch ALL markets so search works across pages
+  const fetchLimit = searchQuery.trim() ? 500 : pageSize;
+  const fetchOffset = searchQuery.trim() ? 0 : (page - 1) * pageSize;
+
   const { data: marketsData, isLoading } = useQuery({
-    queryKey: ["admin-markets", page],
-    queryFn: () => apiFetch<any>(`/api/v1/admin/markets?limit=${pageSize}&offset=${(page - 1) * pageSize}`, { headers: getAuthHeaders() }),
+    queryKey: ["admin-markets", page, searchQuery ? "__search__" : ""],
+    queryFn: () => apiFetch<any>(`/api/v1/admin/markets?limit=${fetchLimit}&offset=${fetchOffset}`, { headers: getAuthHeaders() }),
   });
-  const allMarkets: Market[] = (marketsData as any)?.data || marketsData || [];
-  // Client-side search filter
-  const markets = searchQuery.trim()
-    ? allMarkets.filter((m: Market) => {
-        const q = searchQuery.toLowerCase();
+  const rawMarkets: Market[] = (marketsData as any)?.data || marketsData || [];
+  // Client-side search filter — match on word boundaries to avoid partial matches
+  const allMarkets = searchQuery.trim()
+    ? rawMarkets.filter((m: Market) => {
+        const q = searchQuery.toLowerCase().trim();
+        // For short queries (<=3 chars), require word-start match to avoid false positives
+        const matchFn = q.length <= 3
+          ? (str: string) => str.toLowerCase().split(/[\s,\-_]+/).some(word => word.startsWith(q))
+          : (str: string) => str.toLowerCase().includes(q);
         return (
-          m.name?.toLowerCase().includes(q) ||
-          m.slug?.toLowerCase().includes(q) ||
-          m.state?.toLowerCase().includes(q) ||
-          (m.keywords as string[] || []).some((k: string) => k.toLowerCase().includes(q)) ||
-          (m.neighborhoods as string[] || []).some((n: string) => n.toLowerCase().includes(q))
+          matchFn(m.name || "") ||
+          matchFn(m.slug || "") ||
+          matchFn(m.state || "")
         );
       })
-    : allMarkets;
-  const totalMarkets = (marketsData as any)?.total || allMarkets.length;
-  const totalPages = Math.max(1, Math.ceil(totalMarkets / pageSize));
+    : rawMarkets;
+  // Deduplicate by slug (in case of duplicate records)
+  const seenSlugs = new Set<string>();
+  const markets = allMarkets.filter((m: Market) => {
+    if (seenSlugs.has(m.slug)) return false;
+    seenSlugs.add(m.slug);
+    return true;
+  });
+  const totalMarkets = searchQuery.trim() ? markets.length : ((marketsData as any)?.total || rawMarkets.length);
+  const totalPages = searchQuery.trim() ? 1 : Math.max(1, Math.ceil(totalMarkets / pageSize));
 
   // Auto-seed default markets if none exist
   const seedMutation = useMutation({
