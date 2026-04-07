@@ -435,7 +435,7 @@ export function createEnrichmentWorker(): Worker {
     },
     {
       connection,
-      concurrency: 30, // Increased from 10 — LLM API is the bottleneck, not CPU
+      concurrency: 10, // Keep moderate — DB connection pool is limited
     }
   );
 

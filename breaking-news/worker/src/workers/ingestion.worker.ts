@@ -1501,10 +1501,10 @@ export function createIngestionWorker(): Worker {
     },
     {
       connection,
-      concurrency: 30,  // Handle hundreds of sources in parallel
+      concurrency: 10,  // Moderate — each poll opens a DB connection
       limiter: {
-        max: 300,
-        duration: 60000, // Max 300 jobs per minute (5/sec — polite but fast)
+        max: 120,
+        duration: 60000, // Max 120 jobs per minute (2/sec)
       },
     }
   );

@@ -819,7 +819,7 @@ export function createScoringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 50, // High concurrency — each job now makes only 2 DB calls (was 18)
+      concurrency: 10, // Moderate — each job makes 2 DB calls but pool is shared
     }
   );
 
