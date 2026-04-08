@@ -1,3 +1,5 @@
+import { initSentry, captureException } from './lib/sentry.js';
+initSentry(); // Initialize Sentry before anything else
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';

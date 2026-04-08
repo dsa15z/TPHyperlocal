@@ -6,6 +6,8 @@
  * Deploy as a separate Railway service for isolation + dedicated connection pool.
  */
 import 'dotenv/config';
+import { initSentry } from './lib/sentry.js';
+initSentry();
 import http from 'node:http';
 import { Worker } from 'bullmq';
 import logger from './lib/logger.js';
