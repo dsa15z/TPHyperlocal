@@ -95,9 +95,10 @@ export async function pipelineRoutes(
     const results: string[] = [];
     for (const fix of fixes) {
       try {
+        const escapedUrl = fix.url.replace(/'/g, "''");
+        const escapedPattern = fix.pattern.replace(/'/g, "''");
         const count = await prisma.$executeRawUnsafe(
-          `UPDATE "Source" SET url = $1, "isActive" = true, metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{consecutiveFailures}', '0') WHERE name ILIKE $2`,
-          fix.url, fix.pattern
+          `UPDATE "Source" SET url = '${escapedUrl}', "isActive" = true, metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{consecutiveFailures}', '0') WHERE name ILIKE '${escapedPattern}'`
         );
         if (count > 0) {
           fixed += count;
