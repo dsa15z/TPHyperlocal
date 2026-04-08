@@ -1058,3 +1058,19 @@ export async function deleteServerView(id: string): Promise<void> {
     headers: getAuthHeaders(),
   });
 }
+
+// ─── Ticker Settings Persistence ────────────────────────────────────────────
+
+export async function fetchTickerSettings(): Promise<{ speed: number; viewId: string | null }> {
+  return apiFetch<{ speed: number; viewId: string | null }>("/api/v1/user/ticker", {
+    headers: getAuthHeaders(),
+  });
+}
+
+export async function saveTickerSettings(settings: { speed: number; viewId: string | null }): Promise<void> {
+  await apiFetch<void>("/api/v1/user/ticker", {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(settings),
+  });
+}

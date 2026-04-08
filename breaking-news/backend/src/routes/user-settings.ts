@@ -97,6 +97,71 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
   // SERVER-SIDE PERSISTED VIEWS (per user)
   // ═══════════════════════════════════════════════════════════════════════
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // TICKER SETTINGS (persisted per user)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Ensure table exists
+  const ensureTickerTable = async () => {
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS "UserTickerSettings" (
+        "userId" TEXT PRIMARY KEY,
+        speed INTEGER DEFAULT 7,
+        "viewId" TEXT,
+        "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
+      )
+    `.catch(() => {});
+  };
+
+  // GET /user/ticker — get ticker settings
+  app.get('/user/ticker', async (request, reply) => {
+    const payload = getPayload(request);
+    if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
+
+    await ensureTickerTable();
+    try {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT speed, "viewId" FROM "UserTickerSettings" WHERE "userId" = ${payload.userId} LIMIT 1
+      `;
+      if (rows.length > 0) {
+        return reply.send({ speed: rows[0].speed, viewId: rows[0].viewId });
+      }
+      return reply.send({ speed: 7, viewId: null });
+    } catch {
+      return reply.send({ speed: 7, viewId: null });
+    }
+  });
+
+  // PUT /user/ticker — save ticker settings
+  app.put('/user/ticker', async (request, reply) => {
+    const payload = getPayload(request);
+    if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const body = z.object({
+      speed: z.number().int().min(1).max(10).optional(),
+      viewId: z.string().nullable().optional(),
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Validation error' });
+
+    await ensureTickerTable();
+    try {
+      const speed = body.data.speed ?? 7;
+      const viewId = body.data.viewId ?? null;
+      await prisma.$executeRaw`
+        INSERT INTO "UserTickerSettings" ("userId", speed, "viewId", "updatedAt")
+        VALUES (${payload.userId}, ${speed}, ${viewId}, NOW())
+        ON CONFLICT ("userId") DO UPDATE SET speed = ${speed}, "viewId" = ${viewId}, "updatedAt" = NOW()
+      `;
+      return reply.send({ message: 'Ticker settings saved', speed, viewId });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SERVER-SIDE PERSISTED VIEWS (per user)
+  // ═══════════════════════════════════════════════════════════════════════
+
   // GET /user/views — list all saved views for current user
   app.get('/user/views', async (request, reply) => {
     const payload = getPayload(request);

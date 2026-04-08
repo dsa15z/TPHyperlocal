@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Zap, AlertTriangle, Settings, X } from "lucide-react";
 import clsx from "clsx";
 import { type DashboardView, loadViews } from "@/lib/views";
+import { fetchTickerSettings, saveTickerSettings as saveTickerSettingsAPI } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 
 interface TickerStory {
   id: string;
@@ -33,7 +35,7 @@ function loadTickerSettings(): TickerSettings {
   return { speed: 7, viewId: null };
 }
 
-function saveTickerSettings(s: TickerSettings) {
+function saveTickerSettingsLocal(s: TickerSettings) {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
 }
 
@@ -77,10 +79,26 @@ export function BreakingTicker() {
     setViews(loadViews());
   }, [showSettings]);
 
+  // Load ticker settings from server on mount
+  useEffect(() => {
+    if (typeof window === "undefined" || !isAuthenticated()) return;
+    fetchTickerSettings()
+      .then((server) => {
+        if (server.speed) {
+          const merged = { speed: server.speed, viewId: server.viewId };
+          setSettings(merged);
+          saveTickerSettingsLocal(merged);
+        }
+      })
+      .catch(() => {}); // Use localStorage fallback
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<TickerSettings>) => {
     setSettings(prev => {
       const next = { ...prev, ...patch };
-      saveTickerSettings(next);
+      saveTickerSettingsLocal(next);
+      // Persist to server (fire and forget)
+      saveTickerSettingsAPI(next).catch(() => {});
       return next;
     });
   }, []);
