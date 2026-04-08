@@ -195,6 +195,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/feature-flags", label: "Feature Flags", icon: Shield },
       { href: "/admin/pipeline-health", label: "Pipeline Health", icon: Activity },
       { href: "/admin/metrics", label: "System Metrics", icon: BarChart3 },
+      { href: "/admin/heatmap", label: "Story Heatmap", icon: MapPin },
     ],
   },
 ];
