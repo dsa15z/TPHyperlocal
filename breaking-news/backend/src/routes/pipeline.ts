@@ -96,7 +96,7 @@ export async function pipelineRoutes(
     for (const fix of fixes) {
       try {
         const count = await prisma.$executeRawUnsafe(
-          `UPDATE "Source" SET url = $1, "isActive" = true, metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{consecutiveFailures}', '0') WHERE name ILIKE $2 AND "isActive" = false`,
+          `UPDATE "Source" SET url = $1, "isActive" = true, metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{consecutiveFailures}', '0') WHERE name ILIKE $2`,
           fix.url, fix.pattern
         );
         if (count > 0) {
