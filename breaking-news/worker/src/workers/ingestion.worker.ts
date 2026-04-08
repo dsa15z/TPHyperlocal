@@ -1066,10 +1066,47 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
 
       ingested++;
 
-      await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-      });
+      // ── Pre-enrichment dedup: check if a story with very similar title already exists ──
+      // This saves an expensive LLM enrichment call (~80% of posts are dupes from other sources)
+      const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      let skipEnrichment = false;
+      if (normalizedTitle.length > 20) {
+        try {
+          const existingStory = await prisma.story.findFirst({
+            where: {
+              mergedIntoId: null,
+              firstSeenAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+              title: { contains: normalizedTitle.substring(0, 40), mode: 'insensitive' },
+            },
+            select: { id: true },
+          });
+          if (existingStory) {
+            // Story already exists — skip enrichment, go straight to clustering
+            // Clustering will merge this post into the existing story
+            skipEnrichment = true;
+            const clusterQueue = new Queue('clustering', { connection: getSharedConnection() });
+            await clusterQueue.add('cluster', {
+              sourcePostId: post.id,
+              category: undefined,
+              locationName: undefined,
+              neighborhoods: [],
+              entities: { people: [], organizations: [], locations: [] },
+              structuredEntities: [],
+              famousPersons: [],
+            }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+            await clusterQueue.close();
+          }
+        } catch {
+          // Dedup check failed — fall through to normal enrichment
+        }
+      }
+
+      if (!skipEnrichment) {
+        await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+        });
+      }
 
       // Queue full article extraction if the post has a URL
       if (item.link) {
