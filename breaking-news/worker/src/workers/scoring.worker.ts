@@ -966,7 +966,9 @@ export function createScoringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 100, // High concurrency fills batches fast — actual DB load is 2 queries per batch
+      concurrency: 100,
+      removeOnComplete: { count: 100, age: 3600 },
+      removeOnFail: { count: 50, age: 86400 },
     }
   );
 

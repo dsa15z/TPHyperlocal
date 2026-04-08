@@ -701,7 +701,9 @@ export function createClusteringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 20, // Cached stories + title-only Jaccard = light per job
+      concurrency: 20,
+      removeOnComplete: { count: 100, age: 3600 },
+      removeOnFail: { count: 50, age: 86400 },
     }
   );
 

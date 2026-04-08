@@ -1696,11 +1696,13 @@ export function createIngestionWorker(): Worker {
     },
     {
       connection,
-      concurrency: 10,  // Moderate — each poll opens a DB connection
+      concurrency: 10,
       limiter: {
         max: 120,
-        duration: 60000, // Max 120 jobs per minute (2/sec)
+        duration: 60000,
       },
+      removeOnComplete: { count: 100, age: 3600 }, // Keep max 100 completed, or 1 hour
+      removeOnFail: { count: 50, age: 86400 }, // Keep max 50 failed, or 24 hours
     }
   );
 

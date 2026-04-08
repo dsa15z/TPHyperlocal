@@ -444,7 +444,9 @@ export function createEnrichmentWorker(): Worker {
     },
     {
       connection,
-      concurrency: 10, // Keep moderate — DB connection pool is limited
+      concurrency: 10,
+      removeOnComplete: { count: 100, age: 3600 },
+      removeOnFail: { count: 50, age: 86400 },
     }
   );
 
