@@ -27,7 +27,6 @@ import {
 
 const STAGES = [
   { key: "ingestion", label: "Ingestion", color: "blue", desc: "Polling sources" },
-  { key: "dedup", label: "Dedup", color: "cyan", desc: "Title match skip" },
   { key: "enrichment", label: "Enrichment", color: "purple", desc: "AI categorization" },
   { key: "clustering", label: "Clustering", color: "amber", desc: "Similarity merge" },
   { key: "scoring", label: "Scoring", color: "green", desc: "Rank & score" },
@@ -47,7 +46,6 @@ const LOOKBACK_OPTIONS = [
 ];
 
 const colorMap: Record<string, { bg: string; text: string; border: string; glow: string }> = {
-  cyan: { bg: "bg-cyan-500/15", text: "text-cyan-300", border: "border-cyan-400/40", glow: "shadow-cyan-500/20" },
   blue: { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-400/40", glow: "shadow-blue-500/20" },
   purple: { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-400/40", glow: "shadow-purple-500/20" },
   amber: { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-400/40", glow: "shadow-amber-500/20" },
@@ -59,7 +57,6 @@ const colorMap: Record<string, { bg: string; text: string; border: string; glow:
 interface ThroughputPoint {
   time: number;
   ingestion: number;
-  dedup: number;
   enrichment: number;
   clustering: number;
   scoring: number;
@@ -67,7 +64,6 @@ interface ThroughputPoint {
 
 const CHART_COLORS: Record<string, string> = {
   ingestion: "#60a5fa",   // blue-400
-  dedup: "#22d3ee",       // cyan-400
   enrichment: "#c084fc",  // purple-400
   clustering: "#fbbf24",  // amber-400
   scoring: "#4ade80",     // green-400
@@ -87,15 +83,13 @@ function ThroughputChart({ queueMap }: { queueMap: Record<string, QueueStatus> }
   // Record new data point
   useEffect(() => {
     const now = Date.now();
-    const point: ThroughputPoint = { time: now, ingestion: 0, dedup: 0, enrichment: 0, clustering: 0, scoring: 0 };
+    const point: ThroughputPoint = { time: now, ingestion: 0, enrichment: 0, clustering: 0, scoring: 0 };
     for (const key of ["ingestion", "enrichment", "clustering", "scoring"] as const) {
       const current = queueMap[key]?.completed || 0;
       const prev = lastCompleted[key] || current;
       point[key] = Math.max(0, current - prev);
       lastCompleted[key] = current;
     }
-    // Dedup = ingestion throughput minus enrichment throughput (items that skipped enrichment)
-    point.dedup = Math.max(0, point.ingestion - point.enrichment);
     if (Object.values(lastCompleted).some(v => v > 0)) {
       throughputHistory.push(point);
       if (throughputHistory.length > MAX_POINTS) throughputHistory = throughputHistory.slice(-MAX_POINTS);
@@ -225,9 +219,8 @@ function ThroughputChart({ queueMap }: { queueMap: Record<string, QueueStatus> }
           {hoverData && <span className="text-gray-500 ml-2">{new Date(hoverData.time).toLocaleTimeString()}</span>}
         </span>
         {displayData && (
-          <div className="flex items-center gap-2 text-[10px] font-mono flex-wrap">
+          <div className="flex items-center gap-3 text-[10px] font-mono flex-wrap">
             <span style={{ color: CHART_COLORS.ingestion }}>● Ingest {displayData.ingestion.toLocaleString()}</span>
-            <span style={{ color: CHART_COLORS.dedup }}>● Dedup {displayData.dedup.toLocaleString()}</span>
             <span style={{ color: CHART_COLORS.enrichment }}>● Enrich {displayData.enrichment.toLocaleString()}</span>
             <span style={{ color: CHART_COLORS.clustering }}>● Cluster {displayData.clustering.toLocaleString()}</span>
             <span style={{ color: CHART_COLORS.scoring }}>● Score {displayData.scoring.toLocaleString()}</span>
@@ -553,22 +546,14 @@ export function NewsProgressPanel() {
             <FlowArrow active={totalActive > 0} />
 
             {/* Pipeline stages */}
-            {STAGES.map((stage, i) => {
-              // Dedup doesn't have a BullMQ queue — calculate from ingestion vs enrichment
-              const dedupQueue = stage.key === 'dedup' ? {
-                name: 'dedup', active: 0, waiting: 0, failed: 0,
-                completed: Math.max(0, (queueMap['ingestion']?.completed || 0) - (queueMap['enrichment']?.completed || 0)),
-              } as QueueStatus : queueMap[stage.key];
-
-              return (
-                <div key={stage.key} className="flex items-center">
-                  <StageNode stage={stage} queue={dedupQueue} onAction={stage.key === 'dedup' ? () => {} : handleAction} />
-                  {i < STAGES.length - 1 && (
-                    <FlowArrow active={(queueMap[STAGES[i].key]?.active || 0) > 0 || stage.key === 'dedup'} />
-                  )}
-                </div>
-              );
-            })}
+            {STAGES.map((stage, i) => (
+              <div key={stage.key} className="flex items-center">
+                <StageNode stage={stage} queue={queueMap[stage.key]} onAction={handleAction} />
+                {i < STAGES.length - 1 && (
+                  <FlowArrow active={(queueMap[STAGES[i].key]?.active || 0) > 0} />
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Throughput chart */}

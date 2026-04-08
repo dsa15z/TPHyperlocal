@@ -167,7 +167,7 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
     const payload = getPayload(request);
     if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
 
-    // Ensure UserView table exists
+    // Ensure UserView table exists with unique constraint on userId+name
     await prisma.$executeRaw`
       CREATE TABLE IF NOT EXISTS "UserView" (
         id TEXT PRIMARY KEY,
@@ -180,6 +180,14 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
       )
     `.catch(() => {});
     await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS "UserView_userId_idx" ON "UserView"("userId")`.catch(() => {});
+    await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "UserView_userId_name_idx" ON "UserView"("userId", name)`.catch(() => {});
+
+    // Dedup: remove duplicate views per user (keep the most recently updated one)
+    await prisma.$executeRaw`
+      DELETE FROM "UserView" WHERE id NOT IN (
+        SELECT DISTINCT ON ("userId", name) id FROM "UserView" ORDER BY "userId", name, "updatedAt" DESC
+      )
+    `.catch(() => {});
 
     try {
       const views = await prisma.$queryRaw<any[]>`
@@ -207,6 +215,24 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
 
     const id = `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     try {
+      // Upsert: if view with same name exists for this user, update it instead of creating duplicate
+      const existing = await prisma.$queryRaw<any[]>`
+        SELECT id FROM "UserView" WHERE "userId" = ${payload.userId} AND name = ${body.data.name} LIMIT 1
+      `.catch(() => []);
+
+      if (existing.length > 0) {
+        // Update existing view
+        await prisma.$executeRaw`
+          UPDATE "UserView" SET
+            columns = ${JSON.stringify(body.data.columns)}::jsonb,
+            filters = ${JSON.stringify(body.data.filters)}::jsonb,
+            "updatedAt" = NOW()
+          WHERE id = ${existing[0].id} AND "userId" = ${payload.userId}
+        `;
+        return reply.status(200).send({ message: 'View updated (existing)', id: existing[0].id });
+      }
+
+      // Create new view
       await prisma.$executeRaw`
         INSERT INTO "UserView" (id, "userId", name, columns, filters, "createdAt", "updatedAt")
         VALUES (${id}, ${payload.userId}, ${body.data.name}, ${JSON.stringify(body.data.columns)}::jsonb, ${JSON.stringify(body.data.filters)}::jsonb, NOW(), NOW())
