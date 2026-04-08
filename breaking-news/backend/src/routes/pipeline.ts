@@ -133,6 +133,15 @@ export async function pipelineRoutes(
       { pattern: '%AP en Espa%', url: 'https://news.google.com/rss/search?q=when:7d+AP+noticias&hl=es-419&gl=US&ceid=US:es-419' },
       { pattern: '%Bay Area Citizen%', url: 'https://news.google.com/rss/search?q=Bay+Area+Houston+Texas&hl=en-US&gl=US&ceid=US:en' },
       { pattern: '%Dave Campbell%', url: 'https://news.google.com/rss/search?q=site:texasfootball.com&hl=en-US&gl=US&ceid=US:en' },
+      // Station sources that keep failing (MSA database entries)
+      { pattern: '%KRIV%', url: 'https://www.fox26houston.com/rss.xml' },
+      { pattern: '%KPRC%', url: 'https://www.click2houston.com/arc/outboundfeeds/rss/category/news/local/?outputType=xml&size=10' },
+      { pattern: '%WDJT%', url: 'https://news.google.com/rss/search?q=site:cbs58.com&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%WNYC%', url: 'https://feeds.wnyc.org/wnyc-news' },
+      { pattern: '%WBEZ%', url: 'https://news.google.com/rss/search?q=site:wbez.org&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%KQED%', url: 'https://www.kqed.org/news/feed' },
+      { pattern: '%KCUR%', url: 'https://news.google.com/rss/search?q=site:kcur.org&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%WTTW%', url: 'https://news.google.com/rss/search?q=site:news.wttw.com&hl=en-US&gl=US&ceid=US:en' },
     ];
 
     let fixed = 0;
