@@ -38,6 +38,67 @@ export async function storiesRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
+  // GET /api/v1/stories/stream — SSE stream for real-time story updates
+  // Client connects and receives new/updated stories as they happen
+  app.get('/stories/stream', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    // Send initial heartbeat
+    reply.raw.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+
+    let lastCheck = Date.now();
+
+    // Poll for new stories every 3 seconds and push to client
+    const interval = setInterval(async () => {
+      try {
+        const since = new Date(lastCheck);
+        lastCheck = Date.now();
+
+        const newStories = await prisma.story.findMany({
+          where: {
+            mergedIntoId: null,
+            lastUpdatedAt: { gte: since },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            category: true,
+            locationName: true,
+            compositeScore: true,
+            breakingScore: true,
+            sourceCount: true,
+            firstSeenAt: true,
+            lastUpdatedAt: true,
+          },
+          orderBy: { lastUpdatedAt: 'desc' },
+          take: 20,
+        });
+
+        if (newStories.length > 0) {
+          for (const story of newStories) {
+            reply.raw.write(`data: ${JSON.stringify({ type: 'story_update', story })}\n\n`);
+          }
+        }
+
+        // Heartbeat every 30s
+        reply.raw.write(`:heartbeat ${Date.now()}\n\n`);
+      } catch {
+        // Connection may be closed
+      }
+    }, 3000);
+
+    // Cleanup on disconnect
+    request.raw.on('close', () => {
+      clearInterval(interval);
+    });
+  });
+
   // GET /api/v1/stories - list stories with filtering and pagination
   // If authenticated, includes account derivative data (edits, status, assignments)
   app.get('/stories', async (request, reply) => {
