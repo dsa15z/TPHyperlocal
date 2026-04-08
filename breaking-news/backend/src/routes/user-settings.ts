@@ -98,37 +98,41 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
   // ═══════════════════════════════════════════════════════════════════════
 
   // ═══════════════════════════════════════════════════════════════════════
-  // TICKER SETTINGS (persisted per user)
+  // USER PREFERENCES (persisted per user — active view, ticker, etc.)
   // ═══════════════════════════════════════════════════════════════════════
 
-  // Ensure table exists
-  const ensureTickerTable = async () => {
+  const ensurePrefsTable = async () => {
     await prisma.$executeRaw`
       CREATE TABLE IF NOT EXISTS "UserTickerSettings" (
         "userId" TEXT PRIMARY KEY,
         speed INTEGER DEFAULT 7,
         "viewId" TEXT,
+        "activeViewId" TEXT,
         "updatedAt" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP
       )
     `.catch(() => {});
+    // Add activeViewId column if missing (table may already exist without it)
+    await prisma.$executeRaw`ALTER TABLE "UserTickerSettings" ADD COLUMN IF NOT EXISTS "activeViewId" TEXT`.catch(() => {});
   };
 
-  // GET /user/ticker — get ticker settings
+  // GET /user/ticker — get ticker settings + active view
   app.get('/user/ticker', async (request, reply) => {
     const payload = getPayload(request);
     if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
 
-    await ensureTickerTable();
+    await ensurePrefsTable();
+
+    await ensurePrefsTable();
     try {
       const rows = await prisma.$queryRaw<any[]>`
-        SELECT speed, "viewId" FROM "UserTickerSettings" WHERE "userId" = ${payload.userId} LIMIT 1
+        SELECT speed, "viewId", "activeViewId" FROM "UserTickerSettings" WHERE "userId" = ${payload.userId} LIMIT 1
       `;
       if (rows.length > 0) {
-        return reply.send({ speed: rows[0].speed, viewId: rows[0].viewId });
+        return reply.send({ speed: rows[0].speed, viewId: rows[0].viewId, activeViewId: rows[0].activeViewId });
       }
-      return reply.send({ speed: 7, viewId: null });
+      return reply.send({ speed: 7, viewId: null, activeViewId: null });
     } catch {
-      return reply.send({ speed: 7, viewId: null });
+      return reply.send({ speed: 7, viewId: null, activeViewId: null });
     }
   });
 
@@ -140,19 +144,25 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
     const body = z.object({
       speed: z.number().int().min(1).max(10).optional(),
       viewId: z.string().nullable().optional(),
+      activeViewId: z.string().nullable().optional(),
     }).safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'Validation error' });
 
-    await ensureTickerTable();
+    await ensurePrefsTable();
     try {
       const speed = body.data.speed ?? 7;
       const viewId = body.data.viewId ?? null;
+      const activeViewId = body.data.activeViewId ?? null;
       await prisma.$executeRaw`
-        INSERT INTO "UserTickerSettings" ("userId", speed, "viewId", "updatedAt")
-        VALUES (${payload.userId}, ${speed}, ${viewId}, NOW())
-        ON CONFLICT ("userId") DO UPDATE SET speed = ${speed}, "viewId" = ${viewId}, "updatedAt" = NOW()
+        INSERT INTO "UserTickerSettings" ("userId", speed, "viewId", "activeViewId", "updatedAt")
+        VALUES (${payload.userId}, ${speed}, ${viewId}, ${activeViewId}, NOW())
+        ON CONFLICT ("userId") DO UPDATE SET
+          speed = COALESCE(${speed}, speed),
+          "viewId" = COALESCE(${viewId}, "viewId"),
+          "activeViewId" = COALESCE(${activeViewId}, "activeViewId"),
+          "updatedAt" = NOW()
       `;
-      return reply.send({ message: 'Ticker settings saved', speed, viewId });
+      return reply.send({ message: 'Settings saved', speed, viewId, activeViewId });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }

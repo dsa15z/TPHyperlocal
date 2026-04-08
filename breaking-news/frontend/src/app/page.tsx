@@ -92,6 +92,15 @@ function DashboardContent() {
           setServerViewIds(new Set(serverViews.map(sv => sv.id)));
         }
         setServerViewsLoaded(true);
+        // Also load the persisted active view ID from server
+        import("@/lib/api").then(({ fetchTickerSettings }) => {
+          fetchTickerSettings().then((prefs) => {
+            if (prefs.activeViewId && !cancelled) {
+              setActiveViewId(prefs.activeViewId);
+              saveActiveViewId(prefs.activeViewId);
+            }
+          }).catch(() => {});
+        }).catch(() => {});
       })
       .catch(() => {
         setServerViewsLoaded(true);
@@ -205,6 +214,10 @@ function DashboardContent() {
     (viewId: string) => {
       setActiveViewId(viewId);
       saveActiveViewId(viewId);
+      // Persist active view to server (survives across sessions/devices)
+      import("@/lib/api").then(({ saveTickerSettings }) => {
+        saveTickerSettings({ speed: 7, viewId: null, activeViewId: viewId } as any).catch(() => {});
+      }).catch(() => {});
     },
     []
   );
