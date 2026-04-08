@@ -66,6 +66,51 @@ export async function pipelineRoutes(
     }
   });
 
+  // POST /api/v1/pipeline/fix-broken-sources — Update URLs for known broken sources
+  app.post('/pipeline/fix-broken-sources', async (_request, reply) => {
+    const fixes = [
+      { pattern: '%FOX 26 Houston%', url: 'https://www.fox26houston.com/rss.xml' },
+      { pattern: '%KPRC%', url: 'https://www.click2houston.com/arc/outboundfeeds/rss/category/news/local/?outputType=xml&size=10' },
+      { pattern: '%Houston Press%', url: 'https://www.houstonpress.com/feed' },
+      { pattern: '%City of Houston%', url: 'https://cityofhouston.news/feed/' },
+      { pattern: '%Baylor College%', url: 'https://blogs.bcm.edu/feed/' },
+      { pattern: '%Houston Real Estate%', url: 'https://houstonagentmagazine.com/feed/' },
+      { pattern: '%NWS Houston%', url: 'https://api.weather.gov/alerts/active.atom?zone=TXZ163' },
+      { pattern: '%Houston Chronicle%', url: 'https://www.chron.com/rss/feed/News-270.php' },
+      { pattern: '%San Antonio Express%', url: 'https://www.mysanantonio.com/default/feed/local-news-176.php' },
+      { pattern: '%Chron - Sports%', url: 'https://news.google.com/rss/search?q=site:houstonchronicle.com+sports&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%Community Impact%Houston%', url: 'https://news.google.com/rss/search?q=site:communityimpact.com+houston&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%Houston Business Journal%', url: 'https://news.google.com/rss/search?q=when:7d+site:bizjournals.com/houston&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%TxDOT Houston%', url: 'https://news.google.com/rss/search?q=TxDOT+Houston+Texas&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%Harris County%', url: 'https://news.google.com/rss/search?q=Harris+County+Texas&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%La Voz%Houston%', url: 'https://news.google.com/rss/search?q=La+Voz+Houston+noticias&hl=es-419&gl=US&ceid=US:es-419' },
+      { pattern: '%Reuters%Top%', url: 'https://news.google.com/rss/search?q=when:7d+site:reuters.com&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%Austin American%', url: 'https://news.google.com/rss/search?q=site:statesman.com&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%AP en Espa%', url: 'https://news.google.com/rss/search?q=when:7d+AP+noticias&hl=es-419&gl=US&ceid=US:es-419' },
+      { pattern: '%Bay Area Citizen%', url: 'https://news.google.com/rss/search?q=Bay+Area+Houston+Texas&hl=en-US&gl=US&ceid=US:en' },
+      { pattern: '%Dave Campbell%', url: 'https://news.google.com/rss/search?q=site:texasfootball.com&hl=en-US&gl=US&ceid=US:en' },
+    ];
+
+    let fixed = 0;
+    const results: string[] = [];
+    for (const fix of fixes) {
+      try {
+        const count = await prisma.$executeRawUnsafe(
+          `UPDATE "Source" SET url = $1, "isActive" = true, metadata = jsonb_set(COALESCE(metadata, '{}')::jsonb, '{consecutiveFailures}', '0') WHERE name ILIKE $2 AND "isActive" = false`,
+          fix.url, fix.pattern
+        );
+        if (count > 0) {
+          fixed += count;
+          results.push(`${fix.pattern}: ${count} source(s) updated + reactivated`);
+        }
+      } catch (err: any) {
+        results.push(`${fix.pattern}: ERROR ${err.message}`);
+      }
+    }
+
+    return reply.send({ message: `Fixed ${fixed} broken sources`, fixed, results });
+  });
+
   // GET /api/v1/pipeline/metrics — Time-series metrics for dashboard
   app.get('/pipeline/metrics', async (request, reply) => {
     const query = (request.query as any) || {};
