@@ -36,10 +36,13 @@ When refactoring or renaming:
 If results or context seem incomplete, say so explicitly instead of guessing.
 
 ### RAG + Documentation + MCP/Tools Sync (MANDATORY — EVERY COMMIT)
+**⚠️ CRITICAL: These files WERE found stale on 2026-04-08. This MUST NOT happen again.**
 **On EVERY commit, you MUST check and update ALL THREE of these systems if relevant:**
-1. **RAG Knowledge Base** — Injected into ALL AI prompts. Stale docs = wrong AI answers.
+1. **RAG Knowledge Base** — Injected into ALL AI prompts. Stale docs = wrong AI answers. The chatbot literally cannot help users if these are outdated.
 2. **Architecture Documentation** — `docs/ai-architecture-portable-guide.md` must reflect current state.
 3. **Chatbot Tools + MCP Server** — Both must expose every API capability. If you add a route, add the tool.
+
+**FAILURE MODE (what happened 2026-04-08):** 17 chatbot tools were undocumented, 36 workers were unlisted, entire features (Reddit, content filters, split workers, batch scoring, pipeline monitor) were missing from knowledge base. This caused the AI chatbot to give incomplete/wrong answers to users. DO NOT let this happen again.
 
 The RAG knowledge base is injected into ALL AI prompts (NLP search, chatbot, content generation).
 Stale RAG docs cause the AI to give wrong answers — treat this as a **build-breaking issue**.
