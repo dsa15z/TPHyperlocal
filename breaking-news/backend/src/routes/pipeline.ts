@@ -26,6 +26,105 @@ export async function pipelineRoutes(
 ) {
 
   // ─── Webhook Ingestion ──────────────────────────────────────────────────────
+  // POST /api/v1/pipeline/seed-twitter — Create Twitter sources for key markets
+  app.post('/pipeline/seed-twitter', async (_request, reply) => {
+    try {
+      const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
+      if (!account) return reply.status(400).send({ error: 'No active account' });
+
+      const twitterQueries = [
+        // Houston
+        { name: 'X/Twitter - Houston Breaking', query: 'Houston Texas breaking news', market: 'houston' },
+        { name: 'X/Twitter - Houston Crime', query: 'Houston crime shooting arrest police', market: 'houston' },
+        { name: 'X/Twitter - Houston Weather', query: 'Houston weather storm flood warning', market: 'houston' },
+        // Toronto
+        { name: 'X/Twitter - Toronto Breaking', query: 'Toronto Ontario breaking news', market: 'toronto' },
+        { name: 'X/Twitter - Toronto Crime', query: 'Toronto police shooting arrest crime', market: 'toronto' },
+        { name: 'X/Twitter - GTA Traffic', query: 'Toronto GTA traffic accident 401 QEW DVP', market: 'toronto' },
+        // USA National
+        { name: 'X/Twitter - US Breaking News', query: 'breaking news -is:retweet lang:en', market: 'usa-national' },
+        { name: 'X/Twitter - US Politics', query: 'Congress Senate White House Trump Biden -is:retweet', market: 'usa-national' },
+        // Canada National
+        { name: 'X/Twitter - Canada Breaking', query: 'Canada breaking news -is:retweet lang:en', market: 'canada-national' },
+        { name: 'X/Twitter - Canada Politics', query: 'Ottawa Parliament Trudeau Poilievre -is:retweet', market: 'canada-national' },
+      ];
+
+      const created: string[] = [];
+      for (const tw of twitterQueries) {
+        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "Source" WHERE name = ${tw.name} LIMIT 1`.catch(() => []);
+        if (existing.length > 0) { created.push(`${tw.name} (exists)`); continue; }
+
+        // Find market
+        const market = await prisma.$queryRaw<any[]>`SELECT id FROM "Market" WHERE slug = ${tw.market} LIMIT 1`.catch(() => []);
+        const marketId = market[0]?.id || null;
+
+        const srcId = `src_tw_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        await prisma.$executeRaw`
+          INSERT INTO "Source" (id, platform, "sourceType", name, url, "trustScore", "isActive", "marketId", metadata, "createdAt", "updatedAt")
+          VALUES (${srcId}, 'TWITTER'::"Platform", 'PUBLIC_PAGE'::"SourceType", ${tw.name}, ${tw.query}, 0.60, true, ${marketId}, ${JSON.stringify({ query: tw.query, type: 'twitter-search' })}::jsonb, NOW(), NOW())
+        `;
+        if (marketId) {
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${srcId}, ${marketId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+        }
+        created.push(tw.name);
+      }
+
+      return reply.send({ message: `Twitter sources: ${created.length} processed`, sources: created });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/seed-facebook — Create Facebook page sources
+  app.post('/pipeline/seed-facebook', async (_request, reply) => {
+    try {
+      const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
+      if (!account) return reply.status(400).send({ error: 'No active account' });
+
+      // Facebook pages need page IDs — these are popular news pages
+      const fbPages = [
+        { name: 'Facebook - CNN', pageId: 'cnn', market: 'usa-national' },
+        { name: 'Facebook - BBC News', pageId: 'bbcnews', market: 'global-world' },
+        { name: 'Facebook - NBC News', pageId: 'NBCNews', market: 'usa-national' },
+        { name: 'Facebook - CBC News', pageId: 'cbcnews', market: 'canada-national' },
+        { name: 'Facebook - CP24', pageId: 'cp24', market: 'toronto' },
+        { name: 'Facebook - Houston Chronicle', pageId: 'houstonchronicle', market: 'houston' },
+      ];
+
+      const hasToken = !!(process.env['FACEBOOK_ACCESS_TOKEN']);
+      if (!hasToken) {
+        return reply.send({
+          message: 'Facebook sources created but INACTIVE (no FACEBOOK_ACCESS_TOKEN set)',
+          note: 'Set FACEBOOK_ACCESS_TOKEN env var to activate. Get a Page Access Token from Facebook Developer Console.',
+          sources: fbPages.map(f => f.name),
+        });
+      }
+
+      const created: string[] = [];
+      for (const fb of fbPages) {
+        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "Source" WHERE name = ${fb.name} LIMIT 1`.catch(() => []);
+        if (existing.length > 0) { created.push(`${fb.name} (exists)`); continue; }
+
+        const market = await prisma.$queryRaw<any[]>`SELECT id FROM "Market" WHERE slug = ${fb.market} LIMIT 1`.catch(() => []);
+        const marketId = market[0]?.id || null;
+
+        const srcId = `src_fb_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        await prisma.$executeRaw`
+          INSERT INTO "Source" (id, platform, "sourceType", name, "platformId", "trustScore", "isActive", "marketId", metadata, "createdAt", "updatedAt")
+          VALUES (${srcId}, 'FACEBOOK'::"Platform", 'PUBLIC_PAGE'::"SourceType", ${fb.name}, ${fb.pageId}, 0.75, ${hasToken}, ${marketId}, ${JSON.stringify({ type: 'facebook-page' })}::jsonb, NOW(), NOW())
+        `;
+        if (marketId) {
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${srcId}, ${marketId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+        }
+        created.push(fb.name);
+      }
+
+      return reply.send({ message: `Facebook sources: ${created.length} processed`, sources: created });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /api/v1/ingest/webhook — Accept stories pushed from external sources
   // Supports: raw story payload, RSS-like payload, Newscatcher webhook, custom
   //
