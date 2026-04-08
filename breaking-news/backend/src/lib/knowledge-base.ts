@@ -366,12 +366,12 @@ export function generateAllKnowledgeDocs(): Array<{ key: string; content: string
  */
 export function getCompactKnowledge(): string {
   return `
-TopicPulse: newsroom intelligence platform. 700+ sources, 50 US markets.
+TopicPulse: newsroom intelligence platform. 700+ sources, 50+ markets (US, Canada, UK, Australia, Global).
 
 Stories have: title, category (CRIME/POLITICS/WEATHER/TRAFFIC/BUSINESS/HEALTH/SPORTS/ENTERTAINMENT/TECHNOLOGY/EDUCATION/COMMUNITY/ENVIRONMENT/EMERGENCY), status (BREAKING/DEVELOPING/TOP_STORY/ONGOING/STALE/ARCHIVED), locationName, compositeScore (0-1), sourceCount, firstSeenAt.
 
 Filter params: status (comma-sep), category (comma-sep), marketIds (comma-sep), maxAge (hours, supports decimals like 0.25 for 15min), minScore (0-1), trend (rising/declining), sort (compositeScore/breakingScore/trendingScore/firstSeenAt), order (asc/desc).
 
-Markets: National + 50 US cities. Local stories have lower scoring thresholds.
+Markets: USA National + 50 US cities + Canada National + Toronto + UK National + Australia National + Global/World. Local stories have lower scoring thresholds. Sources support per-source content filters (includeKeywords, excludeKeywords) and per-source poll intervals (pollIntervalMinutes).
 `.trim();
 }
