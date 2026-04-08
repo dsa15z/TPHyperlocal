@@ -1103,6 +1103,11 @@ export async function pipelineRoutes(
   // Global sources → National market, city-named sources → their city market
   app.post('/pipeline/fix-source-markets', async (_request, reply) => {
     try {
+      // ── Rename "National" → "USA National" and set country codes ──
+      await prisma.$executeRaw`UPDATE "Market" SET name = 'USA National', slug = 'usa-national' WHERE name = 'National' AND (country = 'US' OR country IS NULL)`.catch(() => {});
+      await prisma.$executeRaw`UPDATE "Market" SET country = 'US' WHERE country IS NULL`.catch(() => {});
+      await prisma.$executeRaw`UPDATE "Market" SET country = 'CA' WHERE slug = 'toronto'`.catch(() => {});
+
       // Ensure Market has international support columns
       await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'US'`.catch(() => {});
       await prisma.$executeRaw`ALTER TABLE "Market" ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'`.catch(() => {});
@@ -1627,6 +1632,147 @@ export async function pipelineRoutes(
         sources: created,
         redditDebug,
       });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/seed-national — Create a national market for any country
+  app.post('/pipeline/seed-national', async (request, reply) => {
+    const body = z.object({
+      country: z.string().min(2).max(2).default('CA'), // ISO 3166-1 alpha-2
+      name: z.string().optional(), // e.g., "Canada National"
+    }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'Provide country code (2-letter ISO)' });
+
+    const { country } = body.data;
+    const countryUpper = country.toUpperCase();
+
+    const NATIONAL_CONFIGS: Record<string, { name: string; slug: string; lat: number; lon: number; tz: string; keywords: string[]; feeds: Array<{ name: string; url: string; trust: number }> }> = {
+      CA: {
+        name: 'Canada National',
+        slug: 'canada-national',
+        lat: 56.1304, lon: -106.3468, tz: 'America/Toronto',
+        keywords: ['canada', 'canadian', 'federal', 'ottawa', 'parliament', 'trudeau', 'house of commons', 'senate'],
+        feeds: [
+          { name: 'CBC National', url: 'https://www.cbc.ca/cmlink/rss-topstories', trust: 0.92 },
+          { name: 'CTV National', url: 'https://www.ctvnews.ca/rss/ctvnews-ca-top-stories-public-rss-1.822009', trust: 0.88 },
+          { name: 'Global News Canada', url: 'https://globalnews.ca/feed/', trust: 0.85 },
+          { name: 'National Post', url: 'https://nationalpost.com/feed', trust: 0.82 },
+          { name: 'Globe and Mail', url: 'https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/', trust: 0.88 },
+          { name: 'Canadian Press', url: 'https://www.thecanadianpress.com/feed/', trust: 0.92 },
+          { name: 'Google News Canada', url: 'https://news.google.com/rss?hl=en-CA&gl=CA&ceid=CA:en', trust: 0.75 },
+        ],
+      },
+      GB: {
+        name: 'UK National',
+        slug: 'uk-national',
+        lat: 51.5074, lon: -0.1278, tz: 'Europe/London',
+        keywords: ['uk', 'britain', 'british', 'england', 'parliament', 'westminster', 'downing street'],
+        feeds: [
+          { name: 'BBC News UK', url: 'https://feeds.bbci.co.uk/news/uk/rss.xml', trust: 0.92 },
+          { name: 'The Guardian', url: 'https://www.theguardian.com/uk-news/rss', trust: 0.85 },
+          { name: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/uk.xml', trust: 0.82 },
+        ],
+      },
+      AU: {
+        name: 'Australia National',
+        slug: 'australia-national',
+        lat: -25.2744, lon: 133.7751, tz: 'Australia/Sydney',
+        keywords: ['australia', 'australian', 'canberra', 'parliament house', 'asx'],
+        feeds: [
+          { name: 'ABC Australia', url: 'https://www.abc.net.au/news/feed/2942460/rss.xml', trust: 0.90 },
+          { name: 'Sydney Morning Herald', url: 'https://www.smh.com.au/rss/feed.xml', trust: 0.82 },
+        ],
+      },
+    };
+
+    // Also support "GLOBAL" / "WORLD" as a special case
+    const GLOBAL_CONFIG = {
+      name: 'Global / World News',
+      slug: 'global-world',
+      lat: 0, lon: 0, tz: 'UTC',
+      keywords: ['world', 'global', 'international', 'breaking', 'united nations', 'nato', 'eu', 'g7', 'g20'],
+      feeds: [
+        { name: 'Reuters World', url: 'https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best', trust: 0.95 },
+        { name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', trust: 0.92 },
+        { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml', trust: 0.82 },
+        { name: 'AP World News', url: 'https://rsshub.app/apnews/topics/apf-intlnews', trust: 0.95 },
+        { name: 'NPR World', url: 'https://feeds.npr.org/1004/rss.xml', trust: 0.88 },
+        { name: 'France 24', url: 'https://www.france24.com/en/rss', trust: 0.80 },
+        { name: 'DW News', url: 'https://rss.dw.com/rdf/rss-en-all', trust: 0.80 },
+        { name: 'Google News World', url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en', trust: 0.75 },
+      ],
+    };
+
+    if (countryUpper === 'GLOBAL' || countryUpper === 'WW') {
+      // Use global config
+      const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
+      if (!account) return reply.status(400).send({ error: 'No active account' });
+      const marketId = `mkt_global_world_${account.id.slice(0, 8)}`;
+      await prisma.$executeRaw`
+        INSERT INTO "Market" (id, "accountId", name, slug, state, latitude, longitude, "radiusKm", timezone, "isActive", keywords, "createdAt", "updatedAt")
+        VALUES (${marketId}, ${account.id}, ${GLOBAL_CONFIG.name}, ${GLOBAL_CONFIG.slug}, NULL, 0, 0, 40000, 'UTC', true, ${JSON.stringify(GLOBAL_CONFIG.keywords)}::jsonb, NOW(), NOW())
+        ON CONFLICT ("accountId", slug) DO UPDATE SET name = ${GLOBAL_CONFIG.name}, "isActive" = true
+      `;
+      const rows = await prisma.$queryRaw<any[]>`SELECT id FROM "Market" WHERE slug = 'global-world' LIMIT 1`;
+      const mktId = rows[0]?.id || marketId;
+      const created: string[] = [];
+      for (const feed of GLOBAL_CONFIG.feeds) {
+        const srcId = `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "Source" WHERE name = ${feed.name} LIMIT 1`.catch(() => []);
+        if (existing.length > 0) {
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${existing[0].id}, ${mktId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+          created.push(`${feed.name} (linked)`);
+        } else {
+          await prisma.$executeRaw`INSERT INTO "Source" (id, platform, "sourceType", name, url, "trustScore", "isActive", "marketId", metadata, "createdAt", "updatedAt") VALUES (${srcId}, 'RSS'::"Platform", 'NEWS_ORG'::"SourceType", ${feed.name}, ${feed.url}, ${feed.trust}, true, ${mktId}, '{}', NOW(), NOW())`;
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${srcId}, ${mktId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+          created.push(feed.name);
+        }
+      }
+      return reply.send({ message: `${GLOBAL_CONFIG.name} created with ${created.length} sources`, marketId: mktId, country: 'GLOBAL', sources: created });
+    }
+
+    const config = NATIONAL_CONFIGS[countryUpper];
+    if (!config) {
+      return reply.status(400).send({ error: `No national config for country "${countryUpper}". Supported: ${Object.keys(NATIONAL_CONFIGS).join(', ')}` });
+    }
+
+    try {
+      const account = await prisma.account.findFirst({ where: { isActive: true }, select: { id: true } });
+      if (!account) return reply.status(400).send({ error: 'No active account' });
+
+      const marketName = body.data.name || config.name;
+
+      // Create national market via raw SQL
+      const marketId = `mkt_${config.slug.replace(/-/g, '_')}_${account.id.slice(0, 8)}`;
+      await prisma.$executeRaw`
+        INSERT INTO "Market" (id, "accountId", name, slug, state, latitude, longitude, "radiusKm", timezone, "isActive", keywords, "createdAt", "updatedAt")
+        VALUES (${marketId}, ${account.id}, ${marketName}, ${config.slug}, NULL, ${config.lat}, ${config.lon}, 5000, ${config.tz}, true, ${JSON.stringify(config.keywords)}::jsonb, NOW(), NOW())
+        ON CONFLICT ("accountId", slug) DO UPDATE SET name = ${marketName}, "isActive" = true
+      `;
+      await prisma.$executeRaw`UPDATE "Market" SET country = ${countryUpper} WHERE slug = ${config.slug}`.catch(() => {});
+
+      // Get actual market ID
+      const rows = await prisma.$queryRaw<any[]>`SELECT id FROM "Market" WHERE slug = ${config.slug} LIMIT 1`;
+      const mktId = rows[0]?.id || marketId;
+
+      // Create feeds
+      const created: string[] = [];
+      for (const feed of config.feeds) {
+        const srcId = `src_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "Source" WHERE name = ${feed.name} LIMIT 1`.catch(() => []);
+        if (existing.length > 0) {
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${existing[0].id}, ${mktId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+          created.push(`${feed.name} (linked)`);
+        } else {
+          await prisma.$executeRaw`INSERT INTO "Source" (id, platform, "sourceType", name, url, "trustScore", "isActive", "marketId", metadata, "createdAt", "updatedAt") VALUES (${srcId}, 'RSS'::"Platform", 'NEWS_ORG'::"SourceType", ${feed.name}, ${feed.url}, ${feed.trust}, true, ${mktId}, '{}', NOW(), NOW())`;
+          await prisma.$executeRaw`INSERT INTO "SourceMarket" (id, "sourceId", "marketId", "createdAt") VALUES (${`sm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`}, ${srcId}, ${mktId}, NOW()) ON CONFLICT DO NOTHING`.catch(() => {});
+          created.push(feed.name);
+        }
+      }
+
+      return reply.send({ message: `${marketName} created with ${created.length} sources`, marketId: mktId, country: countryUpper, sources: created });
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }

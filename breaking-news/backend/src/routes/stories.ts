@@ -277,6 +277,7 @@ export async function storiesRoutes(
       const orConditions: Prisma.StoryWhereInput[] = [];
 
       if (includeNational) {
+        orConditions.push({ locationName: { contains: 'National', mode: 'insensitive' as const } });
         orConditions.push({ locationName: { equals: 'National', mode: 'insensitive' as const } });
         orConditions.push({ locationName: null });
       }

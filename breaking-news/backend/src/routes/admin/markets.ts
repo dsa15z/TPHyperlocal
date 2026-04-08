@@ -355,7 +355,7 @@ export async function marketRoutes(
     let nationalMarket = await prisma.market.findFirst({ where: { slug: 'national', accountId: au.accountId } });
     if (!nationalMarket) {
       nationalMarket = await prisma.market.create({
-        data: { accountId: au.accountId, name: 'National', slug: 'national', state: null, latitude: 39.8283, longitude: -98.5795, radiusKm: 5000, timezone: 'America/New_York', keywords: ['national', 'us', 'united states', 'federal', 'congress', 'white house', 'supreme court'], neighborhoods: [], isActive: true },
+        data: { accountId: au.accountId, name: 'USA National', slug: 'usa-national', state: null, latitude: 39.8283, longitude: -98.5795, radiusKm: 5000, timezone: 'America/New_York', keywords: ['national', 'us', 'usa', 'united states', 'federal', 'congress', 'white house', 'supreme court', 'america'], neighborhoods: [], isActive: true },
       });
       marketsSeeded++;
     }

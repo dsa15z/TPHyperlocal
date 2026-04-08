@@ -312,7 +312,7 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
     locationName = entityLocation;
   } else if (extractedLocation) {
     locationName = extractedLocation;
-  } else if (marketName && marketName !== 'National') {
+  } else if (marketName && !marketName.toLowerCase().includes('national')) {
     // Fallback: use the source's market name as location
     locationName = marketName;
   }

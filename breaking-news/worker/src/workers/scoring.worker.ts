@@ -109,7 +109,7 @@ async function calculateSocialScore(storyId: string): Promise<{
 // A local story with score 85 = trending. National needs 120+.
 
 function isLocalMarketStory(story: any): boolean {
-  return !!story.marketId || !!story.neighborhood || (story.locationName && story.locationName !== 'National');
+  return !!story.marketId || !!story.neighborhood || (story.locationName && !story.locationName?.toLowerCase().includes('national'));
 }
 
 // ─── Score Calculations ─────────────────────────────────────────────────────
@@ -477,7 +477,7 @@ function calculateConfidenceScoreFast(sources: any[]): number {
 }
 
 function calculateLocalityScoreFast(story: any): number {
-  const hasLocation = !!story.locationName && story.locationName !== 'National';
+  const hasLocation = !!story.locationName && !story.locationName?.toLowerCase().includes('national');
   const hasNeighborhood = !!story.neighborhood;
   if (!hasLocation && !hasNeighborhood) return 0.2; // National story
   return hasNeighborhood ? 1.0 : 0.7;
