@@ -56,8 +56,9 @@ function viewToQuery(view: DashboardView | null): string {
   return params.toString();
 }
 
-// Speed multipliers: 1=60px/s, 2=90, 3=120, 4=160, 5=220
-const SPEED_PX_PER_SEC = [60, 90, 120, 160, 220];
+// Speed multipliers: 1=120px/s, 2=180, 3=240, 4=320, 5=440
+// (doubled from original — "default" is now 2x faster)
+const SPEED_PX_PER_SEC = [120, 180, 240, 320, 440];
 
 export function BreakingTicker() {
   const [stories, setStories] = useState<TickerStory[]>([]);

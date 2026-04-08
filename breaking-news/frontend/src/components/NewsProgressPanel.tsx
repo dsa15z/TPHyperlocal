@@ -66,7 +66,7 @@ function FailedJobsTooltip({ queue, count }: { queue: string; count: number }) {
   const jobs = (data as any)?.jobs || (data as any)?.data || [];
 
   const buildFailureLog = () => {
-    const lines = [`=== ${queue} FAILURE LOG (${count} failed) ===`, `Time: ${new Date().toISOString()}`, ''];
+    const lines = [`=== ${queue} FAILURE LOG (${count.toLocaleString()} failed) ===`, `Time: ${new Date().toISOString()}`, ''];
     // Deduplicate by error message and count occurrences
     const errorCounts: Record<string, number> = {};
     for (const job of jobs) {
@@ -104,22 +104,18 @@ function FailedJobsTooltip({ queue, count }: { queue: string; count: number }) {
   return (
     <span className="relative">
       <span
-        className="font-mono text-red-300 font-bold cursor-help"
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => { if (!pinned) setShow(false); }}
+        className="font-mono text-red-300 font-bold cursor-pointer underline decoration-dotted"
         onClick={() => setPinned(!pinned)}
       >
-        {count} failed
+        {count.toLocaleString()} failed
       </span>
       {isVisible && (
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 w-96 max-h-72 bg-gray-900 border border-red-500/40 rounded-lg shadow-2xl"
-          onMouseEnter={() => setShow(true)}
-          onMouseLeave={() => { if (!pinned) setShow(false); }}
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[480px] max-h-[70vh] bg-gray-900 border border-red-500/50 rounded-xl shadow-2xl"
         >
           {/* Header with actions */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-red-500/20">
-            <span className="text-xs font-bold text-red-300">{queue} — {count} failed</span>
+            <span className="text-xs font-bold text-red-300">{queue} — {count.toLocaleString()} failed</span>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handleCopy}
@@ -205,11 +201,11 @@ function StageNode({ stage, queue, onAction }: {
         <span className={clsx("text-sm font-bold uppercase tracking-wider", c.text)}>{stage.label}</span>
 
         <div className="flex items-center gap-2 text-xs flex-wrap justify-center">
-          {active > 0 && <span className={clsx("font-mono font-bold", c.text)}>{active} active</span>}
-          {waiting > 0 && <span className="font-mono text-yellow-300 font-bold">{waiting} queued</span>}
+          {active > 0 && <span className={clsx("font-mono font-bold", c.text)}>{active.toLocaleString()} active</span>}
+          {waiting > 0 && <span className="font-mono text-yellow-300 font-bold">{waiting.toLocaleString()} queued</span>}
           {failed > 0 && <FailedJobsTooltip queue={stage.key} count={failed} />}
           {active === 0 && waiting === 0 && failed === 0 && (
-            <span className="text-gray-400 font-mono">{completed} done</span>
+            <span className="text-gray-400 font-mono">{completed.toLocaleString()} done</span>
           )}
         </div>
 
@@ -329,7 +325,7 @@ export function NewsProgressPanel() {
         </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-gray-300">{totalCompleted.toLocaleString()} processed</span>
-          {totalFailed > 0 && <span className="text-red-400 font-bold">{totalFailed} failed</span>}
+          {totalFailed > 0 && <span className="text-red-400 font-bold">{totalFailed.toLocaleString()} failed</span>}
           {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </div>
       </button>
@@ -358,7 +354,7 @@ export function NewsProgressPanel() {
               )}
               {totalWaiting > 0 && (
                 <button onClick={handleClearAllPending} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-yellow-500/40 text-yellow-300 text-sm font-medium hover:bg-yellow-500/10 transition-colors">
-                  <Trash2 className="w-4 h-4" /> Clear {totalWaiting} Pending
+                  <Trash2 className="w-4 h-4" /> Clear {totalWaiting.toLocaleString()} Pending
                 </button>
               )}
             </div>

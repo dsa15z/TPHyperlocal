@@ -33,7 +33,7 @@ export function TablePagination({
   return (
     <div className="flex items-center justify-between px-4 py-3 border-t border-surface-300/30">
       <span className="text-sm text-gray-500">
-        {shown} shown &middot; {total} total
+        {shown.toLocaleString()} shown &middot; {total.toLocaleString()} total
         {extra && <> &middot; {extra}</>}
         {totalPages > 1 && (
           <> &middot; Page {page} of {totalPages}</>

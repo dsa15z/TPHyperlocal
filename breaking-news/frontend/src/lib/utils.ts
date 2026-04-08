@@ -102,3 +102,12 @@ export function getScoreTypeColor(
       };
   }
 }
+
+/**
+ * Format a number with thousands separators (e.g., 12345 → "12,345").
+ * Returns "0" for falsy values.
+ */
+export function fmtNum(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "0";
+  return n.toLocaleString();
+}

@@ -446,7 +446,7 @@ function DashboardContent() {
         {/* Results count + export bar */}
         {!isLoading && (
           <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>{total} leads found</span>
+            <span>{total.toLocaleString()} leads found</span>
             <div className="flex items-center gap-3">
               {selectedIds.size > 0 && (
                 <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium">
