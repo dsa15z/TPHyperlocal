@@ -41,6 +41,7 @@ const STALE_CODE_ERRORS = [
   'getCategoryDecayMultiplier is not defined',
   "Identifier 'now' has already been declared",
   'story.storySources is not iterable',
+  'Entity expansion limit exceeded',
 ];
 
 // Source errors that can be healed
