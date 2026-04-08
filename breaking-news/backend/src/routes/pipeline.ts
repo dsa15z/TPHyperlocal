@@ -1640,7 +1640,7 @@ export async function pipelineRoutes(
   // POST /api/v1/pipeline/seed-national — Create a national market for any country
   app.post('/pipeline/seed-national', async (request, reply) => {
     const body = z.object({
-      country: z.string().min(2).max(2).default('CA'), // ISO 3166-1 alpha-2
+      country: z.string().min(2).max(6).default('CA'), // ISO 3166-1 alpha-2 or GLOBAL
       name: z.string().optional(), // e.g., "Canada National"
     }).safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'Provide country code (2-letter ISO)' });
