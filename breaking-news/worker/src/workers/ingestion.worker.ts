@@ -950,11 +950,54 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
     let body = '';
     try { body = await response.text(); } catch {}
     const challenge = isBotChallenge(response.status, body);
-    const reason = challenge
-      ? `Bot challenge: ${challenge} (HTTP ${response.status}) — source may need direct URL or scraping`
-      : `HTTP ${response.status}`;
-    await trackSourceFailure(sourceId, reason);
-    throw new Error(`RSS fetch failed: ${reason}`);
+
+    // Immediate proxy-to-direct switch for Cloudflare-blocked proxies (don't wait for 3 failures)
+    if (challenge && feedUrl.includes('rsshub.app')) {
+      for (const mapping of PROXY_TO_DIRECT) {
+        if (mapping.pattern.test(feedUrl)) {
+          const directUrl = mapping.resolve(feedUrl);
+          if (directUrl && directUrl !== feedUrl) {
+            logger.info({ sourceId, proxy: feedUrl, direct: directUrl }, 'Cloudflare on proxy — switching to direct URL immediately');
+            try {
+              const directResp = await fetch(directUrl, { headers: buildFetchHeaders(), signal: AbortSignal.timeout(25000) });
+              if (directResp.ok) {
+                const directText = await directResp.text();
+                if (directText.includes('<rss') || directText.includes('<feed') || directText.includes('<channel')) {
+                  // Direct URL works! Update the source permanently
+                  const srcMeta = (await prisma.source.findUnique({ where: { id: sourceId }, select: { metadata: true } }))?.metadata as Record<string, unknown> || {};
+                  await prisma.source.update({
+                    where: { id: sourceId },
+                    data: {
+                      url: directUrl,
+                      metadata: { ...srcMeta, consecutiveFailures: 0, previousUrl: feedUrl, healResult: 'proxy-to-direct-immediate', healedAt: new Date().toISOString(), useBrowserUA: true },
+                    },
+                  });
+                  logger.info({ sourceId, oldUrl: feedUrl, newUrl: directUrl }, 'Switched from Cloudflare-blocked proxy to direct URL');
+                  // Re-run with the new URL
+                  response = directResp;
+                  // Continue processing with the direct response below
+                  break;
+                }
+              }
+            } catch {}
+          }
+        }
+      }
+      // If we couldn't switch, fall through to normal error handling
+      if (!response.ok) {
+        const reason = `Bot challenge: ${challenge} (HTTP ${response.status}) — source may need direct URL or scraping`;
+        await trackSourceFailure(sourceId, reason);
+        throw new Error(`RSS fetch failed: ${reason}`);
+      }
+    }
+
+    if (!response.ok) {
+      const reason = challenge
+        ? `Bot challenge: ${challenge} (HTTP ${response.status}) — source may need direct URL or scraping`
+        : `HTTP ${response.status}`;
+      await trackSourceFailure(sourceId, reason);
+      throw new Error(`RSS fetch failed: ${reason}`);
+    }
   }
 
   // Track redirect: if feed redirected, update the URL for future polls
