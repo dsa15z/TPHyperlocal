@@ -555,18 +555,21 @@ export function NewsProgressPanel() {
             </div>
             <FlowArrow active={totalActive > 0} />
 
-            {/* Dedup stage (between Ingestion and Enrichment) */}
-            <StageNode
-              stage={{ key: "dedup", label: "Dedup", color: "cyan", desc: "Title match skip" }}
-              queue={{ name: 'dedup', active: 0, waiting: 0, completed: dedupCount, failed: 0, delayed: 0 } as QueueStatus}
-              onAction={() => {}}
-            />
-            <FlowArrow active={false} />
-
-            {/* Pipeline stages */}
+            {/* Pipeline stages with Dedup inserted after Ingestion */}
             {STAGES.map((stage, i) => (
               <div key={stage.key} className="flex items-center">
                 <StageNode stage={stage} queue={queueMap[stage.key]} onAction={handleAction} />
+                {/* Insert Dedup node after Ingestion, before Enrichment */}
+                {stage.key === "ingestion" && (
+                  <>
+                    <FlowArrow active={(queueMap['ingestion']?.active || 0) > 0} />
+                    <StageNode
+                      stage={{ key: "dedup", label: "Dedup", color: "cyan", desc: "Title match skip" }}
+                      queue={{ name: 'dedup', active: 0, waiting: 0, completed: dedupCount, failed: 0, delayed: 0 } as QueueStatus}
+                      onAction={() => {}}
+                    />
+                  </>
+                )}
                 {i < STAGES.length - 1 && (
                   <FlowArrow active={(queueMap[STAGES[i].key]?.active || 0) > 0} />
                 )}
