@@ -136,6 +136,45 @@ function passesContentFilter(filter: ContentFilter | null, content: {
   return true;
 }
 
+// ─── Pre-Enrichment Dedup ────────────────────────────────────────────────────
+// Checks if a story with similar title already exists. If yes, skips enrichment
+// (saves LLM API call) and queues directly to clustering for merge.
+// Returns true if post was routed to clustering (skip enrichment).
+
+async function trySkipEnrichment(postId: string, title: string, enrichmentQueue: Queue): Promise<boolean> {
+  const normalized = (title || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  if (normalized.length < 20) return false;
+
+  try {
+    const existingStory = await prisma.story.findFirst({
+      where: {
+        mergedIntoId: null,
+        firstSeenAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+        title: { contains: normalized.substring(0, 40), mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+
+    if (existingStory) {
+      const clusterQueue = new Queue('clustering', { connection: getSharedConnection() });
+      await clusterQueue.add('cluster', {
+        sourcePostId: postId,
+        category: undefined,
+        locationName: undefined,
+        neighborhoods: [],
+        entities: { people: [], organizations: [], locations: [] },
+        structuredEntities: [],
+        famousPersons: [],
+      }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+      await clusterQueue.close();
+      return true;
+    }
+  } catch {
+    // Dedup check failed — fall through to enrichment
+  }
+  return false;
+}
+
 /** Get a random browser User-Agent from the pool */
 function getRandomUA(): string {
   return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
@@ -1066,42 +1105,9 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
 
       ingested++;
 
-      // ── Pre-enrichment dedup: check if a story with very similar title already exists ──
-      // This saves an expensive LLM enrichment call (~80% of posts are dupes from other sources)
-      const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-      let skipEnrichment = false;
-      if (normalizedTitle.length > 20) {
-        try {
-          const existingStory = await prisma.story.findFirst({
-            where: {
-              mergedIntoId: null,
-              firstSeenAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
-              title: { contains: normalizedTitle.substring(0, 40), mode: 'insensitive' },
-            },
-            select: { id: true },
-          });
-          if (existingStory) {
-            // Story already exists — skip enrichment, go straight to clustering
-            // Clustering will merge this post into the existing story
-            skipEnrichment = true;
-            const clusterQueue = new Queue('clustering', { connection: getSharedConnection() });
-            await clusterQueue.add('cluster', {
-              sourcePostId: post.id,
-              category: undefined,
-              locationName: undefined,
-              neighborhoods: [],
-              entities: { people: [], organizations: [], locations: [] },
-              structuredEntities: [],
-              famousPersons: [],
-            }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
-            await clusterQueue.close();
-          }
-        } catch {
-          // Dedup check failed — fall through to normal enrichment
-        }
-      }
-
-      if (!skipEnrichment) {
+      // Pre-enrichment dedup: skip LLM if story already exists
+      const skipped = await trySkipEnrichment(post.id, title, enrichmentQueue);
+      if (!skipped) {
         await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
           attempts: 3,
           backoff: { type: 'exponential', delay: 2000 },
@@ -1220,10 +1226,13 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
 
       ingested++;
 
-      await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-      });
+      const skippedNews = await trySkipEnrichment(post.id, article.title, enrichmentQueue);
+      if (!skippedNews) {
+        await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+        });
+      }
     } catch (err) {
       logger.warn({ err, title: article.title }, 'Failed to process NewsAPI article');
     }
@@ -1295,7 +1304,10 @@ async function handleTwitterPoll(job: Job<TwitterPollJob>): Promise<void> {
         },
       });
 
-      await enrichmentQueue.add('enrich', { sourcePostId: post.id });
+      const skippedTweet = await trySkipEnrichment(post.id, tweet.text?.substring(0, 100) || '', enrichmentQueue);
+      if (!skippedTweet) {
+        await enrichmentQueue.add('enrich', { sourcePostId: post.id });
+      }
       ingested++;
     } catch (err) {
       if ((err as any).code === 'P2002') continue; // Dedup
@@ -1502,7 +1514,10 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
             },
           });
 
-          await enrichmentQueue.add('enrich', { sourcePostId: sourcePost.id });
+          const skippedReddit = await trySkipEnrichment(sourcePost.id, post.title || '', enrichmentQueue);
+          if (!skippedReddit) {
+            await enrichmentQueue.add('enrich', { sourcePostId: sourcePost.id });
+          }
           totalIngested++;
         } catch (err) {
           if ((err as any).code === 'P2002') continue; // Dedup
@@ -1614,10 +1629,13 @@ async function handleFacebookPagePoll(job: Job<FacebookPagePollJob>): Promise<vo
 
       ingested++;
 
-      await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-      });
+      const skippedFb = await trySkipEnrichment(post.id, fbPost.message?.substring(0, 100) || '', enrichmentQueue);
+      if (!skippedFb) {
+        await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+        });
+      }
     } catch (err) {
       logger.warn({ err, postId: fbPost.id }, 'Failed to process Facebook post');
     }
