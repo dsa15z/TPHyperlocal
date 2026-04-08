@@ -8,6 +8,7 @@ import { OnboardingTour } from "@/components/OnboardingTour";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { Heartbeat } from "@/components/Heartbeat";
 import { AIAssistant } from "@/components/AIAssistant";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import { BreakingTicker } from "@/components/BreakingTicker";
 
 const inter = Inter({
@@ -39,6 +40,7 @@ export default function RootLayout({
         className={`${inter.variable} font-sans bg-surface text-gray-100 antialiased min-h-screen`}
       >
         <Providers>
+          <PostHogProvider>
           <SiteNav />
           <MainContent>{children}</MainContent>
           <KeyboardShortcuts />
@@ -47,6 +49,7 @@ export default function RootLayout({
           <Heartbeat />
           <AIAssistant />
           <BreakingTicker />
+          </PostHogProvider>
         </Providers>
         <script
           dangerouslySetInnerHTML={{
