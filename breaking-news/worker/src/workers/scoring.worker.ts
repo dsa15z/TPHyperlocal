@@ -823,17 +823,118 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
   }
 }
 
+// ─── Batch Scoring ──────────────────────────────────────────────────────────
+// Scores up to 100 stories in 2 SQL round-trips (1 fetch + 1 batch UPDATE).
+
+async function processBatchScoring(storyIds: string[]): Promise<number> {
+  if (storyIds.length === 0) return 0;
+
+  let stories: any[];
+  try {
+    stories = await prisma.story.findMany({
+      where: { id: { in: storyIds } },
+      include: {
+        storySources: {
+          include: {
+            sourcePost: {
+              include: { source: { select: { id: true, platform: true, trustScore: true } } },
+            },
+          },
+        },
+      },
+    });
+  } catch {
+    stories = await prisma.story.findMany({ where: { id: { in: storyIds } } });
+    stories = stories.map((s: any) => ({ ...s, storySources: [] }));
+  }
+
+  if (stories.length === 0) return 0;
+  const now = Date.now();
+
+  // Calculate scores for all stories in memory
+  const updates: string[] = [];
+  for (const story of stories) {
+    const sources = story.storySources || [];
+    const breakingScore = calculateBreakingScoreFast(sources, now);
+    const trendingResult = calculateTrendingScoreFast(sources, story, now);
+    const confidenceScore = calculateConfidenceScoreFast(sources);
+    const localityScore = calculateLocalityScoreFast(story);
+    const socialResult = calculateSocialScoreFast(sources);
+    const compositeScore = 0.25 * breakingScore + 0.20 * trendingResult.score + 0.15 * confidenceScore + 0.15 * localityScore + 0.25 * socialResult.socialScore;
+
+    const ageMs = now - new Date(story.firstSeenAt).getTime();
+    const lastChangeMs = story.lastUpdatedAt ? now - new Date(story.lastUpdatedAt).getTime() : ageMs;
+    const newStatus = determineStatus(
+      story.status, breakingScore, trendingResult.score, socialResult.socialScore,
+      trendingResult.growthPercent15, trendingResult.growthPercent60,
+      ageMs / 60000, lastChangeMs / 60000, isLocalMarketStory(story),
+    );
+
+    // Escape the ID for SQL safety (cuid format — alphanumeric only)
+    const id = story.id.replace(/[^a-zA-Z0-9_]/g, '');
+    updates.push(`('${id}', ${breakingScore}, ${trendingResult.score}, ${confidenceScore}, ${localityScore}, ${compositeScore}, '${newStatus}')`);
+  }
+
+  // Single batch UPDATE using VALUES + JOIN pattern
+  try {
+    await prisma.$executeRawUnsafe(`
+      UPDATE "Story" AS s SET
+        "breakingScore" = v.breaking,
+        "trendingScore" = v.trending,
+        "confidenceScore" = v.confidence,
+        "localityScore" = v.locality,
+        "compositeScore" = v.composite,
+        "status" = v.status::"StoryStatus",
+        "lastUpdatedAt" = NOW()
+      FROM (VALUES ${updates.join(',')}) AS v(id, breaking, trending, confidence, locality, composite, status)
+      WHERE s.id = v.id
+    `);
+  } catch (err) {
+    logger.error({ err: (err as Error).message, count: updates.length }, 'Batch update failed — falling back to individual');
+    for (const story of stories) {
+      try { await processScoring({ data: { storyId: story.id } } as any); } catch {}
+    }
+  }
+
+  logger.info({ batchSize: storyIds.length, scored: updates.length }, 'Batch scoring complete');
+  return updates.length;
+}
+
 export function createScoringWorker(): Worker {
   const connection = getSharedConnection();
+
+  // Batch collection: accumulate jobs for 150ms then score them all at once
+  const pending: Array<{ storyId: string; resolve: () => void; reject: (e: Error) => void }> = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  async function flush() {
+    timer = null;
+    if (pending.length === 0) return;
+    const batch = pending.splice(0, 100);
+    try {
+      await processBatchScoring(batch.map(b => b.storyId));
+      batch.forEach(b => b.resolve());
+    } catch (err) {
+      batch.forEach(b => b.reject(err as Error));
+    }
+  }
 
   const worker = new Worker<ScoringJob>(
     'scoring',
     async (job) => {
-      await processScoring(job);
+      return new Promise<void>((resolve, reject) => {
+        pending.push({ storyId: job.data.storyId, resolve, reject });
+        if (pending.length >= 100) {
+          if (timer) clearTimeout(timer);
+          flush();
+        } else if (!timer) {
+          timer = setTimeout(flush, 150);
+        }
+      });
     },
     {
       connection,
-      concurrency: 25, // Each job: 1 fetch + 1 raw SQL update = light on connections
+      concurrency: 100, // High concurrency fills batches fast — actual DB load is 2 queries per batch
     }
   );
 
