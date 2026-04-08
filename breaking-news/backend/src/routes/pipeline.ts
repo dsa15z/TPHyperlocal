@@ -24,6 +24,124 @@ export async function pipelineRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
+
+  // ─── Webhook Ingestion ──────────────────────────────────────────────────────
+  // POST /api/v1/ingest/webhook — Accept stories pushed from external sources
+  // Supports: raw story payload, RSS-like payload, Newscatcher webhook, custom
+  //
+  // Headers:
+  //   X-Webhook-Secret: optional shared secret for authentication
+  //   X-Source-Id: optional source ID to attribute the story to
+  //   Content-Type: application/json
+  //
+  // Body formats:
+  //   1. Single story: { title, content, url, author, publishedAt, category, source }
+  //   2. Array of stories: [{ title, content, ... }, ...]
+  //   3. Newscatcher format: { articles: [{ title, summary, link, ... }] }
+  //   4. RSS-like: { items: [{ title, description, link, pubDate }] }
+
+  app.post('/ingest/webhook', async (request, reply) => {
+    // Optional auth via shared secret
+    const secret = (request.headers as any)['x-webhook-secret'];
+    const expectedSecret = process.env['WEBHOOK_SECRET'];
+    if (expectedSecret && secret !== expectedSecret) {
+      return reply.status(401).send({ error: 'Invalid webhook secret' });
+    }
+
+    const sourceId = (request.headers as any)['x-source-id'] || null;
+    const body = request.body as any;
+    if (!body) return reply.status(400).send({ error: 'Empty body' });
+
+    // Normalize to an array of stories
+    let stories: Array<{ title: string; content: string; url?: string; author?: string; publishedAt?: string; category?: string; source?: string }> = [];
+
+    if (Array.isArray(body)) {
+      stories = body;
+    } else if (body.articles) {
+      // Newscatcher format
+      stories = body.articles.map((a: any) => ({
+        title: a.title, content: a.summary || a.excerpt || a.content || '',
+        url: a.link || a.url, author: a.author || a.authors?.join(', '),
+        publishedAt: a.published_date || a.publishedAt, category: a.topic || a.category,
+        source: a.source?.name || a.source,
+      }));
+    } else if (body.items) {
+      // RSS-like format
+      stories = body.items.map((i: any) => ({
+        title: i.title, content: i.description || i.content || i['content:encoded'] || '',
+        url: i.link || i.url, author: i.author || i['dc:creator'],
+        publishedAt: i.pubDate || i.published || i.publishedAt, category: i.category,
+      }));
+    } else if (body.title) {
+      // Single story
+      stories = [body];
+    } else {
+      return reply.status(400).send({ error: 'Unrecognized payload format. Expected: { title, content } or [stories] or { articles: [...] } or { items: [...] }' });
+    }
+
+    if (stories.length === 0) {
+      return reply.status(400).send({ error: 'No stories in payload' });
+    }
+
+    // Ingest each story
+    let ingested = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    const { Queue } = await import('bullmq');
+    const IORedis = (await import('ioredis')).default;
+    const redis = new IORedis(process.env['REDIS_URL'] || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+    const enrichmentQueue = new Queue('enrichment', { connection: redis });
+
+    for (const story of stories.slice(0, 100)) { // Max 100 per request
+      if (!story.title || story.title.length < 5) { skipped++; continue; }
+
+      const contentHash = require('crypto').createHash('md5').update(`${story.title}${story.content || ''}`).digest('hex');
+      const platformPostId = `webhook::${contentHash}`;
+
+      try {
+        // Check for existing post
+        const existing = await prisma.sourcePost.findUnique({ where: { platformPostId } });
+        if (existing) { skipped++; continue; }
+
+        // Create source post
+        const post = await prisma.sourcePost.create({
+          data: {
+            sourceId: sourceId || undefined,
+            platformPostId,
+            content: (story.content || story.title).substring(0, 50000),
+            contentHash,
+            title: story.title.substring(0, 500),
+            url: story.url || undefined,
+            authorName: story.author || story.source || 'Webhook',
+            publishedAt: story.publishedAt ? new Date(story.publishedAt) : new Date(),
+          },
+        });
+
+        // Queue for enrichment
+        await enrichmentQueue.add('enrich', { sourcePostId: post.id }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: { count: 100, age: 3600 },
+        });
+        ingested++;
+      } catch (err: any) {
+        if (err.code === 'P2002') { skipped++; continue; } // Dedup
+        errors.push(`${story.title?.substring(0, 40)}: ${err.message}`);
+      }
+    }
+
+    await enrichmentQueue.close();
+    await redis.quit();
+
+    return reply.send({
+      message: `Webhook processed: ${ingested} ingested, ${skipped} skipped`,
+      ingested,
+      skipped,
+      total: stories.length,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  });
   // GET /api/v1/pipeline/source-health — Quick source health report
   app.get('/pipeline/source-health', async (_request, reply) => {
     try {
