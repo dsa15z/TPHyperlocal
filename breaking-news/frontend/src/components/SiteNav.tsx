@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Newspaper,
+  Activity,
   AlertTriangle,
   Users,
   Timer,
@@ -192,6 +193,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/superadmin", label: "Super Admin", icon: Crown },
       { href: "/admin/credentials", label: "API Keys", icon: KeyRound },
       { href: "/admin/feature-flags", label: "Feature Flags", icon: Shield },
+      { href: "/admin/pipeline-health", label: "Pipeline Health", icon: Activity },
     ],
   },
 ];
