@@ -23,6 +23,25 @@ export async function pipelineRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
+  // GET /api/v1/pipeline/monitor — Self-healing monitor activity log
+  app.get('/pipeline/monitor', async (_request, reply) => {
+    try {
+      const IORedis = (await import('ioredis')).default;
+      const redis = new IORedis(process.env['REDIS_URL'] || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+      const latest = await redis.get('tp:monitor:latest');
+      const logRaw = await redis.lrange('tp:monitor:log', 0, 49);
+      await redis.quit();
+
+      return reply.send({
+        latest: latest ? JSON.parse(latest) : null,
+        log: logRaw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean),
+        description: 'Pipeline self-healing monitor runs every 2 minutes. Clears stale errors, heals failing sources, logs unknown issues.',
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // GET /api/v1/pipeline/status - pipeline queue status
   app.get('/pipeline/status', async (_request, reply) => {
     const queueNames = Object.values(QUEUE_NAMES);
