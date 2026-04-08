@@ -23,6 +23,49 @@ export async function pipelineRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
+  // GET /api/v1/pipeline/source-health — Quick source health report
+  app.get('/pipeline/source-health', async (_request, reply) => {
+    try {
+      const sources = await prisma.$queryRaw<any[]>`
+        SELECT id, name, platform, "isActive", "lastPolledAt",
+               metadata->>'consecutiveFailures' as failures,
+               metadata->>'healResult' as "healResult",
+               metadata->>'lastFailure' as "lastFailure",
+               metadata->>'deactivateReason' as "deactivateReason"
+        FROM "Source"
+        WHERE "isActive" = false OR (metadata->>'consecutiveFailures')::int >= 3
+        ORDER BY (metadata->>'consecutiveFailures')::int DESC NULLS LAST
+        LIMIT 30
+      `;
+
+      const activeCount = await prisma.$queryRaw<any[]>`SELECT COUNT(*)::int as count FROM "Source" WHERE "isActive" = true`;
+      const totalCount = await prisma.$queryRaw<any[]>`SELECT COUNT(*)::int as count FROM "Source"`;
+      const neverPolled = await prisma.$queryRaw<any[]>`SELECT COUNT(*)::int as count FROM "Source" WHERE "isActive" = true AND "lastPolledAt" IS NULL`;
+
+      return reply.send({
+        summary: {
+          total: totalCount[0]?.count || 0,
+          active: activeCount[0]?.count || 0,
+          inactive: (totalCount[0]?.count || 0) - (activeCount[0]?.count || 0),
+          neverPolled: neverPolled[0]?.count || 0,
+          failing: sources.filter((s: any) => s.isActive && parseInt(s.failures || '0') >= 3).length,
+        },
+        problemSources: sources.map((s: any) => ({
+          name: s.name,
+          platform: s.platform,
+          active: s.isActive,
+          failures: parseInt(s.failures || '0'),
+          healResult: s.healResult,
+          lastFailure: s.lastFailure?.substring(0, 80),
+          deactivateReason: s.deactivateReason,
+          lastPolled: s.lastPolledAt,
+        })),
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // GET /api/v1/pipeline/monitor — Self-healing monitor activity log
   app.get('/pipeline/monitor', async (_request, reply) => {
     try {
