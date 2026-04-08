@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
@@ -50,6 +50,146 @@ const colorMap: Record<string, { bg: string; text: string; border: string; glow:
   amber: { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-400/40", glow: "shadow-amber-500/20" },
   green: { bg: "bg-green-500/15", text: "text-green-300", border: "border-green-400/40", glow: "shadow-green-500/20" },
 };
+
+// ─── Throughput Chart (canvas-based, no library) ─────────────────────────────
+
+interface ThroughputPoint {
+  time: number;
+  ingestion: number;
+  enrichment: number;
+  clustering: number;
+  scoring: number;
+}
+
+const CHART_COLORS = {
+  ingestion: "#60a5fa",   // blue-400
+  enrichment: "#c084fc",  // purple-400
+  clustering: "#fbbf24",  // amber-400
+  scoring: "#4ade80",     // green-400
+};
+
+const MAX_POINTS = 60; // 5 min of data at 5s intervals
+
+// Persistent history (survives re-renders)
+let throughputHistory: ThroughputPoint[] = [];
+let lastCompleted: Record<string, number> = {};
+
+function ThroughputChart({ queueMap }: { queueMap: Record<string, QueueStatus> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hoverInfo, setHoverInfo] = useState<string | null>(null);
+
+  // Record new data point
+  useEffect(() => {
+    const now = Date.now();
+    const point: ThroughputPoint = { time: now, ingestion: 0, enrichment: 0, clustering: 0, scoring: 0 };
+
+    for (const key of ["ingestion", "enrichment", "clustering", "scoring"] as const) {
+      const current = queueMap[key]?.completed || 0;
+      const prev = lastCompleted[key] || current;
+      point[key] = Math.max(0, current - prev);
+      lastCompleted[key] = current;
+    }
+
+    // Skip first point (no delta yet)
+    if (Object.values(lastCompleted).some(v => v > 0)) {
+      throughputHistory.push(point);
+      if (throughputHistory.length > MAX_POINTS) throughputHistory = throughputHistory.slice(-MAX_POINTS);
+    }
+  }, [queueMap]);
+
+  // Draw chart
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || throughputHistory.length < 2) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+
+    const data = throughputHistory;
+    const maxVal = Math.max(1, ...data.flatMap(d => [d.ingestion, d.enrichment, d.clustering, d.scoring]));
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      const y = h - (h * i / 4);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
+    // Draw each series
+    for (const [key, color] of Object.entries(CHART_COLORS)) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.beginPath();
+
+      for (let i = 0; i < data.length; i++) {
+        const x = (i / (MAX_POINTS - 1)) * w;
+        const val = (data[i] as any)[key] || 0;
+        const y = h - (val / maxVal) * (h - 8) - 4;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Fill area
+      ctx.fillStyle = color.replace(")", ", 0.08)").replace("rgb", "rgba");
+      ctx.lineTo((data.length - 1) / (MAX_POINTS - 1) * w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Y-axis label
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(maxVal.toLocaleString(), w - 4, 12);
+    ctx.fillText("0", w - 4, h - 2);
+  }, [queueMap, throughputHistory.length]);
+
+  // Latest rates for legend
+  const latest = throughputHistory.length > 0 ? throughputHistory[throughputHistory.length - 1] : null;
+  const perMin = (n: number) => (n * 12).toLocaleString(); // 5s intervals → per minute
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-400 font-medium">Throughput (items/5s)</span>
+        {latest && (
+          <div className="flex items-center gap-3 text-[10px]">
+            <span style={{ color: CHART_COLORS.ingestion }}>● Ingest {latest.ingestion}</span>
+            <span style={{ color: CHART_COLORS.enrichment }}>● Enrich {latest.enrichment}</span>
+            <span style={{ color: CHART_COLORS.clustering }}>● Cluster {latest.clustering}</span>
+            <span style={{ color: CHART_COLORS.scoring }}>● Score {latest.scoring}</span>
+          </div>
+        )}
+      </div>
+      <canvas
+        ref={canvasRef}
+        className="w-full rounded-lg bg-surface-200/30 border border-surface-300/20"
+        style={{ height: 100 }}
+      />
+      {throughputHistory.length < 3 && (
+        <div className="text-[10px] text-gray-600 text-center">Collecting data... chart appears after ~15 seconds</div>
+      )}
+    </div>
+  );
+}
 
 // Failed jobs tooltip — shows error reasons on hover with copy + auto-fix
 function FailedJobsTooltip({ queue, count }: { queue: string; count: number }) {
@@ -343,6 +483,9 @@ export function NewsProgressPanel() {
               </div>
             ))}
           </div>
+
+          {/* Throughput chart */}
+          <ThroughputChart queueMap={queueMap} />
 
           {/* Controls */}
           <div className="flex items-center justify-between gap-3 flex-wrap">
