@@ -72,25 +72,28 @@ function DashboardContent() {
   const [serverViewsLoaded, setServerViewsLoaded] = useState(false);
 
   // Load views from server on mount (server is source of truth when authenticated)
+  const [serverViewIds, setServerViewIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     let cancelled = false;
     fetchServerViews()
       .then((serverViews) => {
-        if (cancelled || !serverViews || serverViews.length === 0) return;
-        const mapped: DashboardView[] = serverViews.map((sv) => ({
-          id: sv.id,
-          name: sv.name,
-          columns: (sv.columns || []) as ColumnConfig[],
-          filters: (sv.filters || {}) as SavedFilters,
-          createdAt: sv.createdAt,
-          updatedAt: sv.updatedAt,
-        }));
-        setViews(mapped);
-        saveViews(mapped); // Cache locally
+        if (cancelled) return;
+        if (serverViews && serverViews.length > 0) {
+          const mapped: DashboardView[] = serverViews.map((sv) => ({
+            id: sv.id,
+            name: sv.name,
+            columns: (sv.columns || []) as ColumnConfig[],
+            filters: (sv.filters || {}) as SavedFilters,
+            createdAt: sv.createdAt,
+            updatedAt: sv.updatedAt,
+          }));
+          setViews(mapped);
+          saveViews(mapped);
+          setServerViewIds(new Set(serverViews.map(sv => sv.id)));
+        }
         setServerViewsLoaded(true);
       })
       .catch(() => {
-        // Not authenticated or API error — use localStorage views (already loaded)
         setServerViewsLoaded(true);
       });
     return () => { cancelled = true; };
@@ -210,6 +213,7 @@ function DashboardContent() {
     const now = new Date().toISOString();
     const savedColumns = columnConfig.map((c) => ({ ...c }));
     const savedFilters = storyFiltersToSaved(filters);
+    const activeViewObj = views.find(v => v.id === activeViewId);
     const updated = views.map((v) =>
       v.id === activeViewId
         ? { ...v, columns: savedColumns, filters: savedFilters, updatedAt: now }
@@ -217,9 +221,25 @@ function DashboardContent() {
     );
     persistViews(updated);
     setHasViewChanges(false);
-    // Sync to server
-    updateServerView(activeViewId, { columns: savedColumns, filters: savedFilters }).catch(() => {});
-  }, [views, activeViewId, columnConfig, filters, persistViews]);
+    // Sync to server — create if not yet on server, update if it is
+    if (serverViewIds.has(activeViewId)) {
+      updateServerView(activeViewId, { columns: savedColumns, filters: savedFilters }).catch(() => {});
+    } else {
+      createServerView({ name: activeViewObj?.name || "Default", columns: savedColumns, filters: savedFilters })
+        .then((res) => {
+          if (res?.id) {
+            setServerViewIds(prev => new Set([...prev, res.id]));
+            // Update local view ID to match server
+            if (res.id !== activeViewId) {
+              setViews(prev => prev.map(v => v.id === activeViewId ? { ...v, id: res.id } : v));
+              setActiveViewId(res.id);
+              saveActiveViewId(res.id);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [views, activeViewId, columnConfig, filters, persistViews, serverViewIds]);
 
   const handleCreateView = useCallback(
     (name: string) => {
@@ -241,11 +261,14 @@ function DashboardContent() {
       // Sync to server — replace temp ID with server-assigned ID
       createServerView({ name, columns: cols, filters: filts })
         .then((res) => {
-          if (res?.id && res.id !== tempId) {
-            setViews((prev) => prev.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
-            saveViews(views.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
-            setActiveViewId(res.id);
-            saveActiveViewId(res.id);
+          if (res?.id) {
+            setServerViewIds(prev => new Set([...prev, res.id]));
+            if (res.id !== tempId) {
+              setViews((prev) => prev.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
+              saveViews(views.map((v) => v.id === tempId ? { ...v, id: res.id } : v));
+              setActiveViewId(res.id);
+              saveActiveViewId(res.id);
+            }
           }
         })
         .catch(() => {});
