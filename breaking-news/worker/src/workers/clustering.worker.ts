@@ -148,8 +148,11 @@ async function getRecentStoriesCached(): Promise<any[]> {
         title: true,
         category: true,
         locationName: true,
+        neighborhood: true,
         sourceCount: true,
         status: true,
+        lastUpdatedAt: true,
+        firstSeenAt: true,
       },
     });
     cachedStories = stories;
@@ -259,7 +262,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
       [...new Set(storyPeople)],
     );
 
-    const timeProximity = calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2);
+    const timeProximity = story.lastUpdatedAt ? calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2) : 0.5;
 
     const combinedSimilarity = 0.6 * maxTextSim + 0.2 * entitySim + 0.2 * timeProximity;
 
@@ -403,7 +406,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         story.neighborhood,
       );
 
-      const timeProximity = calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2);
+      const timeProximity = story.lastUpdatedAt ? calculateTimeProximity(post.publishedAt, story.lastUpdatedAt, 2) : 0.5;
       const combinedSimilarity = 0.6 * maxTextSim + 0.2 * entitySim + 0.2 * timeProximity;
 
       if (combinedSimilarity > bestSimilarity) {
