@@ -65,7 +65,7 @@ function viewToQuery(view: DashboardView | null): string {
 
 // Speed: 10 levels, default=7 (was max), new max=10 is 3x faster than old max
 // 1=120, 2=160, 3=200, 4=260, 5=320, 6=380, 7=440(default), 8=560, 9=720, 10=1000
-const SPEED_PX_PER_SEC = [120, 160, 200, 260, 320, 380, 440, 560, 720, 1000];
+const SPEED_PX_PER_SEC = [120, 200, 300, 400, 520, 660, 800, 1000, 1400, 2000];
 
 export function BreakingTicker() {
   const [stories, setStories] = useState<TickerStory[]>([]);
