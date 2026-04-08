@@ -491,8 +491,19 @@ function calculateSocialScoreFast(sources: any[]): { socialScore: number; rawSoc
     totalShares += ss.sourcePost?.engagementShares || 0;
     totalComments += ss.sourcePost?.engagementComments || 0;
   }
-  const rawSocialTotal = 2 * (totalShares + totalLikes) + totalComments + sources.length;
-  return { socialScore: Math.min(1.0, rawSocialTotal / 200), rawSocialTotal };
+  const hasEngagement = totalLikes > 0 || totalShares > 0 || totalComments > 0;
+  const sourceCount = sources.length;
+
+  if (hasEngagement) {
+    // Has real engagement data (Twitter, Reddit, Facebook sources)
+    const rawSocialTotal = 2 * (totalShares + totalLikes) + totalComments + sourceCount;
+    return { socialScore: Math.min(1.0, rawSocialTotal / 200), rawSocialTotal };
+  }
+
+  // RSS-only: no engagement data — use source count as primary signal
+  // 1 source = 0.1, 2 = 0.25, 3 = 0.4, 5 = 0.6, 8 = 0.8, 12+ = 1.0
+  const sourceSignal = Math.min(1.0, Math.sqrt(sourceCount / 12));
+  return { socialScore: sourceSignal, rawSocialTotal: sourceCount };
 }
 
 // ─── Main Processing ────────────────────────────────────────────────────────
