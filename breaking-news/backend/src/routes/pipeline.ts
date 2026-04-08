@@ -111,6 +111,24 @@ export async function pipelineRoutes(
     }
   });
 
+  // POST /api/v1/pipeline/toggle-reddit — Enable/disable all Reddit sources
+  app.post('/pipeline/toggle-reddit', async (request, reply) => {
+    const body = (request.body as any) || {};
+    const active = body.active !== undefined ? !!body.active : false;
+    try {
+      const count = await prisma.$executeRawUnsafe(
+        `UPDATE "Source" SET "isActive" = $1 WHERE platform = 'REDDIT'`, active
+      );
+      return reply.send({ message: `Reddit sources ${active ? 'activated' : 'deactivated'}`, updated: count });
+    } catch (err: any) {
+      // REDDIT enum might not exist — try by name
+      const count = await prisma.$executeRawUnsafe(
+        `UPDATE "Source" SET "isActive" = $1 WHERE name ILIKE '%reddit%'`, active
+      );
+      return reply.send({ message: `Reddit sources ${active ? 'activated' : 'deactivated'} (by name)`, updated: count });
+    }
+  });
+
   // POST /api/v1/pipeline/fix-broken-sources — Update URLs for known broken sources
   app.post('/pipeline/fix-broken-sources', async (_request, reply) => {
     const fixes = [
