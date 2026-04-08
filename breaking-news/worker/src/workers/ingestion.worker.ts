@@ -873,7 +873,7 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
     response = await fetch(feedUrl, {
       headers,
       redirect: 'follow',
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(25000),
     });
   } catch (err) {
     await trackSourceFailure(sourceId, (err as Error).message);
@@ -1121,7 +1121,7 @@ async function handleNewsAPIPoll(job: Job<NewsAPIPollJob>): Promise<void> {
   let response: Response;
   try {
     response = await fetch(`https://newsapi.org/v2/everything?${params}`, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(25000),
     });
   } catch (err) {
     logger.error({ sourceId, err }, 'Failed to fetch NewsAPI');
@@ -1510,7 +1510,7 @@ async function handleFacebookPagePoll(job: Job<FacebookPagePollJob>): Promise<vo
   let response: Response;
   try {
     response = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(25000),
     });
   } catch (err) {
     logger.error({ sourceId, pageId, err }, 'Failed to fetch Facebook page');

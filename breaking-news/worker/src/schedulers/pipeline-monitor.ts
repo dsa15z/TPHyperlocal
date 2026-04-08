@@ -42,6 +42,8 @@ const STALE_CODE_ERRORS = [
   "Identifier 'now' has already been declared",
   'story.storySources is not iterable',
   'Entity expansion limit exceeded',
+  'The operation was aborted due to timeout',
+  'operation was aborted',
 ];
 
 // Source errors that can be healed
