@@ -458,7 +458,7 @@ function calculateTrendingScoreFast(sources: any[], story: any, now: number): { 
 
   const ageMs = now - new Date(story.firstSeenAt).getTime();
   const category = story.category || 'OTHER';
-  const decayMultiplier = getCategoryDecayMultiplier(category, ageMs);
+  const decayMultiplier = getCategoryDecay(category, ageMs / 60000);
 
   const rawTrending = Math.min(1.0, (growthPercent60 > 0 ? 0.4 : 0) + (growthPercent15 > 50 ? 0.3 : growthPercent15 > 0 ? 0.15 : 0) + (last60 >= 3 ? 0.3 : last60 / 10));
   return { score: rawTrending * decayMultiplier, growthPercent15, growthPercent60 };
