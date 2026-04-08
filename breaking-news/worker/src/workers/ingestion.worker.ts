@@ -817,6 +817,8 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   textNodeName: '#text',
+  processEntities: false, // Prevent "Entity expansion limit exceeded" on feeds with many HTML entities
+  htmlEntities: true,
 });
 
 function getGuid(item: RSSItem, feedUrl: string): string {
