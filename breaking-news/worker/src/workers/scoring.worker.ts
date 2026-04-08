@@ -833,7 +833,7 @@ export function createScoringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 10, // Moderate — each job makes 2 DB calls but pool is shared
+      concurrency: 25, // Each job: 1 fetch + 1 raw SQL update = light on connections
     }
   );
 

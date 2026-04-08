@@ -641,7 +641,7 @@ export function createClusteringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 5, // Keep conservative — clustering needs serial consistency
+      concurrency: 10, // Prisma unique constraints handle merge conflicts
     }
   );
 
