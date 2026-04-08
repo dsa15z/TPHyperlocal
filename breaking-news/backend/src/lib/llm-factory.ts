@@ -33,6 +33,65 @@ export interface FunctionDef {
   };
 }
 
+// ─── LLM Usage Tracking ─────────────────────────────────────────────────────
+// Approximate costs per 1K tokens (as of 2026)
+const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'grok-3-mini': { input: 0.0003, output: 0.0005 },
+  'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
+};
+
+// Buffer LLM usage records and flush periodically
+const llmUsageBuffer: Array<{ provider: string; model: string; tokens: number; latencyMs: number; cost: number }> = [];
+let llmFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function trackLLMUsage(provider: string, model: string, usage: any, latencyMs: number) {
+  const inputTokens = usage?.prompt_tokens || usage?.input_tokens || 0;
+  const outputTokens = usage?.completion_tokens || usage?.output_tokens || 0;
+  const totalTokens = inputTokens + outputTokens;
+  const costs = TOKEN_COSTS[model] || { input: 0.0002, output: 0.0005 };
+  const cost = (inputTokens / 1000) * costs.input + (outputTokens / 1000) * costs.output;
+
+  llmUsageBuffer.push({ provider, model, tokens: totalTokens, latencyMs, cost });
+
+  if (!llmFlushTimer) {
+    llmFlushTimer = setTimeout(flushLLMUsage, 15000);
+  }
+}
+
+async function flushLLMUsage() {
+  llmFlushTimer = null;
+  if (llmUsageBuffer.length === 0) return;
+  const batch = llmUsageBuffer.splice(0, llmUsageBuffer.length);
+  try {
+    // Dynamic import to avoid circular deps
+    const { PrismaClient } = await import('@prisma/client');
+    const p = new PrismaClient();
+    const values = batch.map(u =>
+      `('llm.call', 1, '${JSON.stringify({ provider: u.provider, model: u.model }).replace(/'/g, "''")}'::jsonb, NOW())`
+    ).join(',');
+    await p.$executeRawUnsafe(`INSERT INTO "MetricsRaw" (metric, value, tags, "createdAt") VALUES ${values}`).catch(() => {});
+
+    // Also record cost and tokens
+    const costValues = batch.map(u =>
+      `('llm.cost_usd', ${u.cost}, '${JSON.stringify({ provider: u.provider, model: u.model }).replace(/'/g, "''")}'::jsonb, NOW())`
+    ).join(',');
+    await p.$executeRawUnsafe(`INSERT INTO "MetricsRaw" (metric, value, tags, "createdAt") VALUES ${costValues}`).catch(() => {});
+
+    const tokenValues = batch.map(u =>
+      `('llm.tokens', ${u.tokens}, '${JSON.stringify({ provider: u.provider, model: u.model }).replace(/'/g, "''")}'::jsonb, NOW())`
+    ).join(',');
+    await p.$executeRawUnsafe(`INSERT INTO "MetricsRaw" (metric, value, tags, "createdAt") VALUES ${tokenValues}`).catch(() => {});
+
+    const latencyValues = batch.map(u =>
+      `('llm.latency_ms', ${u.latencyMs}, '${JSON.stringify({ provider: u.provider, model: u.model }).replace(/'/g, "''")}'::jsonb, NOW())`
+    ).join(',');
+    await p.$executeRawUnsafe(`INSERT INTO "MetricsRaw" (metric, value, tags, "createdAt") VALUES ${latencyValues}`).catch(() => {});
+
+    await p.$disconnect();
+  } catch {}
+}
+
 // ─── Provider helpers ───────────────────────────────────────────────────────
 
 function buildOpenAIBody(messages: any[], options: LLMOptions & { stream?: boolean }): any {
@@ -82,6 +141,7 @@ export async function generateWithFallback(
   // Try OpenAI first (best function calling support)
   const openaiKey = process.env['OPENAI_API_KEY'];
   if (openaiKey) {
+    const llmStart = Date.now();
     try {
       const body = buildOpenAIBody(messages, options);
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -93,6 +153,7 @@ export async function generateWithFallback(
 
       if (res.ok) {
         const data = await res.json();
+        trackLLMUsage('openai', 'gpt-4o-mini', data.usage, Date.now() - llmStart);
         const choice = data.choices?.[0];
         const toolCalls = parseToolCalls(choice);
         if (toolCalls) {
@@ -112,6 +173,7 @@ export async function generateWithFallback(
   // Try Grok/xAI (OpenAI-compatible function calling)
   const xaiKey = process.env['XAI_API_KEY'];
   if (xaiKey) {
+    const grokStart = Date.now();
     try {
       const body = buildOpenAIBody(messages, { ...options, maxTokens: options.maxTokens });
       body.model = 'grok-3-mini';
@@ -124,6 +186,7 @@ export async function generateWithFallback(
 
       if (res.ok) {
         const data = await res.json();
+        trackLLMUsage('xai', 'grok-3-mini', data.usage, Date.now() - grokStart);
         const choice = data.choices?.[0];
         const toolCalls = parseToolCalls(choice);
         if (toolCalls) {
