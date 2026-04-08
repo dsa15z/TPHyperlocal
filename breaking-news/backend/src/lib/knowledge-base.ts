@@ -67,13 +67,24 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 
 ### Source
 - id, name, platform, url, trustScore (0-1), isActive, lastPolledAt
-- platform: one of RSS, REDDIT, NEWSAPI, NEWSCATCHER, TWITTER, FACEBOOK, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL
+- platform: one of RSS, REDDIT, NEWSAPI, NEWSCATCHER, TWITTER, FACEBOOK, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, PERIGON, MANUAL
 - Sources are linked to markets via SourceMarket join table (M:N)
 - A source can serve multiple markets (e.g., AP News serves all)
+- metadata JSON can contain content filter and polling settings:
+  - contentFilter.includeKeywords: string[] — post must contain at least one keyword (case-insensitive)
+  - contentFilter.excludeKeywords: string[] — post must NOT contain any keyword
+  - contentFilter.minScore: number — minimum engagement score threshold
+  - pollIntervalMinutes: number — per-source poll interval (default 5 min). The scheduler checks this to skip sources polled recently.
+  - autoRewrite: boolean — when true, new stories from this source are auto-rewritten via LLM after clustering
+  - displaySourceName: string — overrides source attribution in auto-rewritten summaries (e.g., "Staff Report")
 
 ### Market
 - id, name, state, slug, latitude, longitude, radiusKm, keywords[], neighborhoods[]
+- country: ISO 3166-1 alpha-2 code (default "US"). Supports international markets: US, CA, GB, AU, DE, FR, JP, etc.
+- language: ISO 639-1 code (default "en"). Controls feed language selection and AI content generation language.
+- region: broader geographic grouping (e.g., "North America", "Europe", "Asia-Pacific", "Latin America")
 - "National" is a market (not a flag)
+- Market hierarchy: USA National + 50 US MSAs, Canada National, UK National, Australia National, Global/World News
 - Markets have TV stations, radio stations, Google/Bing local feeds, Twitter searches, HyperLocal Intel
 - Only sources linked to ACTIVE markets get polled
 - Users only see stories matching their account's paid markets
@@ -158,6 +169,10 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - POST /api/v1/pipeline/clear-all — obliterate all jobs from a queue
 - POST /api/v1/pipeline/poll-source/:id — poll single source now
 - POST /api/v1/pipeline/cleanup-sources — deduplicate sources
+- GET /api/v1/pipeline/monitor — self-healing monitor activity log (latest run + last 50 log entries from Redis)
+- GET /api/v1/pipeline/source-health — source health report (total/active/inactive/neverPolled/failing counts + problem sources list)
+- POST /api/v1/pipeline/seed-national — create a national market for any country (body: { country: "CA"|"GB"|"AU"|"GLOBAL", name?: string }). Pre-configured feeds for Canada, UK, Australia, and Global/World News.
+- POST /api/v1/pipeline/seed-toronto — create Toronto market with Reddit + RSS sources for Canadian local news
 
 ### Content Generation
 - POST /api/v1/conversation-starters/generate — AI discussion prompts (radio_talk, tv_anchor, podcast, social_engagement)
@@ -202,6 +217,8 @@ Social score: 2×(shares+likes) + comments + sourceCount, normalized to 0-1
 - GET /api/v1/user/settings/access — see accounts, roles, markets
 - GET/POST/PUT/DELETE /api/v1/user/views — saved dashboard views
 - GET/POST/PATCH/DELETE /api/v1/user/subscriptions — email alert subscriptions
+- GET /api/v1/user/ticker — get ticker scroll settings (speed 1-10, viewId)
+- PUT /api/v1/user/ticker — save ticker scroll settings (body: { speed?: number, viewId?: string|null })
 
 ## Market Filter Logic
 When a market is selected (e.g., Houston), stories are filtered by:
@@ -220,6 +237,32 @@ Sacramento, Pittsburgh, Las Vegas, Austin, Cincinnati, Kansas City, Columbus, In
 Cleveland, San Jose, Nashville, Virginia Beach, Providence, Milwaukee, Jacksonville,
 Oklahoma City, Raleigh, Memphis, Richmond, Louisville, New Orleans, Salt Lake City,
 Hartford, Birmingham, Buffalo
+
+## International Market Support
+TopicPulse supports international markets beyond the 50 US MSAs:
+- **USA National**: Covers all US national news (AP, Reuters, NPR, CNN, Fox News, etc.)
+- **Canada National**: CBC, CTV, Global News, National Post, Globe and Mail, Canadian Press
+- **UK National**: BBC, The Guardian, Sky News
+- **Australia National**: ABC Australia, Sydney Morning Herald
+- **Global / World News**: Reuters, BBC World, Al Jazeera, AP, NPR World, France 24, DW News
+- **Toronto**: Local Canadian market with Reddit (r/toronto, r/ontario) + local RSS feeds
+- Each market has country (ISO alpha-2), language (ISO 639-1), and optional region fields
+- Seed endpoints: POST /pipeline/seed-national (country code) and POST /pipeline/seed-toronto
+
+## Batch Scoring Optimization
+The scoring worker uses a batch collection strategy for efficiency:
+- Individual scoring jobs are accumulated for 150ms before processing
+- All collected jobs are scored in a single batch operation (processBatchScoring)
+- Batch scoring reads all story data at once, computes scores in parallel, then writes all updates in a single transaction
+- This reduces database round-trips from N queries to 2 (one read, one write) per batch
+- Falls back to individual scoring if batch processing fails
+
+## Content Filter Enforcement
+Sources can have per-source content filters in their metadata (metadata.contentFilter):
+- includeKeywords: post must contain at least one keyword to be ingested
+- excludeKeywords: post must NOT contain any keyword to be ingested
+- Applied during ingestion before SourcePost creation
+- **Duplicate URL rule**: When a source URL is already used by another source, adding it to a local market REQUIRES a content filter with includeKeywords. National/Global markets are exempt. This prevents the same feed from polluting local markets with irrelevant stories.
 
 ## Prisma Schema — Exact Field Names
 
@@ -244,6 +287,8 @@ lastPolledAt (DateTime?).
 
 ### Market Fields
 id (String cuid), accountId (String), name (String), slug (String), state (String?),
+country (String default "US" — ISO 3166-1 alpha-2), language (String default "en" — ISO 639-1),
+region (String? — "North America", "Europe", "Asia-Pacific", "Latin America"),
 latitude (Float), longitude (Float), radiusKm (Float default 80), timezone (String),
 isActive (Boolean default true), keywords (Json — string array), neighborhoods (Json — string array).
 
@@ -253,6 +298,15 @@ editedSummary (String? Text), notes (String? Text), editedBy (String?), editedAt
 accountStatus (String default INBOX), assignedTo (String?), assignedAt (DateTime?),
 coveredAt (DateTime?), coverageFeedId (String?), aiDrafts (Json?), aiScripts (Json?),
 aiVideos (Json?), research (Json?), tags (Json?), lastSyncedAt (DateTime), baseSnapshotAt (DateTime?).
+
+### ToolAnalytics Fields
+id (String cuid), tool (String — tool name e.g. search_stories, heal_source), args (Json?),
+userId (String), role (String — user role at time of call), durationMs (Int — execution time),
+success (Boolean default true), error (String?), cached (Boolean default false), createdAt (DateTime).
+
+### UserTickerSettings (raw SQL table, not in Prisma schema)
+userId (TEXT PRIMARY KEY), speed (INTEGER default 7 — scroll speed 1-10),
+viewId (TEXT? — saved view to filter ticker), updatedAt (TIMESTAMP).
 
 ### Enums
 Platform: FACEBOOK, TWITTER, RSS, REDDIT, NEWSAPI, NEWSCATCHER, PERIGON, GDELT, LLM_OPENAI, LLM_CLAUDE, LLM_GROK, LLM_GEMINI, MANUAL

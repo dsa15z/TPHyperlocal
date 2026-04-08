@@ -122,6 +122,22 @@ POST /broadcast-package/generate with a story ID generates ALL formats in parall
 - Social media thread (4 tweets)
 - Push notification (title + body)
 
+### CSV Export
+You can export selected stories to CSV for use in spreadsheets or other tools.
+1. On the Leads dashboard, select stories using the checkboxes on each row
+2. A selection bar appears showing the count of selected stories
+3. Click **Export CSV** in the selection bar
+4. The export uses your current view's visible columns — if you hide a column, it won't appear in the CSV
+5. The file downloads as \`topicpulse-leads-YYYY-MM-DD.csv\` with proper escaping for Excel compatibility (BOM prefix, quoted fields with commas/newlines)
+
+### View Persistence (Server-Synced)
+Saved views are stored on the server, not just in your browser.
+- When you save a view, it syncs to the backend via the \`/api/v1/user/views\` API
+- Views survive across sessions, devices, and browsers — log in anywhere and your views are there
+- localStorage is used as a fast cache, but the server is the source of truth
+- Create, rename, duplicate, and delete views from the view dropdown menu
+- Each view stores: name, visible columns (with order and widths), and all filter settings
+
 ## Breaking News Ticker
 The orange/red bar at the bottom of every page shows BREAKING stories.
 - Orange = BREAKING status stories
@@ -131,6 +147,12 @@ The orange/red bar at the bottom of every page shows BREAKING stories.
 - Click any story title to open its detail page
 - Auto-refreshes every 15 seconds
 - Only appears when there are BREAKING/ALERT stories
+
+### Ticker Settings
+Click the **gear icon** (⚙) on the ticker bar to open settings:
+- **Speed slider (1-10)**: Controls scroll speed. 1 = slow (120 px/sec), 7 = default (440 px/sec), 10 = fastest (1000 px/sec). Old 1-5 scale settings are auto-migrated.
+- **View-based filter**: By default the ticker shows ALERT + BREAKING stories. You can select any of your saved views to use its filters instead — for example, a view filtered to "Crime + Breaking" will only show breaking crime stories in the ticker.
+- Settings are saved to the server (persists across devices) with localStorage as fallback.
 
 ## AI Chatbot
 Click the blue chat icon (bottom-right) or press Cmd+K to open.
