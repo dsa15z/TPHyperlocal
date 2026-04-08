@@ -21,6 +21,7 @@ import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js'
 import { startPipelineMonitor, stopPipelineMonitor } from './schedulers/pipeline-monitor.js';
 import { startMetricsCollector, stopMetricsCollector } from './schedulers/metrics-collector.js';
 import { startCredibilityTracker, stopCredibilityTracker } from './schedulers/credibility-tracker.js';
+import { startMeiliSync, stopMeiliSync } from './schedulers/meili-sync.js';
 
 const SERVICE_NAME = 'worker-critical';
 const workers: Worker[] = [];
@@ -62,6 +63,9 @@ async function main(): Promise<void> {
 
   // Source credibility tracker — adjusts trust scores every 6h
   startCredibilityTracker();
+
+  // Meilisearch sync — pushes stories every 30s
+  startMeiliSync();
 
   logger.info({ workers: workers.length }, 'Critical workers + schedulers running');
 

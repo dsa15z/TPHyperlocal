@@ -46,6 +46,7 @@ const LOOKBACK_OPTIONS = [
 ];
 
 const colorMap: Record<string, { bg: string; text: string; border: string; glow: string }> = {
+  cyan: { bg: "bg-cyan-500/15", text: "text-cyan-300", border: "border-cyan-400/40", glow: "shadow-cyan-500/20" },
   blue: { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-400/40", glow: "shadow-blue-500/20" },
   purple: { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-400/40", glow: "shadow-purple-500/20" },
   amber: { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-400/40", glow: "shadow-amber-500/20" },
@@ -453,6 +454,7 @@ export function NewsProgressPanel() {
 
   const queues: QueueStatus[] = (statusData as any)?.queues || [];
   const summary = (statusData as any)?.summary || {};
+  const dedupCount: number = (statusData as any)?.dedupCount || 0;
 
   // Source health for the Sources box
   const { data: sourceHealthData } = useQuery({
@@ -552,6 +554,14 @@ export function NewsProgressPanel() {
               <span className="text-[10px] text-gray-500">active / inactive</span>
             </div>
             <FlowArrow active={totalActive > 0} />
+
+            {/* Dedup stage (between Ingestion and Enrichment) */}
+            <StageNode
+              stage={{ key: "dedup", label: "Dedup", color: "cyan", desc: "Title match skip" }}
+              queue={{ name: 'dedup', active: 0, waiting: 0, completed: dedupCount, failed: 0, delayed: 0 } as QueueStatus}
+              onAction={() => {}}
+            />
+            <FlowArrow active={false} />
 
             {/* Pipeline stages */}
             {STAGES.map((stage, i) => (

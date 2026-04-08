@@ -318,6 +318,16 @@ export async function pipelineRoutes(
     const totalCompleted = statuses.reduce((s, q) => s + q.completed, 0);
     const totalFailed = statuses.reduce((s, q) => s + q.failed, 0);
 
+    // Get dedup count from metrics (actual skipped enrichment count)
+    let dedupCount = 0;
+    try {
+      const dedupRows = await prisma.$queryRaw<any[]>`
+        SELECT COALESCE(SUM(value), 0)::int as total FROM "MetricsRaw"
+        WHERE metric = 'dedup.skipped_enrichment'
+      `.catch(() => [{ total: 0 }]);
+      dedupCount = dedupRows[0]?.total || 0;
+    } catch {}
+
     return reply.send({
       timestamp: new Date().toISOString(),
       summary: {
@@ -328,6 +338,7 @@ export async function pipelineRoutes(
         is_processing: totalActive > 0 || totalWaiting > 0,
       },
       queues: statuses,
+      dedupCount,
     });
   });
 

@@ -273,16 +273,33 @@ export async function storiesRoutes(
     let semanticStoryIds: string[] | null = null;
 
     if (nlpTextSearch) {
-      // Keyword search (fast, exact)
-      if (!where.AND) where.AND = [];
-      (where.AND as Prisma.StoryWhereInput[]).push({
-        OR: [
-          { title: { contains: nlpTextSearch, mode: 'insensitive' } },
-          { summary: { contains: nlpTextSearch, mode: 'insensitive' } },
-          { aiSummary: { contains: nlpTextSearch, mode: 'insensitive' } },
-          { locationName: { contains: nlpTextSearch, mode: 'insensitive' } },
-        ],
-      });
+      // Try Meilisearch first (sub-10ms), fallback to Prisma LIKE
+      let meiliIds: string[] | null = null;
+      try {
+        const { searchStories: meiliSearch } = await import('../lib/meilisearch.js');
+        const meiliResult = await meiliSearch(nlpTextSearch, { limit: 100 });
+        if (meiliResult && meiliResult.hits?.length > 0) {
+          meiliIds = meiliResult.hits.map((h: any) => h.id);
+          app.log.info({ query: nlpTextSearch, hits: meiliIds.length, ms: meiliResult.processingTimeMs }, 'Meilisearch hit');
+        }
+      } catch {}
+
+      if (meiliIds && meiliIds.length > 0) {
+        // Use Meilisearch results — filter by story IDs
+        if (!where.AND) where.AND = [];
+        (where.AND as Prisma.StoryWhereInput[]).push({ id: { in: meiliIds } });
+      } else {
+        // Fallback to Prisma LIKE (slower)
+        if (!where.AND) where.AND = [];
+        (where.AND as Prisma.StoryWhereInput[]).push({
+          OR: [
+            { title: { contains: nlpTextSearch, mode: 'insensitive' } },
+            { summary: { contains: nlpTextSearch, mode: 'insensitive' } },
+            { aiSummary: { contains: nlpTextSearch, mode: 'insensitive' } },
+            { locationName: { contains: nlpTextSearch, mode: 'insensitive' } },
+          ],
+        });
+      }
 
       // Semantic search (embedding similarity) — runs in parallel
       // Generates an embedding for the search query and finds similar stories
