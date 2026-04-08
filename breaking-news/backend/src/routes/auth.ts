@@ -332,6 +332,12 @@ export async function authRoutes(
       role,
     });
 
+    // Track login in PostHog
+    import('../lib/posthog.js').then(({ trackEvent, identifyUser }) => {
+      identifyUser(user.id, { email: user.email, role, accountId });
+      trackEvent(user.id, 'user_logged_in', { method: 'password', role });
+    }).catch(() => {});
+
     return reply.send({ token: newToken });
   });
 

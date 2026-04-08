@@ -104,6 +104,18 @@ export async function storiesRoutes(
   app.get('/stories', async (request, reply) => {
     // Optional auth — if present, we include account derivative overlay
     const accountId = (request as any).accountUser?.accountId || null;
+    const userId = (request as any).accountUser?.userId || null;
+
+    // Track search/view in PostHog (non-blocking)
+    if (userId) {
+      import('../lib/posthog.js').then(({ trackEvent }) => {
+        const q = request.query as any;
+        trackEvent(userId, 'stories_viewed', {
+          filters: { status: q.status, category: q.category, nlp: q.nlp, market: q.marketIds },
+          page: q.offset ? Math.floor(Number(q.offset) / Number(q.limit || 25)) + 1 : 1,
+        });
+      }).catch(() => {});
+    }
 
     const parseResult = ListStoriesQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -1241,6 +1253,14 @@ REASON: <one sentence explanation>`;
     }
 
     const { id } = parseResult.data;
+
+    // Track story detail view in PostHog
+    const viewUserId = (request as any).accountUser?.userId;
+    if (viewUserId) {
+      import('../lib/posthog.js').then(({ trackEvent }) => {
+        trackEvent(viewUserId, 'story_detail_viewed', { storyId: id });
+      }).catch(() => {});
+    }
 
     const story = await prisma.story.findUnique({
       where: { id },
