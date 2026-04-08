@@ -259,6 +259,36 @@ export async function sourceRoutes(
       ? { ...(data.metadata || {}), subreddits: data.subreddits }
       : data.metadata ?? undefined;
 
+    // Enforce content filter when reusing a URL for a local market
+    if (data.url && data.platform !== 'REDDIT') {
+      const existingWithSameUrl = await prisma.source.findFirst({
+        where: { url: data.url },
+        select: { id: true, name: true },
+      });
+      if (existingWithSameUrl) {
+        const hasFilter = (mergedMetadata as any)?.contentFilter?.includeKeywords?.length > 0;
+        if (!hasFilter) {
+          // Check if target market is national/global (those don't need filters)
+          let isNational = false;
+          if (data.marketIds?.length) {
+            const mkt = await prisma.market.findFirst({
+              where: { id: { in: data.marketIds }, name: { contains: 'National', mode: 'insensitive' } },
+            });
+            if (mkt) isNational = true;
+            const globalMkt = await prisma.market.findFirst({
+              where: { id: { in: data.marketIds }, name: { contains: 'Global', mode: 'insensitive' } },
+            });
+            if (globalMkt) isNational = true;
+          }
+          if (!isNational) {
+            return reply.status(400).send({
+              error: `This feed URL is already used by "${existingWithSameUrl.name}". To reuse it for a local market, add a Content Filter with include keywords (e.g., "toronto, ontario") to specify what local stories to capture.`,
+            });
+          }
+        }
+      }
+    }
+
     const source = await prisma.source.create({
       data: {
         platform: data.platform as any,
