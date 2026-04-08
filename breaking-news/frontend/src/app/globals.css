@@ -230,14 +230,18 @@
   100% { background-position: 200% 0; }
 }
 
-/* Breaking news ticker scroll */
+/* Breaking news ticker scroll — GPU-accelerated, smooth */
 @keyframes ticker-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
 }
 
 .ticker-scroll {
-  animation: ticker-scroll 18s linear infinite;
+  animation: ticker-scroll var(--ticker-duration, 25s) linear infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 .ticker-scroll:hover {

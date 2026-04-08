@@ -284,7 +284,7 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         entitySim,
         timeProximity,
         combinedSimilarity,
-        bestSourceText,
+        bestSourceText: story.title || '',
       });
     }
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Zap, AlertTriangle } from "lucide-react";
 import clsx from "clsx";
 
@@ -13,12 +13,13 @@ interface TickerStory {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 /**
- * Persistent breaking news ticker fixed to the bottom of the screen.
- * Uses raw fetch (not React Query) to avoid any dependency issues.
- * Polls every 15 seconds. Renders nothing when no breaking stories.
+ * Breaking news ticker — GPU-accelerated, smooth, dynamic speed.
+ * Speed adjusts based on content length so reading pace stays consistent.
+ * Polls every 20 seconds. 3 copies for seamless infinite loop.
  */
 export function BreakingTicker() {
   const [stories, setStories] = useState<TickerStory[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -26,7 +27,7 @@ export function BreakingTicker() {
     async function fetchBreaking() {
       try {
         const res = await fetch(
-          `${API_BASE}/api/v1/stories?status=ALERT,BREAKING&maxAge=24&sort=breakingScore&order=desc&limit=20`,
+          `${API_BASE}/api/v1/stories?status=ALERT,BREAKING&maxAge=24&sort=breakingScore&order=desc&limit=25`,
           { headers: { "Content-Type": "application/json" } }
         );
         if (!res.ok) return;
@@ -37,15 +38,22 @@ export function BreakingTicker() {
           status: s.status,
         }));
         if (active) setStories(items);
-      } catch {
-        // Silently fail
-      }
+      } catch {}
     }
 
     fetchBreaking();
-    const interval = setInterval(fetchBreaking, 30_000);
+    const interval = setInterval(fetchBreaking, 20_000);
     return () => { active = false; clearInterval(interval); };
   }, []);
+
+  // Dynamic speed: ~80px/sec reading speed (comfortable for news tickers)
+  const tickerDuration = useMemo(() => {
+    const totalChars = stories.reduce((sum, s) => sum + (s.title?.length || 0), 0);
+    // ~8px per char, 80px/sec reading speed, 2 copies = divide by 2
+    const estimatedWidth = totalChars * 8;
+    const seconds = Math.max(15, Math.min(60, estimatedWidth / 80));
+    return `${seconds}s`;
+  }, [stories]);
 
   if (stories.length === 0) return null;
 
@@ -62,7 +70,6 @@ export function BreakingTicker() {
           : "bg-orange-950/95 border-t border-orange-500/40"
       )}
     >
-      {/* Static label */}
       <div
         className={clsx(
           "flex-shrink-0 flex items-center gap-1.5 px-3 h-full font-bold text-xs uppercase tracking-wider",
@@ -73,17 +80,20 @@ export function BreakingTicker() {
         <span>{label}</span>
       </div>
 
-      {/* Scrolling ticker */}
       <div className="flex-1 overflow-hidden relative">
-        <div className="ticker-scroll flex items-center gap-0 whitespace-nowrap">
+        <div
+          ref={scrollRef}
+          className="ticker-scroll flex items-center whitespace-nowrap"
+          style={{ "--ticker-duration": tickerDuration } as React.CSSProperties}
+        >
           {[0, 1].map((copy) => (
-            <div key={copy} className="flex items-center gap-0 flex-shrink-0">
+            <div key={copy} className="flex items-center flex-shrink-0">
               {stories.map((s) => (
                 <a
                   key={`${copy}-${s.id}`}
                   href={`/stories/${s.id}`}
                   className={clsx(
-                    "text-sm hover:underline flex-shrink-0 px-4",
+                    "text-sm hover:underline flex-shrink-0 px-5",
                     s.status === "ALERT" ? "text-red-300" : "text-orange-300"
                   )}
                 >
@@ -92,11 +102,11 @@ export function BreakingTicker() {
               ))}
               <span
                 className={clsx(
-                  "flex-shrink-0 px-2 text-xs",
-                  hasAlert ? "text-red-600" : "text-orange-600"
+                  "flex-shrink-0 px-3 text-xs opacity-40",
+                  hasAlert ? "text-red-500" : "text-orange-500"
                 )}
               >
-                ●
+                ◆
               </span>
             </div>
           ))}
