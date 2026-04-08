@@ -11,6 +11,7 @@ interface QueueStatus {
   completed: number;
   failed: number;
   delayed: number;
+  avgProcessingMs?: number;
 }
 
 const JobsQuerySchema = z.object({
@@ -276,6 +277,20 @@ export async function pipelineRoutes(
           'failed',
           'delayed',
         );
+
+        // Calculate avg processing time from last 10 completed jobs
+        let avgProcessingMs = 0;
+        try {
+          const recentJobs = await queue.getCompleted(0, 10);
+          const durations = recentJobs
+            .filter((j: any) => j.finishedOn && j.processedOn)
+            .map((j: any) => j.finishedOn - j.processedOn)
+            .filter((d: number) => d > 0 && d < 300000); // cap at 5 min
+          if (durations.length > 0) {
+            avgProcessingMs = Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length);
+          }
+        } catch {}
+
         statuses.push({
           name,
           waiting: counts.waiting ?? 0,
@@ -283,6 +298,7 @@ export async function pipelineRoutes(
           completed: counts.completed ?? 0,
           failed: counts.failed ?? 0,
           delayed: counts.delayed ?? 0,
+          avgProcessingMs,
         });
       } catch {
         statuses.push({
@@ -292,6 +308,7 @@ export async function pipelineRoutes(
           completed: 0,
           failed: 0,
           delayed: 0,
+          avgProcessingMs: 0,
         });
       }
     }

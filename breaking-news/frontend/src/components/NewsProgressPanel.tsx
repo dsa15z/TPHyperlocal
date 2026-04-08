@@ -400,6 +400,14 @@ function StageNode({ stage, queue, onAction }: {
         </div>
 
         <span className="text-[11px] text-gray-400">{stage.desc}</span>
+        {(queue as any)?.avgProcessingMs > 0 && (
+          <span className="text-[10px] text-gray-500 font-mono">
+            avg {(queue as any).avgProcessingMs < 1000
+              ? `${(queue as any).avgProcessingMs}ms`
+              : `${((queue as any).avgProcessingMs / 1000).toFixed(1)}s`
+            }
+          </span>
+        )}
       </div>
 
       {showActions && (
