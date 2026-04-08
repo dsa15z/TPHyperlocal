@@ -51,40 +51,117 @@ const colorMap: Record<string, { bg: string; text: string; border: string; glow:
   green: { bg: "bg-green-500/15", text: "text-green-300", border: "border-green-400/40", glow: "shadow-green-500/20" },
 };
 
-// Failed jobs tooltip — shows error reasons on hover
+// Failed jobs tooltip — shows error reasons on hover with copy + auto-fix
 function FailedJobsTooltip({ queue, count }: { queue: string; count: number }) {
   const [show, setShow] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { data } = useQuery({
     queryKey: ["pipeline-failed-jobs", queue],
-    queryFn: () => fetchPipelineJobs(queue, "failed", 10),
-    enabled: show,
+    queryFn: () => fetchPipelineJobs(queue, "failed", 20),
+    enabled: show || pinned,
     staleTime: 10_000,
   });
 
   const jobs = (data as any)?.jobs || (data as any)?.data || [];
 
+  const buildFailureLog = () => {
+    const lines = [`=== ${queue} FAILURE LOG (${count} failed) ===`, `Time: ${new Date().toISOString()}`, ''];
+    // Deduplicate by error message and count occurrences
+    const errorCounts: Record<string, number> = {};
+    for (const job of jobs) {
+      const reason = job.failedReason || job.error || "Unknown error";
+      errorCounts[reason] = (errorCounts[reason] || 0) + 1;
+    }
+    for (const [reason, cnt] of Object.entries(errorCounts).sort((a, b) => b[1] - a[1])) {
+      lines.push(`[${cnt}x] ${reason}`);
+    }
+    lines.push('', `Total unique errors: ${Object.keys(errorCounts).length}`, `Total failed: ${count}`);
+    return lines.join('\n');
+  };
+
+  const handleCopy = async () => {
+    const log = buildFailureLog();
+    try {
+      await navigator.clipboard.writeText(log);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = log;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const isVisible = show || pinned;
+
   return (
-    <span
-      className="relative cursor-help"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      <span className="font-mono text-red-300 font-bold">{count} failed</span>
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 w-80 max-h-60 overflow-y-auto bg-gray-900 border border-red-500/30 rounded-lg shadow-2xl p-3 space-y-1.5">
-          <div className="text-xs font-semibold text-red-300 mb-2">{queue} — {count} failed jobs</div>
-          {jobs.length === 0 && <div className="text-xs text-gray-500">Loading...</div>}
-          {jobs.map((job: any, i: number) => (
-            <div key={i} className="text-[11px] border-l-2 border-red-500/40 pl-2 py-0.5">
-              <div className="text-red-300 font-medium truncate">
-                {job.failedReason || job.error || "Unknown error"}
-              </div>
-              <div className="text-gray-500 text-[10px]">
-                {job.name || "job"} · att: {job.attemptsMade || "?"} · {job.processedOn ? new Date(job.processedOn).toLocaleTimeString() : ""}
-              </div>
+    <span className="relative">
+      <span
+        className="font-mono text-red-300 font-bold cursor-help"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => { if (!pinned) setShow(false); }}
+        onClick={() => setPinned(!pinned)}
+      >
+        {count} failed
+      </span>
+      {isVisible && (
+        <div
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 w-96 max-h-72 bg-gray-900 border border-red-500/40 rounded-lg shadow-2xl"
+          onMouseEnter={() => setShow(true)}
+          onMouseLeave={() => { if (!pinned) setShow(false); }}
+        >
+          {/* Header with actions */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-red-500/20">
+            <span className="text-xs font-bold text-red-300">{queue} — {count} failed</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleCopy}
+                className="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors"
+              >
+                {copied ? "✓ Copied!" : "📋 Copy Log"}
+              </button>
+              {pinned && (
+                <button onClick={() => { setPinned(false); setShow(false); }} className="text-gray-500 hover:text-white text-xs">✕</button>
+              )}
             </div>
-          ))}
-          {jobs.length >= 10 && <div className="text-[10px] text-gray-600 pt-1">Showing first 10 of {count}</div>}
+          </div>
+
+          {/* Error list — deduplicated */}
+          <div className="overflow-y-auto max-h-52 p-3 space-y-1.5">
+            {jobs.length === 0 && <div className="text-xs text-gray-500">Loading...</div>}
+            {(() => {
+              const errorCounts: Record<string, { count: number; latest: string; attempts: number }> = {};
+              for (const job of jobs) {
+                const reason = job.failedReason || job.error || "Unknown error";
+                if (!errorCounts[reason]) {
+                  errorCounts[reason] = { count: 0, latest: '', attempts: job.attemptsMade || 0 };
+                }
+                errorCounts[reason].count++;
+                errorCounts[reason].latest = job.processedOn ? new Date(job.processedOn).toLocaleTimeString() : '';
+              }
+              return Object.entries(errorCounts)
+                .sort((a, b) => b[1].count - a[1].count)
+                .map(([reason, info], i) => (
+                  <div key={i} className="text-[11px] border-l-2 border-red-500/40 pl-2 py-1">
+                    <div className="text-red-200 font-medium">{reason}</div>
+                    <div className="text-gray-500 text-[10px]">
+                      {info.count > 1 ? `${info.count} occurrences` : '1 occurrence'} · last: {info.latest}
+                    </div>
+                  </div>
+                ));
+            })()}
+          </div>
+
+          <div className="text-[10px] text-gray-600 px-3 py-1.5 border-t border-red-500/20">
+            Click "Copy Log" to paste into Claude for analysis
+          </div>
         </div>
       )}
     </span>
