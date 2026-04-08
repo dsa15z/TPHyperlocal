@@ -1542,16 +1542,68 @@ export async function pipelineRoutes(
         },
       });
 
-      // Toronto RSS news sources
+      // Toronto + Ontario RSS/API sources (TV, radio, newspapers, blogs, government)
       const feeds = [
-        { name: 'CBC Toronto', url: 'https://www.cbc.ca/cmlink/rss-canada-toronto', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.90, metadata: { type: 'news', network: 'CBC' } },
-        { name: 'CTV Toronto', url: 'https://toronto.ctvnews.ca/rss/ctv-news-toronto-1.822319', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.88, metadata: { type: 'news', network: 'CTV' } },
-        { name: 'Global News Toronto', url: 'https://globalnews.ca/toronto/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'news', network: 'Global' } },
+        // ── TV Stations ──
+        { name: 'CBC Toronto', url: 'https://www.cbc.ca/cmlink/rss-canada-toronto', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.90, metadata: { type: 'tv', network: 'CBC', callSign: 'CBLT' } },
+        { name: 'CBC Ontario', url: 'https://www.cbc.ca/cmlink/rss-canada-ottawa', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.90, metadata: { type: 'tv', network: 'CBC' } },
+        { name: 'CBC Hamilton', url: 'https://www.cbc.ca/cmlink/rss-canada-hamilton', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.90, metadata: { type: 'tv', network: 'CBC' } },
+        { name: 'CBC Kitchener-Waterloo', url: 'https://www.cbc.ca/cmlink/rss-canada-kitchener-waterloo', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.90, metadata: { type: 'tv', network: 'CBC' } },
+        { name: 'CTV Toronto', url: 'https://toronto.ctvnews.ca/rss/ctv-news-toronto-1.822319', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.88, metadata: { type: 'tv', network: 'CTV', callSign: 'CFTO' } },
+        { name: 'CTV Barrie', url: 'https://barrie.ctvnews.ca/rss/ctv-news-barrie-1.1272498', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'tv', network: 'CTV' } },
+        { name: 'Global News Toronto', url: 'https://globalnews.ca/toronto/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'tv', network: 'Global', callSign: 'CIII' } },
+        { name: 'Global News Canada', url: 'https://globalnews.ca/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'tv', network: 'Global' } },
+        { name: 'CP24', url: 'https://www.cp24.com/rss/topstories', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.88, metadata: { type: 'tv', network: 'CP24', callSign: 'CP24' } },
+        { name: 'CityNews Toronto', url: 'https://toronto.citynews.ca/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.82, metadata: { type: 'tv', network: 'CityTV', callSign: 'CITY' } },
+        { name: 'TVO - Ontario Today', url: 'https://www.tvo.org/rss.xml', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'tv', network: 'TVO' } },
+        // ── Radio Stations ──
+        { name: 'CBC Radio One Toronto', url: 'https://www.cbc.ca/cmlink/rss-topstories', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.92, metadata: { type: 'radio', network: 'CBC', callSign: 'CBLA-FM', format: 'News/Talk', frequency: '99.1 FM' } },
+        { name: 'Newstalk 1010 CFRB', url: 'https://www.iheartradio.ca/newstalk-1010/rss', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.80, metadata: { type: 'radio', callSign: 'CFRB', format: 'News/Talk', frequency: '1010 AM' } },
+        { name: '680 News Toronto', url: 'https://www.680news.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.82, metadata: { type: 'radio', callSign: 'CFTR', format: 'All-News', frequency: '680 AM' } },
+        { name: 'AM640 Toronto', url: 'https://globalnews.ca/am640/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.78, metadata: { type: 'radio', callSign: 'CFMJ', format: 'News/Talk', frequency: '640 AM' } },
+        { name: 'CP24 Radio', url: 'https://www.cp24.com/rss/cp24-latest-news-1.7498316', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'radio', network: 'CP24', format: 'All-News' } },
+        // ── Newspapers ──
         { name: 'Toronto Star', url: 'https://www.thestar.com/search/?f=rss&t=article&c=news/gta*&l=50&s=start_time&sd=desc', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'newspaper' } },
+        { name: 'Toronto Star - Canada', url: 'https://www.thestar.com/search/?f=rss&t=article&c=news/canada*&l=50&s=start_time&sd=desc', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'newspaper' } },
         { name: 'Toronto Sun', url: 'https://torontosun.com/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.75, metadata: { type: 'newspaper' } },
+        { name: 'National Post', url: 'https://nationalpost.com/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.82, metadata: { type: 'newspaper' } },
+        { name: 'Globe and Mail', url: 'https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/canada/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.88, metadata: { type: 'newspaper' } },
+        { name: 'Hamilton Spectator', url: 'https://www.thespec.com/search/?f=rss&t=article&l=50&s=start_time&sd=desc', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.78, metadata: { type: 'newspaper', city: 'Hamilton' } },
+        { name: 'Ottawa Citizen', url: 'https://ottawacitizen.com/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.78, metadata: { type: 'newspaper', city: 'Ottawa' } },
+        // ── Blogs & Hyperlocal ──
         { name: 'BlogTO', url: 'https://www.blogto.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'blog', subtype: 'local' } },
-        { name: 'CP24', url: 'https://www.cp24.com/rss/topstories', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.88, metadata: { type: 'news', network: 'CP24' } },
+        { name: 'Daily Hive Toronto', url: 'https://dailyhive.com/toronto/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'blog', subtype: 'local' } },
+        { name: 'Narcity Toronto', url: 'https://www.narcity.com/toronto/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.55, metadata: { type: 'blog', subtype: 'lifestyle' } },
+        { name: 'The Logic', url: 'https://thelogic.co/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.75, metadata: { type: 'blog', subtype: 'business' } },
+        { name: 'Storeys Toronto Real Estate', url: 'https://storeys.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'blog', subtype: 'real-estate' } },
+        { name: 'Toronto Guardian', url: 'https://torontoguardian.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.55, metadata: { type: 'blog', subtype: 'local' } },
+        // ── Government & Official ──
+        { name: 'City of Toronto News', url: 'https://www.toronto.ca/news/feed/', platform: 'RSS', sourceType: 'GOV_AGENCY', trustScore: 0.95, metadata: { type: 'government', level: 'municipal' } },
+        { name: 'Ontario Newsroom', url: 'https://news.ontario.ca/en/rss/allnews', platform: 'RSS', sourceType: 'GOV_AGENCY', trustScore: 0.95, metadata: { type: 'government', level: 'provincial' } },
+        { name: 'Toronto Police News', url: 'https://torontopolice.on.ca/newsreleases/rss.php', platform: 'RSS', sourceType: 'GOV_AGENCY', trustScore: 0.92, metadata: { type: 'government', subtype: 'police' } },
+        { name: 'TTC Service Alerts', url: 'https://www.ttc.ca/service-advisories/RSS', platform: 'RSS', sourceType: 'GOV_AGENCY', trustScore: 0.90, metadata: { type: 'government', subtype: 'transit' } },
+        // ── Sports ──
+        { name: 'Sportsnet - Raptors', url: 'https://www.sportsnet.ca/basketball/nba/teams/toronto-raptors/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.80, metadata: { type: 'sports', team: 'Raptors' } },
+        { name: 'Sportsnet - Leafs', url: 'https://www.sportsnet.ca/hockey/nhl/teams/toronto-maple-leafs/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.80, metadata: { type: 'sports', team: 'Maple Leafs' } },
+        { name: 'Sportsnet - Blue Jays', url: 'https://www.sportsnet.ca/baseball/mlb/teams/toronto-blue-jays/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.80, metadata: { type: 'sports', team: 'Blue Jays' } },
+        { name: 'Sportsnet - TFC', url: 'https://www.sportsnet.ca/soccer/mls/teams/toronto-fc/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.80, metadata: { type: 'sports', team: 'Toronto FC' } },
+        { name: 'TSN', url: 'https://www.tsn.ca/rss/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.82, metadata: { type: 'sports', network: 'TSN' } },
+        // ── Wire / Aggregator ──
         { name: 'Google News - Toronto', url: 'https://news.google.com/rss/search?q=Toronto+Ontario+news&hl=en-CA&gl=CA&ceid=CA:en', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.75, metadata: { type: 'google-news', subtype: 'local' } },
+        { name: 'Google News - Ontario', url: 'https://news.google.com/rss/search?q=Ontario+Canada+news&hl=en-CA&gl=CA&ceid=CA:en', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.75, metadata: { type: 'google-news', subtype: 'provincial' } },
+        { name: 'Google News - GTA Crime', url: 'https://news.google.com/rss/search?q=Toronto+GTA+crime+police&hl=en-CA&gl=CA&ceid=CA:en', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.70, metadata: { type: 'google-news', subtype: 'crime' } },
+        { name: 'Bing News - Toronto', url: 'https://www.bing.com/news/search?q=Toronto+Ontario+news&format=rss', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.70, metadata: { type: 'bing-news', subtype: 'local' } },
+        { name: 'Canadian Press', url: 'https://www.thecanadianpress.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.92, metadata: { type: 'wire', provider: 'CP' } },
+        // ── Suburban / Regional ──
+        { name: 'Mississauga News', url: 'https://www.mississauga.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'newspaper', city: 'Mississauga' } },
+        { name: 'Brampton Guardian', url: 'https://www.bramptonguardian.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'newspaper', city: 'Brampton' } },
+        { name: 'York Region', url: 'https://www.yorkregion.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'newspaper', city: 'Markham' } },
+        { name: 'Durham Region', url: 'https://www.durhamregion.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.65, metadata: { type: 'newspaper', city: 'Oshawa' } },
+        { name: 'Waterloo Region Record', url: 'https://www.therecord.com/search/?f=rss&t=article&l=50&s=start_time&sd=desc', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.72, metadata: { type: 'newspaper', city: 'Kitchener' } },
+        // ── Business & Tech ──
+        { name: 'BetaKit (Canadian Tech)', url: 'https://betakit.com/feed/', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.70, metadata: { type: 'blog', subtype: 'tech' } },
+        { name: 'Financial Post', url: 'https://financialpost.com/feed', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.82, metadata: { type: 'newspaper', subtype: 'business' } },
+        { name: 'BNN Bloomberg Canada', url: 'https://www.bnnbloomberg.ca/rss/latest', platform: 'RSS', sourceType: 'NEWS_ORG', trustScore: 0.85, metadata: { type: 'tv', network: 'BNN Bloomberg', subtype: 'business' } },
       ];
 
       for (const f of feeds) {
