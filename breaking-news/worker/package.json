@@ -7,6 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "(prisma db push --skip-generate 2>&1 || echo 'prisma db push failed - non-fatal'); node dist/index.js",
+    "start:critical": "(prisma db push --skip-generate 2>&1 || echo 'db push skipped'); node dist/worker-critical.js",
+    "start:standard": "(prisma db push --skip-generate 2>&1 || echo 'db push skipped'); node dist/worker-standard.js",
+    "start:background": "node dist/worker-background.js",
     "db:generate": "prisma generate --schema=../backend/prisma/schema.prisma"
   },
   "dependencies": {
