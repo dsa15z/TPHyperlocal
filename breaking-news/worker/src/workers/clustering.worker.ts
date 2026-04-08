@@ -122,10 +122,48 @@ interface CandidateStory {
   bestSourceText: string;
 }
 
+// ─── Cached Recent Stories (shared across concurrent clustering jobs) ────────
+// Instead of each job fetching ALL recent stories (huge query), we cache them
+// in memory and refresh every 5 seconds. 10 concurrent jobs share one cache.
+let cachedStories: any[] = [];
+let cacheExpiry = 0;
+let cacheRefreshing = false;
+
+async function getRecentStoriesCached(): Promise<any[]> {
+  const now = Date.now();
+  if (now < cacheExpiry && cachedStories.length > 0) return cachedStories;
+  if (cacheRefreshing) return cachedStories; // Another job is refreshing, use stale
+
+  cacheRefreshing = true;
+  try {
+    const recentCutoff = new Date(now - 24 * 60 * 60 * 1000);
+    const stories = await prisma.story.findMany({
+      where: {
+        status: { not: 'ARCHIVED' },
+        lastUpdatedAt: { gte: recentCutoff },
+        mergedIntoId: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        locationName: true,
+        sourceCount: true,
+        status: true,
+      },
+    });
+    cachedStories = stories;
+    cacheExpiry = now + 5000; // Refresh every 5 seconds
+    return stories;
+  } catch {
+    return cachedStories; // Return stale on error
+  } finally {
+    cacheRefreshing = false;
+  }
+}
+
 async function processCluster(job: Job<ClusteringJob>): Promise<void> {
   const { sourcePostId, category, locationName: enrichedLocation, neighborhoods, entities } = job.data;
-
-  logger.info({ sourcePostId, category }, 'Clustering source post');
 
   // Fetch the source post
   const post = await prisma.sourcePost.findUnique({
@@ -141,24 +179,9 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
   const postText = `${post.title || ''} ${post.content}`;
   const postWordSet = getWordSet(postText);
 
-  // Find recent stories (last 24 hours, not archived)
-  const recentCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentStories = await prisma.story.findMany({
-    where: {
-      status: { not: 'ARCHIVED' },
-      lastUpdatedAt: { gte: recentCutoff },
-      mergedIntoId: null, // Don't match against merged stories
-    },
-    include: {
-      storySources: {
-        include: {
-          sourcePost: true,
-        },
-        orderBy: { addedAt: 'desc' },
-        take: 10, // Compare against up to 10 most recent posts in the story
-      },
-    },
-  });
+  // Find recent stories from cache (refreshed every 5s, shared across jobs)
+  // This eliminates the massive per-job query that was the main bottleneck
+  const recentStories = await getRecentStoriesCached();
 
   logger.info({ sourcePostId, recentStories: recentStories.length }, 'Comparing against recent stories');
 
@@ -211,17 +234,9 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
   const candidates: CandidateStory[] = [];
 
   for (const story of recentStories) {
-    let maxTextSim = 0;
-    let bestSourceText = '';
-    for (const storySource of story.storySources) {
-      const storyText = `${storySource.sourcePost.title || ''} ${storySource.sourcePost.content}`;
-      const storyWordSet = getWordSet(storyText);
-      const textSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
-      if (textSim > maxTextSim) {
-        maxTextSim = textSim;
-        bestSourceText = storyText;
-      }
-    }
+    // Compare post title+content against story title (fast, no nested query)
+    const storyWordSet = getWordSet(story.title || '');
+    const maxTextSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
 
     // Extract people from story's source posts for entity matching
     const storyPeople: string[] = [];
@@ -641,7 +656,7 @@ export function createClusteringWorker(): Worker {
     },
     {
       connection,
-      concurrency: 10, // Prisma unique constraints handle merge conflicts
+      concurrency: 20, // Cached stories + title-only Jaccard = light per job
     }
   );
 
