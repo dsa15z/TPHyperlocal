@@ -76,32 +76,31 @@ let lastCompleted: Record<string, number> = {};
 
 function ThroughputChart({ queueMap }: { queueMap: Record<string, QueueStatus> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hoverInfo, setHoverInfo] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   // Record new data point
   useEffect(() => {
     const now = Date.now();
     const point: ThroughputPoint = { time: now, ingestion: 0, enrichment: 0, clustering: 0, scoring: 0 };
-
     for (const key of ["ingestion", "enrichment", "clustering", "scoring"] as const) {
       const current = queueMap[key]?.completed || 0;
       const prev = lastCompleted[key] || current;
       point[key] = Math.max(0, current - prev);
       lastCompleted[key] = current;
     }
-
-    // Skip first point (no delta yet)
     if (Object.values(lastCompleted).some(v => v > 0)) {
       throughputHistory.push(point);
       if (throughputHistory.length > MAX_POINTS) throughputHistory = throughputHistory.slice(-MAX_POINTS);
     }
   }, [queueMap]);
 
+  const CHART_PAD = { top: 8, bottom: 20, left: 4, right: 4 }; // bottom padding for x-axis labels
+
   // Draw chart
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || throughputHistory.length < 2) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -111,78 +110,128 @@ function ThroughputChart({ queueMap }: { queueMap: Record<string, QueueStatus> }
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
-
-    // Clear
     ctx.clearRect(0, 0, w, h);
 
     const data = throughputHistory;
+    const chartH = h - CHART_PAD.top - CHART_PAD.bottom;
+    const chartW = w - CHART_PAD.left - CHART_PAD.right;
     const maxVal = Math.max(1, ...data.flatMap(d => [d.ingestion, d.enrichment, d.clustering, d.scoring]));
 
+    const getX = (i: number) => CHART_PAD.left + (i / (MAX_POINTS - 1)) * chartW;
+    const getY = (val: number) => CHART_PAD.top + chartH - (val / maxVal) * chartH;
+
     // Grid lines
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
     ctx.lineWidth = 1;
     for (let i = 1; i <= 3; i++) {
-      const y = h - (h * i / 4);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+      const y = getY((maxVal * i) / 4);
+      ctx.beginPath(); ctx.moveTo(CHART_PAD.left, y); ctx.lineTo(w - CHART_PAD.right, y); ctx.stroke();
     }
 
-    // Draw each series
+    // Draw series
     for (const [key, color] of Object.entries(CHART_COLORS)) {
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.beginPath();
-
       for (let i = 0; i < data.length; i++) {
-        const x = (i / (MAX_POINTS - 1)) * w;
-        const val = (data[i] as any)[key] || 0;
-        const y = h - (val / maxVal) * (h - 8) - 4;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const x = getX(i);
+        const y = getY((data[i] as any)[key] || 0);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
 
-      // Fill area
-      ctx.fillStyle = color.replace(")", ", 0.08)").replace("rgb", "rgba");
-      ctx.lineTo((data.length - 1) / (MAX_POINTS - 1) * w, h);
-      ctx.lineTo(0, h);
+      // Fill
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = color;
+      ctx.lineTo(getX(data.length - 1), CHART_PAD.top + chartH);
+      ctx.lineTo(getX(0), CHART_PAD.top + chartH);
       ctx.closePath();
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
-    // Y-axis label
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.font = "10px monospace";
-    ctx.textAlign = "right";
-    ctx.fillText(maxVal.toLocaleString(), w - 4, 12);
-    ctx.fillText("0", w - 4, h - 2);
-  }, [queueMap, throughputHistory.length]);
+    // X-axis time labels (every ~60s / 12 points)
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "9px monospace";
+    ctx.textAlign = "center";
+    const labelInterval = Math.max(6, Math.floor(data.length / 5));
+    for (let i = 0; i < data.length; i += labelInterval) {
+      const t = new Date(data[i].time);
+      const label = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      ctx.fillText(label, getX(i), h - 4);
+    }
+    // Always show latest time
+    if (data.length > 1) {
+      const t = new Date(data[data.length - 1].time);
+      ctx.textAlign = "right";
+      ctx.fillText(t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), w - 4, h - 4);
+    }
 
-  // Latest rates for legend
+    // Y-axis labels
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.textAlign = "right";
+    ctx.fillText(maxVal.toLocaleString(), w - 4, CHART_PAD.top + 8);
+
+    // Hover crosshair
+    if (hoverIdx !== null && hoverIdx >= 0 && hoverIdx < data.length) {
+      const x = getX(hoverIdx);
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x, CHART_PAD.top); ctx.lineTo(x, CHART_PAD.top + chartH); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Dots at each series value
+      for (const [key, color] of Object.entries(CHART_COLORS)) {
+        const val = (data[hoverIdx] as any)[key] || 0;
+        const y = getY(val);
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }, [queueMap, throughputHistory.length, hoverIdx]);
+
+  // Mouse tracking
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || throughputHistory.length < 2) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const chartW = rect.width - CHART_PAD.left - CHART_PAD.right;
+    const relX = (mouseX - CHART_PAD.left) / chartW;
+    const idx = Math.round(relX * (MAX_POINTS - 1));
+    const clamped = Math.max(0, Math.min(throughputHistory.length - 1, idx));
+    setHoverIdx(clamped);
+  }, []);
+
+  const hoverData = hoverIdx !== null && hoverIdx < throughputHistory.length ? throughputHistory[hoverIdx] : null;
   const latest = throughputHistory.length > 0 ? throughputHistory[throughputHistory.length - 1] : null;
-  const perMin = (n: number) => (n * 12).toLocaleString(); // 5s intervals → per minute
+  const displayData = hoverData || latest;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" ref={containerRef}>
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 font-medium">Throughput (items/5s)</span>
-        {latest && (
-          <div className="flex items-center gap-3 text-[10px]">
-            <span style={{ color: CHART_COLORS.ingestion }}>● Ingest {latest.ingestion}</span>
-            <span style={{ color: CHART_COLORS.enrichment }}>● Enrich {latest.enrichment}</span>
-            <span style={{ color: CHART_COLORS.clustering }}>● Cluster {latest.clustering}</span>
-            <span style={{ color: CHART_COLORS.scoring }}>● Score {latest.scoring}</span>
+        <span className="text-xs text-gray-400 font-medium">
+          Throughput (items/5s)
+          {hoverData && <span className="text-gray-500 ml-2">{new Date(hoverData.time).toLocaleTimeString()}</span>}
+        </span>
+        {displayData && (
+          <div className="flex items-center gap-3 text-[11px] font-mono">
+            <span style={{ color: CHART_COLORS.ingestion }}>● Ingest {displayData.ingestion.toLocaleString()}</span>
+            <span style={{ color: CHART_COLORS.enrichment }}>● Enrich {displayData.enrichment.toLocaleString()}</span>
+            <span style={{ color: CHART_COLORS.clustering }}>● Cluster {displayData.clustering.toLocaleString()}</span>
+            <span style={{ color: CHART_COLORS.scoring }}>● Score {displayData.scoring.toLocaleString()}</span>
           </div>
         )}
       </div>
       <canvas
         ref={canvasRef}
-        className="w-full rounded-lg bg-surface-200/30 border border-surface-300/20"
-        style={{ height: 100 }}
+        className="w-full rounded-lg bg-surface-200/30 border border-surface-300/20 cursor-crosshair"
+        style={{ height: 120 }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
       />
       {throughputHistory.length < 3 && (
         <div className="text-[10px] text-gray-600 text-center">Collecting data... chart appears after ~15 seconds</div>
