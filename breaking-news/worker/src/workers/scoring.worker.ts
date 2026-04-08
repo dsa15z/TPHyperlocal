@@ -799,6 +799,21 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     status: newStatus,
   }, 'Scoring complete');
 
+  // Auto-generate multi-source synthesis summary for stories with 5+ sources
+  if (sources.length >= 5 && !story.aiSummary) {
+    try {
+      const { Queue } = await import('bullmq');
+      const summaryQueue = new Queue('first-draft', { connection: getSharedConnection() });
+      await summaryQueue.add('multi-source-summary', {
+        storyId,
+        type: 'summary',
+        sourceCount: sources.length,
+      }, { jobId: `summary-${storyId}`, removeOnComplete: 50, attempts: 2 });
+      await summaryQueue.close();
+      metrics.increment('scoring.summary_triggered', 1);
+    } catch {}
+  }
+
   // Auto-trigger prediction after scoring (for stories < 6h old)
   if (ageMinutes < 360) {
     try {

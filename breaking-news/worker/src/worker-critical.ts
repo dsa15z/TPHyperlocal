@@ -18,6 +18,7 @@ import { createScoringWorker } from './workers/scoring.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 import { startPipelineMonitor, stopPipelineMonitor } from './schedulers/pipeline-monitor.js';
 import { startMetricsCollector, stopMetricsCollector } from './schedulers/metrics-collector.js';
+import { startCredibilityTracker, stopCredibilityTracker } from './schedulers/credibility-tracker.js';
 
 const SERVICE_NAME = 'worker-critical';
 const workers: Worker[] = [];
@@ -57,6 +58,9 @@ async function main(): Promise<void> {
   // Metrics collector — records time-series every 60s, hourly rollup
   startMetricsCollector();
 
+  // Source credibility tracker — adjusts trust scores every 6h
+  startCredibilityTracker();
+
   logger.info({ workers: workers.length }, 'Critical workers + schedulers running');
 
   // Health server
@@ -79,6 +83,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal, service: SERVICE_NAME }, 'Shutting down...');
   const timeout = setTimeout(() => process.exit(1), 30000);
   try {
+    stopCredibilityTracker();
     stopMetricsCollector();
     stopPipelineMonitor();
     await stopSchedulers();

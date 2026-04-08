@@ -390,8 +390,50 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
         }
       }
     }
-  } else {
-    // No candidates from Jaccard pre-filter -- check all stories with legacy method
+  }
+
+  // --- Stage 2b: Pure embedding search for paraphrased duplicates ---
+  // If Jaccard didn't find a strong match, try direct embedding similarity in DB
+  // This catches stories with completely rewritten titles about the same event
+  if (!bestStory && post.embeddingJson) {
+    try {
+      const embedding = typeof post.embeddingJson === 'string' ? JSON.parse(post.embeddingJson) : post.embeddingJson;
+      if (Array.isArray(embedding) && embedding.length > 0) {
+        const similar = await prisma.$queryRaw<Array<{ id: string; title: string; similarity: number }>>`
+          SELECT s.id, s.title,
+            1 - (
+              SELECT SUM(a * b) / NULLIF(SQRT(SUM(a * a)) * SQRT(SUM(b * b)), 0)
+              FROM unnest(ARRAY(SELECT jsonb_array_elements_text(s."embeddingJson"::jsonb)::float8)) WITH ORDINALITY AS t1(a, ord)
+              JOIN unnest(ARRAY(SELECT unnest(${embedding}::float8[]))) WITH ORDINALITY AS t2(b, ord) USING (ord)
+            ) as similarity
+          FROM "Story" s
+          WHERE s."embeddingJson" IS NOT NULL
+            AND s."mergedIntoId" IS NULL
+            AND s."firstSeenAt" >= NOW() - INTERVAL '48 hours'
+          ORDER BY similarity DESC
+          LIMIT 3
+        `.catch(() => []);
+
+        for (const match of similar) {
+          if (match.similarity >= 0.85) {
+            bestStory = recentStories.find(s => s.id === match.id) || null;
+            if (bestStory) {
+              bestSimilarity = match.similarity;
+              mergeReason = `Merged: ${Math.round(match.similarity * 100)}% semantic embedding match (paraphrase detected)`;
+              metrics.increment('clustering.embedding_dedup', 1);
+              logger.info({ sourcePostId, storyId: match.id, similarity: match.similarity.toFixed(3), title: match.title?.substring(0, 60) }, 'Embedding-based paraphrase dedup match');
+              break;
+            }
+          }
+        }
+      }
+    } catch (embErr) {
+      logger.debug({ err: (embErr as Error).message }, 'Embedding dedup search failed (non-fatal)');
+    }
+  }
+
+  if (!bestStory) {
+    // No candidates from Jaccard or embedding -- check all stories with legacy method
     // (handles edge case where Jaccard is low but combined score is still decent)
     for (const story of recentStories) {
       // Compare against story title (cached stories don't include source posts)
