@@ -66,6 +66,83 @@ export async function pipelineRoutes(
     }
   });
 
+  // GET /api/v1/pipeline/metrics — Time-series metrics for dashboard
+  app.get('/pipeline/metrics', async (request, reply) => {
+    const query = (request.query as any) || {};
+    const metric = query.metric || 'pipeline.throughput';
+    const hours = Math.min(parseInt(query.hours || '24'), 720); // max 30 days
+    const granularity = query.granularity || 'raw'; // raw (60s) or hourly
+
+    try {
+      if (granularity === 'hourly') {
+        const rows = await prisma.$queryRaw<any[]>`
+          SELECT metric, hour as time, avg, min, max, sum, count, tags
+          FROM "MetricsHourly"
+          WHERE metric = ${metric}
+            AND hour > NOW() - (${hours} || ' hours')::interval
+          ORDER BY hour ASC
+        `;
+        return reply.send({ data: rows, metric, granularity, hours });
+      }
+
+      // Raw (last N hours, max 48h for raw)
+      const rawHours = Math.min(hours, 48);
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT metric, value, tags, "createdAt" as time
+        FROM "MetricsRaw"
+        WHERE metric = ${metric}
+          AND "createdAt" > NOW() - (${rawHours} || ' hours')::interval
+        ORDER BY "createdAt" ASC
+      `;
+      return reply.send({ data: rows, metric, granularity: 'raw', hours: rawHours });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // GET /api/v1/pipeline/metrics/summary — All metrics latest values
+  app.get('/pipeline/metrics/summary', async (_request, reply) => {
+    try {
+      // Latest value for each metric
+      const latest = await prisma.$queryRaw<any[]>`
+        SELECT DISTINCT ON (metric, tags) metric, value, tags, "createdAt" as time
+        FROM "MetricsRaw"
+        WHERE "createdAt" > NOW() - INTERVAL '5 minutes'
+        ORDER BY metric, tags, "createdAt" DESC
+      `;
+
+      // 24h throughput totals
+      const throughput24h = await prisma.$queryRaw<any[]>`
+        SELECT tags->>'queue' as queue, SUM(value)::int as total
+        FROM "MetricsRaw"
+        WHERE metric = 'pipeline.throughput' AND "createdAt" > NOW() - INTERVAL '24 hours'
+        GROUP BY tags->>'queue'
+      `;
+
+      // Hourly story creation trend (last 24h)
+      const storyTrend = await prisma.$queryRaw<any[]>`
+        SELECT hour as time, sum as stories
+        FROM "MetricsHourly"
+        WHERE metric = 'stories.last_hour' AND hour > NOW() - INTERVAL '24 hours'
+        ORDER BY hour ASC
+      `;
+
+      return reply.send({
+        latest: latest.reduce((acc: any, r: any) => {
+          const key = r.tags && Object.keys(r.tags).length > 0
+            ? `${r.metric}.${Object.values(r.tags).join('.')}`
+            : r.metric;
+          acc[key] = { value: r.value, time: r.time };
+          return acc;
+        }, {}),
+        throughput24h,
+        storyTrend,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // GET /api/v1/pipeline/monitor — Self-healing monitor activity log
   app.get('/pipeline/monitor', async (_request, reply) => {
     try {

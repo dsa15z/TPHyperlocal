@@ -17,6 +17,7 @@ import { createClusteringWorker } from './workers/clustering.worker.js';
 import { createScoringWorker } from './workers/scoring.worker.js';
 import { startSchedulers, stopSchedulers } from './schedulers/poll-scheduler.js';
 import { startPipelineMonitor, stopPipelineMonitor } from './schedulers/pipeline-monitor.js';
+import { startMetricsCollector, stopMetricsCollector } from './schedulers/metrics-collector.js';
 
 const SERVICE_NAME = 'worker-critical';
 const workers: Worker[] = [];
@@ -53,6 +54,9 @@ async function main(): Promise<void> {
   // Self-healing monitor — checks for failures every 2 min and auto-fixes
   startPipelineMonitor();
 
+  // Metrics collector — records time-series every 60s, hourly rollup
+  startMetricsCollector();
+
   logger.info({ workers: workers.length }, 'Critical workers + schedulers running');
 
   // Health server
@@ -75,6 +79,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal, service: SERVICE_NAME }, 'Shutting down...');
   const timeout = setTimeout(() => process.exit(1), 30000);
   try {
+    stopMetricsCollector();
     stopPipelineMonitor();
     await stopSchedulers();
     await Promise.all(workers.map(w => w.close().catch(() => {})));
