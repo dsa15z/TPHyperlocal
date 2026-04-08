@@ -38,6 +38,14 @@ const updateSourceSchema = z.object({
   autoRewrite: z.boolean().optional(), // Auto-rewrite content before story creation
   displaySourceName: z.string().max(255).optional().nullable(), // Override displayed source name
   subreddits: z.array(z.string()).optional(), // Reddit: list of subreddit names to poll
+  contentFilter: z.object({
+    includeKeywords: z.array(z.string()).optional(),
+    excludeKeywords: z.array(z.string()).optional(),
+    includeHashtags: z.array(z.string()).optional(),
+    excludeHashtags: z.array(z.string()).optional(),
+    minScore: z.number().optional(),
+    minEngagement: z.number().optional(),
+  }).optional(), // Per-source content filtering
 });
 
 const listSourcesSchema = z.object({
@@ -322,16 +330,17 @@ export async function sourceRoutes(
     }
 
     // Extract fields that go into metadata, not top-level Source columns
-    const { marketIds: newMarketIds, pollIntervalMinutes, autoRewrite, displaySourceName, subreddits, ...sourceUpdateData } = updateData;
+    const { marketIds: newMarketIds, pollIntervalMinutes, autoRewrite, displaySourceName, subreddits, contentFilter, ...sourceUpdateData } = updateData;
 
     // Merge per-source settings into metadata
-    if (pollIntervalMinutes !== undefined || autoRewrite !== undefined || displaySourceName !== undefined || subreddits !== undefined) {
+    if (pollIntervalMinutes !== undefined || autoRewrite !== undefined || displaySourceName !== undefined || subreddits !== undefined || contentFilter !== undefined) {
       const existingMeta = (sourceUpdateData.metadata || existing.metadata || {}) as Record<string, unknown>;
       sourceUpdateData.metadata = {
         ...existingMeta,
         ...(pollIntervalMinutes !== undefined ? { pollIntervalMinutes } : {}),
         ...(autoRewrite !== undefined ? { autoRewrite } : {}),
         ...(subreddits !== undefined ? { subreddits } : {}),
+        ...(contentFilter !== undefined ? { contentFilter } : {}),
         ...(displaySourceName !== undefined ? { displaySourceName } : {}),
       };
     }

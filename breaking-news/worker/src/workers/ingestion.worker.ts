@@ -73,6 +73,69 @@ async function logPollAudit(sourceId: string, result: {
   }
 }
 
+// ─── Content Filter ──────────────────────────────────────────────────────────
+// Per-source content filtering via metadata.contentFilter settings.
+// Supports: includeKeywords, excludeKeywords, includeHashtags, excludeHashtags,
+//           minScore (Reddit), minEngagement, requireImage
+
+interface ContentFilter {
+  includeKeywords?: string[];   // Post must contain at least one of these
+  excludeKeywords?: string[];   // Post must NOT contain any of these
+  includeHashtags?: string[];   // Post must have at least one of these hashtags/flairs
+  excludeHashtags?: string[];   // Post must NOT have any of these
+  minScore?: number;            // Reddit: minimum upvote score
+  minEngagement?: number;       // Minimum likes+shares+comments
+  requireImage?: boolean;       // Only posts with images
+}
+
+function loadContentFilter(metadata: Record<string, unknown>): ContentFilter | null {
+  const cf = metadata.contentFilter as Record<string, unknown> | undefined;
+  if (!cf) return null;
+  return {
+    includeKeywords: (cf.includeKeywords as string[]) || undefined,
+    excludeKeywords: (cf.excludeKeywords as string[]) || undefined,
+    includeHashtags: (cf.includeHashtags as string[]) || undefined,
+    excludeHashtags: (cf.excludeHashtags as string[]) || undefined,
+    minScore: (cf.minScore as number) || undefined,
+    minEngagement: (cf.minEngagement as number) || undefined,
+    requireImage: (cf.requireImage as boolean) || undefined,
+  };
+}
+
+function passesContentFilter(filter: ContentFilter | null, content: {
+  title: string;
+  body: string;
+  hashtags?: string[];
+  flair?: string;
+  score?: number;
+  engagement?: number;
+  hasImage?: boolean;
+}): boolean {
+  if (!filter) return true;
+
+  const text = `${content.title} ${content.body}`.toLowerCase();
+
+  if (filter.includeKeywords && filter.includeKeywords.length > 0) {
+    if (!filter.includeKeywords.some(kw => text.includes(kw.toLowerCase()))) return false;
+  }
+  if (filter.excludeKeywords && filter.excludeKeywords.length > 0) {
+    if (filter.excludeKeywords.some(kw => text.includes(kw.toLowerCase()))) return false;
+  }
+  if (filter.includeHashtags && filter.includeHashtags.length > 0) {
+    const allTags = [...(content.hashtags || []), content.flair || ''].map(t => t.toLowerCase());
+    if (!filter.includeHashtags.some(ht => allTags.some(t => t.includes(ht.toLowerCase())))) return false;
+  }
+  if (filter.excludeHashtags && filter.excludeHashtags.length > 0) {
+    const allTags = [...(content.hashtags || []), content.flair || ''].map(t => t.toLowerCase());
+    if (filter.excludeHashtags.some(ht => allTags.some(t => t.includes(ht.toLowerCase())))) return false;
+  }
+  if (filter.minScore !== undefined && (content.score || 0) < filter.minScore) return false;
+  if (filter.minEngagement !== undefined && (content.engagement || 0) < filter.minEngagement) return false;
+  if (filter.requireImage && !content.hasImage) return false;
+
+  return true;
+}
+
 /** Get a random browser User-Agent from the pool */
 function getRandomUA(): string {
   return UA_POOL[Math.floor(Math.random() * UA_POOL.length)];
@@ -789,7 +852,7 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   // Load source metadata for conditional fetch headers (ETag, Last-Modified)
   const sourceMeta = await prisma.source.findUnique({
     where: { id: sourceId },
-    select: { metadata: true },
+    select: { metadata: true, lastPolledAt: true },
   });
   const meta = (sourceMeta?.metadata || {}) as Record<string, unknown>;
 
@@ -908,7 +971,40 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
       : [parsed.feed.entry];
   }
 
-  logger.info({ sourceId, itemCount: items.length }, 'Parsed RSS items');
+  // Time-bound filtering: only process items published since last poll
+  // Uses the shorter of: lastPolledAt or the UI time setting (default 24h)
+  const uiMaxAgeHours = (meta.pollMaxAgeHours as number) || 24;
+  const lastPolled = (sourceMeta as any)?.lastPolledAt ? new Date((sourceMeta as any).lastPolledAt).getTime() : 0;
+  const uiCutoff = Date.now() - uiMaxAgeHours * 60 * 60 * 1000;
+  const effectiveCutoff = Math.max(lastPolled, uiCutoff); // Whichever is more recent
+
+  const beforeFilter = items.length;
+  items = items.filter(item => {
+    const pubDate = item.pubDate || item['dc:date'];
+    if (!pubDate) return true; // No date = include (can't filter)
+    const pubTime = new Date(pubDate).getTime();
+    if (isNaN(pubTime)) return true; // Invalid date = include
+    return pubTime >= effectiveCutoff;
+  });
+  if (items.length < beforeFilter) {
+    logger.info({ sourceId, before: beforeFilter, after: items.length, cutoffAge: Math.round((Date.now() - effectiveCutoff) / 60000) + 'min' }, 'Filtered old items by time bound');
+  }
+
+  // Content filter: apply keyword/hashtag filtering from source metadata
+  const contentFilter = loadContentFilter(meta);
+  if (contentFilter) {
+    const beforeCF = items.length;
+    items = items.filter(item => {
+      const title = decodeHTMLEntities(item.title || '');
+      const body = decodeHTMLEntities(item.description || item['content:encoded'] || '');
+      return passesContentFilter(contentFilter, { title, body });
+    });
+    if (items.length < beforeCF) {
+      logger.info({ sourceId, before: beforeCF, after: items.length }, 'Filtered items by content filter');
+    }
+  }
+
+  logger.info({ sourceId, itemCount: items.length }, 'Processing RSS items');
 
   const enrichmentQueue = new Queue('enrichment', {
     connection: getSharedConnection(),
@@ -1274,9 +1370,21 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
   const { sourceId, subreddits } = job.data;
   logger.info({ sourceId, subreddits, count: subreddits.length }, 'Polling Reddit subreddits');
 
+  // Load source metadata for time bounds + content filter
+  const sourceData = await prisma.source.findUnique({
+    where: { id: sourceId },
+    select: { metadata: true, lastPolledAt: true },
+  });
+  const redditMeta = ((sourceData?.metadata || {}) as Record<string, unknown>);
+  const redditFilter = loadContentFilter(redditMeta);
+  const redditLastPolled = (sourceData as any)?.lastPolledAt ? new Date((sourceData as any).lastPolledAt).getTime() : 0;
+  const redditMaxAge = (redditMeta.pollMaxAgeHours as number) || 24;
+  const redditCutoff = Math.max(redditLastPolled, Date.now() - redditMaxAge * 60 * 60 * 1000);
+
   const enrichmentQueue = new Queue('enrichment', { connection: getSharedConnection() });
   let totalIngested = 0;
   let totalFetched = 0;
+  let totalFiltered = 0;
 
   for (const sub of subreddits) {
     const subreddit = sub.replace(/^r\//, '').replace(/^\/r\//, '').trim();
@@ -1288,9 +1396,24 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
 
       for (const item of posts) {
         const post = item.data;
-        if (!post || post.stickied || post.is_self === false && !post.selftext) {
-          // Skip link-only posts with no text content (we want text-based news)
-          if (!post?.title) continue;
+        if (!post || post.stickied) continue;
+        if (!post.title) continue;
+
+        // Time filter: skip posts older than cutoff
+        const postTime = (post.created_utc || 0) * 1000;
+        if (postTime > 0 && postTime < redditCutoff) continue;
+
+        // Content filter
+        if (!passesContentFilter(redditFilter, {
+          title: post.title || '',
+          body: post.selftext || '',
+          flair: post.link_flair_text || '',
+          hashtags: [],
+          score: post.score || 0,
+          engagement: (post.num_comments || 0) + (post.ups || 0),
+        })) {
+          totalFiltered++;
+          continue;
         }
 
         try {

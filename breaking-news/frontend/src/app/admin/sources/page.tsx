@@ -194,6 +194,10 @@ function SourcesPage() {
   const [formAutoRewrite, setFormAutoRewrite] = useState(false);
   const [formDisplaySourceName, setFormDisplaySourceName] = useState("");
   const [formSubreddits, setFormSubreddits] = useState(""); // comma-separated subreddit names
+  // Content filter fields
+  const [formIncludeKeywords, setFormIncludeKeywords] = useState("");
+  const [formExcludeKeywords, setFormExcludeKeywords] = useState("");
+  const [formMinScore, setFormMinScore] = useState<number | "">("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -423,6 +427,9 @@ function SourcesPage() {
     setFormAutoRewrite(false);
     setFormDisplaySourceName("");
     setFormSubreddits("");
+    setFormIncludeKeywords("");
+    setFormExcludeKeywords("");
+    setFormMinScore("");
     setEditingId(null);
     setTestResult(null);
   };
@@ -446,6 +453,11 @@ function SourcesPage() {
     let subs = meta.subreddits;
     if (typeof subs === 'string') { try { subs = JSON.parse(subs); } catch {} }
     setFormSubreddits(Array.isArray(subs) ? subs.join(", ") : "");
+    // Content filter
+    const cf = (meta.contentFilter || {}) as Record<string, unknown>;
+    setFormIncludeKeywords(((cf.includeKeywords as string[]) || []).join(", "));
+    setFormExcludeKeywords(((cf.excludeKeywords as string[]) || []).join(", "));
+    setFormMinScore((cf.minScore as number) || "");
     setModalTab("details");
     setShowForm(true);
   };
@@ -483,6 +495,12 @@ function SourcesPage() {
       autoRewrite: formAutoRewrite,
       ...(formPlatform === "REDDIT" && subreddits.length > 0 ? { subreddits } : {}),
       displaySourceName: formDisplaySourceName.trim() || null,
+      // Content filter (stored in metadata.contentFilter)
+      contentFilter: (formIncludeKeywords.trim() || formExcludeKeywords.trim() || formMinScore !== "") ? {
+        ...(formIncludeKeywords.trim() ? { includeKeywords: formIncludeKeywords.split(/[,\n]+/).map(s => s.trim()).filter(Boolean) } : {}),
+        ...(formExcludeKeywords.trim() ? { excludeKeywords: formExcludeKeywords.split(/[,\n]+/).map(s => s.trim()).filter(Boolean) } : {}),
+        ...(formMinScore !== "" ? { minScore: Number(formMinScore) } : {}),
+      } : undefined,
     };
 
     if (editingId) {
@@ -947,6 +965,50 @@ function SourcesPage() {
                       Stories from this source will be rewritten by AI before publishing. The original source will be hidden and replaced with the display name above.
                     </p>
                   )}
+                </div>
+
+                {/* ── Content Filter ────────────────────────────── */}
+                <div className="border-t border-white/5 pt-3 mt-1">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Content Filter</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Include Keywords</label>
+                      <input
+                        type="text"
+                        placeholder="crime, breaking, fire"
+                        value={formIncludeKeywords}
+                        onChange={(e) => setFormIncludeKeywords(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded text-sm text-gray-200 placeholder-gray-600"
+                      />
+                      <p className="text-[10px] text-gray-600 mt-0.5">Must contain at least one (comma-sep)</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Exclude Keywords</label>
+                      <input
+                        type="text"
+                        placeholder="sponsored, ad, giveaway"
+                        value={formExcludeKeywords}
+                        onChange={(e) => setFormExcludeKeywords(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded text-sm text-gray-200 placeholder-gray-600"
+                      />
+                      <p className="text-[10px] text-gray-600 mt-0.5">Skip posts containing any of these</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Min Score (Reddit)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={formMinScore}
+                        onChange={(e) => setFormMinScore(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="w-full px-2 py-1.5 bg-white/5 border border-white/10 rounded text-sm text-gray-200 placeholder-gray-600"
+                      />
+                      <p className="text-[10px] text-gray-600 mt-0.5">Minimum upvote score to ingest</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Content filters allow the same feed URL to be used with different filters for different markets.
+                  </p>
                 </div>
 
                 <div className="flex items-center gap-3 pt-2 flex-wrap">
