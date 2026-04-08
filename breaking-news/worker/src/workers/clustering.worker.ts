@@ -3,6 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
+import { metrics } from '../lib/metrics.js';
 import { extractLocation, decodeHTMLEntities } from '../utils/text.js';
 import {
   getWordSet,
@@ -636,6 +637,14 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
   });
 
   await scoringQueue.close();
+
+  // Metrics
+  if (mergeReason) {
+    metrics.increment('clustering.merged', 1);
+  } else {
+    metrics.increment('clustering.new_story', 1);
+  }
+  metrics.increment('clustering.processed', 1);
 
   logger.info({ sourcePostId, storyId, mergeReason: mergeReason || 'new story', entities: structuredEntities.length }, 'Clustering complete');
 }

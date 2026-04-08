@@ -3,6 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { XMLParser } from 'fast-xml-parser';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
+import { metrics } from '../lib/metrics.js';
 import prisma from '../lib/prisma.js';
 import { generateContentHash, decodeHTMLEntities } from '../utils/text.js';
 import { searchRecentTweets, type Tweet } from '../lib/twitter-client.js';
@@ -156,6 +157,7 @@ async function trySkipEnrichment(postId: string, title: string, enrichmentQueue:
     });
 
     if (existingStory) {
+      metrics.increment('dedup.skipped_enrichment', 1);
       const clusterQueue = new Queue('clustering', { connection: getSharedConnection() });
       await clusterQueue.add('cluster', {
         sourcePostId: postId,
@@ -908,13 +910,16 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   await throttleDomain(feedUrl);
 
   let response: Response;
+  const fetchStart = Date.now();
   try {
     response = await fetch(feedUrl, {
       headers,
       redirect: 'follow',
       signal: AbortSignal.timeout(25000),
     });
+    metrics.timing('ingestion.fetch_time_ms', fetchStart, { platform: 'RSS' });
   } catch (err) {
+    metrics.increment('ingestion.fetch_errors', 1, { platform: 'RSS' });
     await trackSourceFailure(sourceId, (err as Error).message);
     logger.error({ sourceId, feedUrl, err }, 'Failed to fetch RSS feed');
     throw err;
@@ -1137,6 +1142,11 @@ async function handleRSSPoll(job: Job<RSSPollJob>): Promise<void> {
   await extractionQueue.close();
 
   await logPollAudit(sourceId, { status: ingested > 0 ? 'success' : 'partial', fetched: items.length, ingested });
+
+  // ── Metrics ──
+  metrics.record('ingestion.items_fetched', items.length, { platform: 'RSS' });
+  metrics.record('ingestion.items_ingested', ingested, { platform: 'RSS' });
+  metrics.record('ingestion.dedup_rate', items.length > 0 ? ((items.length - ingested) / items.length) * 100 : 0, { platform: 'RSS' });
 
   logger.info({ sourceId, ingested, total: items.length }, 'RSS poll complete');
 }
@@ -1547,6 +1557,11 @@ async function handleRedditPoll(job: Job<RedditPollJob>): Promise<void> {
   });
 
   await logPollAudit(sourceId, { status: totalIngested > 0 ? 'success' : 'partial', fetched: totalFetched, ingested: totalIngested, subreddits: subreddits.length });
+
+  metrics.record('ingestion.items_fetched', totalFetched, { platform: 'REDDIT' });
+  metrics.record('ingestion.items_ingested', totalIngested, { platform: 'REDDIT' });
+  metrics.record('ingestion.items_filtered', totalFiltered, { platform: 'REDDIT' });
+  metrics.record('ingestion.dedup_rate', totalFetched > 0 ? ((totalFetched - totalIngested) / totalFetched) * 100 : 0, { platform: 'REDDIT' });
 
   logger.info({ sourceId, subreddits: subreddits.length, fetched: totalFetched, ingested: totalIngested }, 'Reddit poll complete');
 }

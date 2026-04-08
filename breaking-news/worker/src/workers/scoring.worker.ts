@@ -3,6 +3,7 @@ import { Worker, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
+import { metrics } from '../lib/metrics.js';
 import { detectNeighborhoods } from '../utils/text.js';
 
 const logger = createChildLogger('scoring');
@@ -896,6 +897,8 @@ async function processBatchScoring(storyIds: string[]): Promise<number> {
     }
   }
 
+  metrics.record('scoring.batch_size', updates.length);
+  metrics.increment('scoring.processed', updates.length);
   logger.info({ batchSize: storyIds.length, scored: updates.length }, 'Batch scoring complete');
   return updates.length;
 }

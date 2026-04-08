@@ -3,6 +3,7 @@ import { Worker, Queue, Job } from 'bullmq';
 import { createChildLogger } from '../lib/logger.js';
 import { getSharedConnection } from '../lib/redis.js';
 import prisma from '../lib/prisma.js';
+import { metrics } from '../lib/metrics.js';
 import { normalizeText, detectNeighborhoods, extractLocation } from '../utils/text.js';
 import { generate } from '../lib/llm-factory.js';
 
@@ -328,7 +329,10 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   // Also use LLM for entity extraction (always, to get better NER than regex)
   let llmResult: LLMEnrichResult | null = null;
   if (category === 'OTHER' || !locationName || structuredEntities.length < 2) {
+    const llmStart = Date.now();
     llmResult = await llmEnrich(post.title || '', post.content);
+    metrics.timing('enrichment.llm_latency_ms', llmStart);
+    metrics.increment('enrichment.llm_calls', 1, { provider: llmResult ? 'openai' : 'unknown' });
     if (category === 'OTHER' && llmResult.category !== 'OTHER') {
       category = llmResult.category;
       logger.info({ sourcePostId, category }, 'LLM assigned category');
@@ -421,6 +425,11 @@ async function processEnrichment(job: Job<EnrichmentJob>): Promise<void> {
   });
 
   await clusteringQueue.close();
+
+  // Metrics
+  metrics.increment('enrichment.processed', 1);
+  if (llmResult) metrics.increment('enrichment.llm_used', 1);
+  else metrics.increment('enrichment.keyword_only', 1);
 
   logger.info({ sourcePostId, category, locationName }, 'Enrichment complete');
 }
