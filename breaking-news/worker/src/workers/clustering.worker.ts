@@ -238,13 +238,8 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     const storyWordSet = getWordSet(story.title || '');
     const maxTextSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
 
-    // Extract people from story's source posts for entity matching
+    // Extract people from story title as a heuristic (cached stories don't include source posts)
     const storyPeople: string[] = [];
-    for (const ss of story.storySources) {
-      const rawData = ss.sourcePost.rawData as Record<string, any> | null;
-      const spEntities = rawData?.entities as { people?: string[] } | undefined;
-      if (spEntities?.people) storyPeople.push(...spEntities.people);
-    }
     // Also extract people from the story title as a heuristic
     const titleWords = (story.title || '').split(/\s+/);
     // Look for capitalized word pairs (likely person names)
@@ -395,13 +390,9 @@ async function processCluster(job: Job<ClusteringJob>): Promise<void> {
     // No candidates from Jaccard pre-filter -- check all stories with legacy method
     // (handles edge case where Jaccard is low but combined score is still decent)
     for (const story of recentStories) {
-      let maxTextSim = 0;
-      for (const storySource of story.storySources) {
-        const storyText = `${storySource.sourcePost.title || ''} ${storySource.sourcePost.content}`;
-        const storyWordSet = getWordSet(storyText);
-        const textSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
-        maxTextSim = Math.max(maxTextSim, textSim);
-      }
+      // Compare against story title (cached stories don't include source posts)
+      const storyWordSet = getWordSet(story.title || '');
+      const maxTextSim = calculateJaccardSimilarity(postWordSet, storyWordSet);
 
       const entitySim = calculateEntitySimilarity(
         entities,
