@@ -194,6 +194,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/credentials", label: "API Keys", icon: KeyRound },
       { href: "/admin/feature-flags", label: "Feature Flags", icon: Shield },
       { href: "/admin/pipeline-health", label: "Pipeline Health", icon: Activity },
+      { href: "/admin/alert-channels", label: "Alert Channels", icon: Bell },
       { href: "/admin/metrics", label: "System Metrics", icon: BarChart3 },
       { href: "/admin/heatmap", label: "Story Heatmap", icon: MapPin },
     ],
