@@ -20,12 +20,17 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 const SETTINGS_KEY = "tp-ticker-settings";
 
 function loadTickerSettings(): TickerSettings {
-  if (typeof window === "undefined") return { speed: 3, viewId: null };
+  if (typeof window === "undefined") return { speed: 7, viewId: null };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate old 1-5 scale to new 1-10 scale
+      if (parsed.speed && parsed.speed <= 5) parsed.speed = Math.min(10, parsed.speed + 4);
+      return parsed;
+    }
   } catch {}
-  return { speed: 3, viewId: null };
+  return { speed: 7, viewId: null };
 }
 
 function saveTickerSettings(s: TickerSettings) {
@@ -56,9 +61,9 @@ function viewToQuery(view: DashboardView | null): string {
   return params.toString();
 }
 
-// Speed multipliers: 1=120px/s, 2=180, 3=240, 4=320, 5=440
-// (doubled from original — "default" is now 2x faster)
-const SPEED_PX_PER_SEC = [120, 180, 240, 320, 440];
+// Speed: 10 levels, default=7 (was max), new max=10 is 3x faster than old max
+// 1=120, 2=160, 3=200, 4=260, 5=320, 6=380, 7=440(default), 8=560, 9=720, 10=1000
+const SPEED_PX_PER_SEC = [120, 160, 200, 260, 320, 380, 440, 560, 720, 1000];
 
 export function BreakingTicker() {
   const [stories, setStories] = useState<TickerStory[]>([]);
@@ -116,7 +121,7 @@ export function BreakingTicker() {
   const tickerDuration = useMemo(() => {
     const totalChars = stories.reduce((sum, s) => sum + (s.title?.length || 0), 0);
     const estimatedWidth = totalChars * 8;
-    const pxPerSec = SPEED_PX_PER_SEC[Math.max(0, Math.min(4, settings.speed - 1))];
+    const pxPerSec = SPEED_PX_PER_SEC[Math.max(0, Math.min(9, settings.speed - 1))];
     const seconds = Math.max(8, estimatedWidth / pxPerSec);
     return `${seconds}s`;
   }, [stories, settings.speed]);
@@ -203,19 +208,20 @@ export function BreakingTicker() {
           {/* Speed */}
           <div>
             <label className="block text-xs text-gray-400 mb-1">
-              Speed: {["Slow", "Moderate", "Default", "Fast", "Very Fast"][settings.speed - 1]}
+              Speed: {["Slow", "Moderate", "Steady", "Brisk", "Quick", "Fast", "Default", "Rapid", "Sprint", "Max"][settings.speed - 1] || "Default"} ({SPEED_PX_PER_SEC[settings.speed - 1]}px/s)
             </label>
             <input
               type="range"
               min="1"
-              max="5"
+              max="10"
               value={settings.speed}
               onChange={(e) => updateSettings({ speed: Number(e.target.value) })}
               className="w-full accent-accent"
             />
             <div className="flex justify-between text-[10px] text-gray-600">
               <span>Slow</span>
-              <span>Fast</span>
+              <span>Default (7)</span>
+              <span>Max</span>
             </div>
           </div>
 
