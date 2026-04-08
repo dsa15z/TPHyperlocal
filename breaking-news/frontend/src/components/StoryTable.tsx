@@ -258,9 +258,13 @@ function buildColumnDefs(): Record<string, ColumnDef<Story, any>> {
         const t = Math.round(story.trending_score * 100);
         const c = Math.round(story.confidence_score * 100);
         const l = Math.round(story.locality_score * 100);
+        // Social score = composite - (breaking*25% + trending*20% + confidence*15% + locality*15%) / 25%
+        // Or derive from the remaining 25%
+        const calculatedWithout = b * 0.25 + t * 0.20 + c * 0.15 + l * 0.15;
+        const s = Math.max(0, Math.round((score - calculatedWithout) / 0.25));
         const barColor = score >= 60 ? "bg-red-500" : score >= 40 ? "bg-orange-500" : score >= 20 ? "bg-yellow-500" : "bg-gray-500";
 
-        const tooltip = `Score: ${score}\n= Breaking (${b}) \u00d7 25% = ${(b * 0.25).toFixed(1)}\n+ Trending (${t}) \u00d7 20% = ${(t * 0.20).toFixed(1)}\n+ Confidence (${c}) \u00d7 15% = ${(c * 0.15).toFixed(1)}\n+ Locality (${l}) \u00d7 15% = ${(l * 0.15).toFixed(1)}`;
+        const tooltip = `Score: ${score}\n= Breaking (${b}) \u00d7 25% = ${(b * 0.25).toFixed(1)}\n+ Trending (${t}) \u00d7 20% = ${(t * 0.20).toFixed(1)}\n+ Confidence (${c}) \u00d7 15% = ${(c * 0.15).toFixed(1)}\n+ Locality (${l}) \u00d7 15% = ${(l * 0.15).toFixed(1)}\n+ Social (${s}) \u00d7 25% = ${(s * 0.25).toFixed(1)}`;
 
         return (
           <div className="group/score relative text-center">
