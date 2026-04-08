@@ -66,6 +66,50 @@ export async function pipelineRoutes(
     }
   });
 
+  // GET /api/v1/pipeline/alert-channels — Get alert channel config
+  app.get('/pipeline/alert-channels', async (_request, reply) => {
+    try {
+      const { getAlertChannels } = await import('../lib/alert-channels.js');
+      const channels = await getAlertChannels();
+      return reply.send({ channels });
+    } catch (err: any) {
+      return reply.send({ channels: [], error: err.message });
+    }
+  });
+
+  // PUT /api/v1/pipeline/alert-channels — Save alert channel config
+  app.put('/pipeline/alert-channels', async (request, reply) => {
+    try {
+      const { saveAlertChannels } = await import('../lib/alert-channels.js');
+      const body = (request.body as any)?.channels;
+      if (!Array.isArray(body)) return reply.status(400).send({ error: 'channels must be an array' });
+      await saveAlertChannels(body);
+      return reply.send({ message: 'Alert channels saved', count: body.length });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  // POST /api/v1/pipeline/test-alert — Test alert channels with a sample story
+  app.post('/pipeline/test-alert', async (_request, reply) => {
+    try {
+      const { dispatchAlert } = await import('../lib/alert-channels.js');
+      const result = await dispatchAlert({
+        id: 'test-alert',
+        title: '🧪 Test Alert — TopicPulse Alert Channel Test',
+        status: 'BREAKING',
+        category: 'TEST',
+        location: 'System',
+        compositeScore: 0.95,
+        sourceCount: 1,
+        url: process.env['FRONTEND_URL'] || 'https://tp-hyperlocal.vercel.app',
+      });
+      return reply.send({ message: 'Test alert dispatched', ...result });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   // POST /api/v1/pipeline/fix-broken-sources — Update URLs for known broken sources
   app.post('/pipeline/fix-broken-sources', async (_request, reply) => {
     const fixes = [

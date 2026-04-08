@@ -811,16 +811,30 @@ async function processScoring(job: Job<ScoringJob>): Promise<void> {
     }
   }
 
-  // Auto-trigger push notifications for ALERT/BREAKING
+  // Auto-trigger push notifications + alert channels for ALERT/BREAKING
   if (previousStatus !== newStatus && (newStatus === 'ALERT' || newStatus === 'BREAKING')) {
     try {
       const { Queue } = await import('bullmq');
       const pushQueue = new Queue('push-notifications', { connection: getSharedConnection() });
       await pushQueue.add(`push-${storyId}`, { storyId, event: newStatus }, { removeOnComplete: 50 });
       await pushQueue.close();
-    } catch {
-      // Non-critical
-    }
+    } catch {}
+
+    // Dispatch to alert channels (Slack, email, webhook)
+    try {
+      const { dispatchAlert } = await import('../lib/alert-channels.js');
+      const frontendUrl = process.env['FRONTEND_URL'] || 'https://tp-hyperlocal.vercel.app';
+      await dispatchAlert({
+        id: storyId,
+        title: story.title || 'Breaking Story',
+        status: newStatus,
+        category: story.category || 'UNKNOWN',
+        location: story.locationName || 'National',
+        compositeScore,
+        sourceCount: sources.length,
+        url: `${frontendUrl}/stories/${storyId}`,
+      });
+    } catch {}
   }
 }
 
