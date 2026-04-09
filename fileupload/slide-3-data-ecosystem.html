@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TopLine — Intelligence Ecosystem</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0A0E1A;
+    color: #ffffff;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    background: linear-gradient(135deg, #0A0E1A 0%, #111827 40%, #0F172A 100%);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Ambient glows */
+  .glow-1 { position: absolute; width: 400px; height: 400px; background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%); top: -50px; right: 200px; pointer-events: none; }
+  .glow-2 { position: absolute; width: 400px; height: 400px; background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%); bottom: 50px; left: 100px; pointer-events: none; }
+  .glow-3 { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(139,92,246,0.05) 0%, transparent 70%); top: 300px; left: 800px; pointer-events: none; }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 28px 60px 0;
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 18px;
+    color: #fff;
+  }
+  .logo-text {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #ffffff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .logo-sub {
+    font-size: 10px;
+    font-weight: 500;
+    color: #10B981;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .header-stats {
+    display: flex;
+    gap: 32px;
+  }
+  .header-stat {
+    text-align: center;
+  }
+  .header-stat .num {
+    font-size: 32px;
+    font-weight: 800;
+    color: #10B981;
+    line-height: 1;
+  }
+  .header-stat .label {
+    font-size: 10px;
+    color: #64748B;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Title */
+  .title-area {
+    padding: 20px 60px 0;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .title-area h1 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+  }
+  .title-area h1 .white { color: #ffffff; }
+  .title-area h1 .green { color: #10B981; }
+  .title-callout {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 10px;
+  }
+  .callout-zi {
+    width: 32px;
+    height: 32px;
+    background: rgba(59, 130, 246, 0.15);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    color: #3B82F6;
+  }
+  .callout-text {
+    font-size: 13px;
+    color: #60A5FA;
+    font-weight: 600;
+  }
+  .callout-text span {
+    color: #94A3B8;
+    font-weight: 400;
+  }
+
+  /* Main content area */
+  .main-content {
+    flex: 1;
+    display: flex;
+    gap: 20px;
+    padding: 16px 60px 0;
+    position: relative;
+    z-index: 2;
+    min-height: 0;
+  }
+
+  /* Data categories column */
+  .data-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    align-content: start;
+  }
+
+  /* Category block */
+  .cat-block {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 12px;
+    transition: all 0.2s;
+  }
+  .cat-block:hover {
+    border-color: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+  }
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .cat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .cat-name {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .cat-count {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    color: #64748B;
+  }
+
+  .source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .source-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    color: #94A3B8;
+    font-weight: 400;
+  }
+  .source-item.highlighted {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #60A5FA;
+    font-weight: 600;
+  }
+  .source-item.highlighted::after {
+    content: 'ZI';
+    margin-left: auto;
+    font-size: 8px;
+    font-weight: 800;
+    color: #3B82F6;
+    background: rgba(59, 130, 246, 0.2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .source-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+
+  /* Tier badges */
+  .tier-badge {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: auto;
+    letter-spacing: 0.5px;
+  }
+  .tier-1 { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+  .tier-2 { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+  .tier-3 { background: rgba(139, 92, 246, 0.12); color: #A78BFA; }
+
+  /* Category colors */
+  .cat-advertiser .cat-dot, .cat-advertiser .source-dot { background: #EF4444; }
+  .cat-advertiser .cat-name { color: #EF4444; }
+
+  .cat-growth .cat-dot, .cat-growth .source-dot { background: #10B981; }
+  .cat-growth .cat-name { color: #10B981; }
+
+  .cat-intent .cat-dot, .cat-intent .source-dot { background: #8B5CF6; }
+  .cat-intent .cat-name { color: #8B5CF6; }
+
+  .cat-enrichment .cat-dot, .cat-enrichment .source-dot { background: #3B82F6; }
+  .cat-enrichment .cat-name { color: #3B82F6; }
+
+  .cat-market .cat-dot, .cat-market .source-dot { background: #F59E0B; }
+  .cat-market .cat-name { color: #F59E0B; }
+
+  .cat-reputation .cat-dot, .cat-reputation .source-dot { background: #EC4899; }
+  .cat-reputation .cat-name { color: #EC4899; }
+
+  .cat-competitive .cat-dot, .cat-competitive .source-dot { background: #F97316; }
+  .cat-competitive .cat-name { color: #F97316; }
+
+  .cat-social .cat-dot, .cat-social .source-dot { background: #06B6D4; }
+  .cat-social .cat-name { color: #06B6D4; }
+
+  .cat-conversion .cat-dot, .cat-conversion .source-dot { background: #84CC16; }
+  .cat-conversion .cat-name { color: #84CC16; }
+
+  .cat-hiring .cat-dot, .cat-hiring .source-dot { background: #14B8A6; }
+  .cat-hiring .cat-name { color: #14B8A6; }
+
+  .cat-creative .cat-dot, .cat-creative .source-dot { background: #E879F9; }
+  .cat-creative .cat-name { color: #E879F9; }
+
+  .cat-geo .cat-dot, .cat-geo .source-dot { background: #22D3EE; }
+  .cat-geo .cat-name { color: #22D3EE; }
+
+  .cat-macro .cat-dot, .cat-macro .source-dot { background: #A3E635; }
+  .cat-macro .cat-name { color: #A3E635; }
+
+  .cat-crm .cat-dot, .cat-crm .source-dot { background: #FCD34D; }
+  .cat-crm .cat-name { color: #FCD34D; }
+
+  .cat-search .cat-dot, .cat-search .source-dot { background: #FB923C; }
+  .cat-search .cat-name { color: #FB923C; }
+
+  .cat-events .cat-dot, .cat-events .source-dot { background: #C084FC; }
+  .cat-events .cat-name { color: #C084FC; }
+
+  /* Right side funnel */
+  .funnel-panel {
+    width: 360px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .funnel-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #475569;
+    text-align: center;
+  }
+
+  .funnel-stage {
+    border-radius: 14px;
+    padding: 16px 20px;
+    position: relative;
+  }
+  .funnel-stage.ingest {
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(59,130,246,0.03));
+    border: 1px solid rgba(59, 130, 246, 0.15);
+  }
+  .funnel-stage.process {
+    background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.03));
+    border: 1px solid rgba(139, 92, 246, 0.15);
+  }
+  .funnel-stage.score {
+    background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.03));
+    border: 1px solid rgba(245, 158, 11, 0.15);
+  }
+  .funnel-stage.output {
+    background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(16,185,129,0.04));
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .funnel-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .funnel-stage.ingest .funnel-title { color: #60A5FA; }
+  .funnel-stage.process .funnel-title { color: #A78BFA; }
+  .funnel-stage.score .funnel-title { color: #FBBF24; }
+  .funnel-stage.output .funnel-title { color: #34D399; }
+
+  .funnel-desc {
+    font-size: 11px;
+    color: #64748B;
+    line-height: 1.5;
+  }
+  .funnel-metric {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 6px;
+  }
+  .funnel-stage.ingest .funnel-metric { background: rgba(59,130,246,0.1); color: #60A5FA; }
+  .funnel-stage.process .funnel-metric { background: rgba(139,92,246,0.1); color: #A78BFA; }
+  .funnel-stage.score .funnel-metric { background: rgba(245,158,11,0.1); color: #FBBF24; }
+  .funnel-stage.output .funnel-metric { background: rgba(16,185,129,0.12); color: #34D399; }
+
+  .funnel-arrow {
+    text-align: center;
+    color: #1E293B;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .output-final {
+    text-align: center;
+    padding: 20px;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 14px;
+  }
+  .output-final .big-num {
+    font-size: 44px;
+    font-weight: 900;
+    color: #10B981;
+    line-height: 1;
+  }
+  .output-final .big-label {
+    font-size: 13px;
+    color: #34D399;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .output-final .big-sub {
+    font-size: 11px;
+    color: #475569;
+    margin-top: 2px;
+  }
+
+  /* Bottom */
+  .bottom-bar {
+    padding: 12px 60px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+  }
+  .bottom-quote {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .bottom-quote .dim { color: #334155; }
+  .bottom-quote .zi-blue { color: #3B82F6; }
+  .bottom-quote .bright { color: #10B981; }
+  .bottom-right {
+    font-size: 11px;
+    color: #475569;
+    text-align: right;
+  }
+  .bottom-right span {
+    display: block;
+    color: #64748B;
+    font-weight: 600;
+  }
+
+  .footer-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6);
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="glow-1"></div>
+  <div class="glow-2"></div>
+  <div class="glow-3"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">T</div>
+      <div>
+        <div class="logo-text">TOPLINE</div>
+        <div class="logo-sub">ENTERPRISE</div>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="header-stat">
+        <div class="num">90+</div>
+        <div class="label">Data Sources</div>
+      </div>
+      <div class="header-stat">
+        <div class="num">16</div>
+        <div class="label">Signal Categories</div>
+      </div>
+      <div class="header-stat">
+        <div class="num">3</div>
+        <div class="label">Tiers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Title -->
+  <div class="title-area">
+    <h1>
+      <span class="white">The Intelligence </span>
+      <span class="green">Ecosystem</span>
+    </h1>
+    <div class="title-callout">
+      <div class="callout-zi">Zi</div>
+      <div class="callout-text">ZoomInfo <span>is one of 90+ inputs</span></div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main-content">
+    <!-- Data source grid -->
+    <div class="data-grid">
+      <!-- Advertiser Intent -->
+      <div class="cat-block cat-advertiser">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Advertiser Intent</div>
+          <div class="cat-count">3</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#EF4444"></div>Meta Ads Library<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EF4444"></div>Google Ads Transparency<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EF4444"></div>YouTube Ads Detection<span class="tier-badge tier-1">T1</span></div>
+        </div>
+      </div>
+
+      <!-- Local Growth -->
+      <div class="cat-block cat-growth">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Local Growth</div>
+          <div class="cat-count">3</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#10B981"></div>Google Maps<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#10B981"></div>Business Journals<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#10B981"></div>City Permits / Data.gov<span class="tier-badge tier-1">T1</span></div>
+        </div>
+      </div>
+
+      <!-- Pre-Spend Intent -->
+      <div class="cat-block cat-intent">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Pre-Spend Intent</div>
+          <div class="cat-count">3</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#8B5CF6"></div>Bombora<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#8B5CF6"></div>G2 Buyer Intent<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#8B5CF6"></div>6sense<span class="tier-badge tier-1">T1</span></div>
+        </div>
+      </div>
+
+      <!-- Enrichment -->
+      <div class="cat-block cat-enrichment">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Enrichment</div>
+          <div class="cat-count">4</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#3B82F6"></div>Apollo.io<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item highlighted"><div class="source-dot" style="background:#3B82F6"></div>ZoomInfo<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#3B82F6"></div>Hunter.io<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#3B82F6"></div>Lusha<span class="tier-badge tier-2">T2</span></div>
+        </div>
+      </div>
+
+      <!-- Call Conversion -->
+      <div class="cat-block cat-conversion">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Call Conversion</div>
+          <div class="cat-count">3</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#84CC16"></div>CallRail<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#84CC16"></div>Invoca<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#84CC16"></div>WhatConverts<span class="tier-badge tier-1">T1</span></div>
+        </div>
+      </div>
+
+      <!-- Ad Intelligence -->
+      <div class="cat-block cat-competitive">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Ad Intelligence</div>
+          <div class="cat-count">3</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#F97316"></div>MediaRadar<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F97316"></div>Winmo<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F97316"></div>Adbeat<span class="tier-badge tier-2">T2</span></div>
+        </div>
+      </div>
+
+      <!-- Reputation -->
+      <div class="cat-block cat-reputation">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Reputation</div>
+          <div class="cat-count">5</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#EC4899"></div>Birdeye<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EC4899"></div>Google Reviews<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EC4899"></div>Yext<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EC4899"></div>Trustpilot<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#EC4899"></div>BBB Listings<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Hiring Signals -->
+      <div class="cat-block cat-hiring">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Hiring Signals</div>
+          <div class="cat-count">5</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#14B8A6"></div>LinkedIn Jobs<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#14B8A6"></div>Indeed Jobs<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#14B8A6"></div>ZipRecruiter<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#14B8A6"></div>AngelList<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Market & Geo -->
+      <div class="cat-block cat-market">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Market & Geo</div>
+          <div class="cat-count">6</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>Google Trends<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>Nielsen DMA<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>FCC Database<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>SafeGraph<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>Placer.ai<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#F59E0B"></div>Comscore<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Creative Intelligence -->
+      <div class="cat-block cat-creative">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Creative Intel</div>
+          <div class="cat-count">5</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#E879F9"></div>VidTao<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#E879F9"></div>Foreplay.co<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#E879F9"></div>Moat (Oracle)<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#E879F9"></div>AdSpy<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Social Signals -->
+      <div class="cat-block cat-social">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Social Signals</div>
+          <div class="cat-count">6</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>Facebook Pages<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>Instagram<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>X (Twitter)<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>Reddit<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>Nextdoor<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#06B6D4"></div>Brandwatch<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- CRM / Internal -->
+      <div class="cat-block cat-crm">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">CRM & Automation</div>
+          <div class="cat-count">4</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#FCD34D"></div>HubSpot CRM<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FCD34D"></div>Salesforce CRM<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FCD34D"></div>Internal CRM<span class="tier-badge tier-1">T1</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FCD34D"></div>Clay<span class="tier-badge tier-1">T1</span></div>
+        </div>
+      </div>
+
+      <!-- Macro / Economic -->
+      <div class="cat-block cat-macro">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Macro & Economic</div>
+          <div class="cat-count">5</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#A3E635"></div>BLS Employment<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#A3E635"></div>Zillow<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#A3E635"></div>Redfin<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#A3E635"></div>NOAA Weather<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#A3E635"></div>WeatherAPI<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Search Intelligence -->
+      <div class="cat-block cat-search">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Search Intel</div>
+          <div class="cat-count">4</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#FB923C"></div>SEMrush<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FB923C"></div>Ahrefs<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FB923C"></div>SpyFu<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#FB923C"></div>SimilarWeb<span class="tier-badge tier-2">T2</span></div>
+        </div>
+      </div>
+
+      <!-- Digital / Tech -->
+      <div class="cat-block cat-geo">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Tech & Digital</div>
+          <div class="cat-count">4</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#22D3EE"></div>BuiltWith<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#22D3EE"></div>Wappalyzer<span class="tier-badge tier-2">T2</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#22D3EE"></div>VisualPing<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#22D3EE"></div>PageSpeed Insights<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+
+      <!-- Events & Lifecycle -->
+      <div class="cat-block cat-events">
+        <div class="cat-header">
+          <div class="cat-dot"></div>
+          <div class="cat-name">Events & Lifecycle</div>
+          <div class="cat-count">6</div>
+        </div>
+        <div class="source-list">
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>Eventbrite<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>Ticketmaster<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>Crunchbase<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>State Registries<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>SBA Loan Data<span class="tier-badge tier-3">T3</span></div>
+          <div class="source-item"><div class="source-dot" style="background:#C084FC"></div>WHOIS Changes<span class="tier-badge tier-3">T3</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Funnel -->
+    <div class="funnel-panel">
+      <div class="funnel-label">How It Becomes Revenue</div>
+
+      <div class="funnel-stage ingest">
+        <div class="funnel-title">Ingest & Normalize</div>
+        <div class="funnel-desc">90+ sources ingested into a unified signal layer. Every data point tagged, timestamped, and geolocated.</div>
+        <div class="funnel-metric">90+ SOURCES → UNIFIED SIGNALS</div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+
+      <div class="funnel-stage process">
+        <div class="funnel-title">Enrich & Correlate</div>
+        <div class="funnel-desc">Cross-reference signals across categories. Ad launches + hiring + growth = high-confidence intent.</div>
+        <div class="funnel-metric">MULTI-SIGNAL CORRELATION</div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+
+      <div class="funnel-stage score">
+        <div class="funnel-title">Score & Rank</div>
+        <div class="funnel-desc">AI scoring engine weighs timing, channel gaps, competitive pressure, and spend trajectory.</div>
+        <div class="funnel-metric">COMPOSITE REVENUE SCORE</div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+
+      <div class="funnel-stage output">
+        <div class="funnel-title">Deliver Decisions</div>
+        <div class="funnel-desc">Reps get ranked targets with timing, reason to call, and a ready-to-use pitch narrative.</div>
+        <div class="funnel-metric">DECISION-READY OUTPUT</div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+
+      <div class="output-final">
+        <div class="big-num">10–25</div>
+        <div class="big-label">Targets Per Week</div>
+        <div class="big-sub">With pitch, timing & reason</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom -->
+  <div class="bottom-bar">
+    <div class="bottom-quote">
+      <span class="zi-blue">ZoomInfo</span>
+      <span class="dim"> is one data source. </span>
+      <span class="bright">We orchestrate all of them into decisions.</span>
+    </div>
+    <div class="bottom-right">
+      <span>© 2026 TopLine Enterprise</span>
+      All Rights Reserved
+    </div>
+  </div>
+
+  <div class="footer-bar"></div>
+</div>
+</body>
+</html>

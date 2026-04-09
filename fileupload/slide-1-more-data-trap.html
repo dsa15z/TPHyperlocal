@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TopLine — Why More Data Isn't Fixing Sales</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0A0E1A;
+    color: #ffffff;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    background: linear-gradient(135deg, #0A0E1A 0%, #111827 40%, #0F172A 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle grid overlay */
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* Ambient glow */
+  .glow-red {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(239,68,68,0.08) 0%, transparent 70%);
+    top: -100px;
+    left: -100px;
+    pointer-events: none;
+  }
+  .glow-green {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%);
+    bottom: -100px;
+    right: -100px;
+    pointer-events: none;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 40px 80px 0;
+    position: relative;
+    z-index: 2;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 20px;
+    color: #fff;
+  }
+  .logo-text {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #ffffff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .logo-sub {
+    font-size: 11px;
+    font-weight: 500;
+    color: #10B981;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* Title area */
+  .title-area {
+    padding: 40px 80px 0;
+    position: relative;
+    z-index: 2;
+  }
+  .title-area h1 {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+  .title-area h1 .red { color: #EF4444; }
+  .title-area h1 .white { color: #ffffff; }
+  .subtitle {
+    font-size: 18px;
+    color: #64748B;
+    font-weight: 400;
+    max-width: 600px;
+  }
+
+  /* Main content grid */
+  .content {
+    display: grid;
+    grid-template-columns: 1fr 60px 1fr;
+    gap: 0;
+    padding: 40px 80px;
+    position: relative;
+    z-index: 2;
+    align-items: start;
+  }
+
+  /* Left column - The Problem */
+  .problem-side {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-radius: 20px;
+    padding: 40px;
+  }
+  .problem-side .col-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .col-badge-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: #EF4444;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+  .col-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #F1F5F9;
+  }
+
+  /* Tool stack list */
+  .tool-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+  .tool-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    transition: all 0.2s;
+  }
+  .tool-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tool-icon.zi { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+  .tool-icon.intent { background: rgba(168, 85, 247, 0.15); color: #A855F7; }
+  .tool-icon.clay { background: rgba(245, 158, 11, 0.15); color: #F59E0B; }
+  .tool-icon.ai { background: rgba(236, 72, 153, 0.15); color: #EC4899; }
+  .tool-name { font-size: 15px; font-weight: 500; color: #CBD5E1; }
+  .tool-cost {
+    margin-left: auto;
+    font-size: 12px;
+    color: #64748B;
+    font-weight: 500;
+  }
+
+  /* Cascade arrows */
+  .cascade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: 24px 0 28px;
+  }
+  .cascade-arrow {
+    width: 2px;
+    height: 16px;
+    background: rgba(239, 68, 68, 0.3);
+  }
+  .cascade-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #EF4444;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 4px;
+  }
+
+  /* Pain points */
+  .pain-points {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .pain {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.06);
+    border-left: 3px solid rgba(239, 68, 68, 0.4);
+    border-radius: 0 10px 10px 0;
+  }
+  .pain-x {
+    color: #EF4444;
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .pain-text {
+    font-size: 14px;
+    color: #94A3B8;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  /* Center divider */
+  .divider-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding-top: 60px;
+  }
+  .vs-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1E293B, #334155);
+    border: 2px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #64748B;
+    letter-spacing: 1px;
+  }
+  .divider-line {
+    width: 2px;
+    flex: 1;
+    background: linear-gradient(180deg, transparent, rgba(255,255,255,0.06), transparent);
+  }
+
+  /* Right column - The Reality */
+  .reality-side {
+    background: rgba(16, 185, 129, 0.04);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    border-radius: 20px;
+    padding: 40px;
+  }
+  .col-badge-green {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  /* Output comparison */
+  .output-block {
+    margin-bottom: 24px;
+  }
+  .output-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 14px;
+  }
+
+  .signal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .signal-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: rgba(16, 185, 129, 0.04);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+    border-radius: 12px;
+  }
+  .signal-check {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .signal-check svg {
+    width: 14px;
+    height: 14px;
+    stroke: #10B981;
+    fill: none;
+    stroke-width: 3;
+  }
+  .signal-text {
+    font-size: 15px;
+    color: #E2E8F0;
+    font-weight: 500;
+  }
+  .signal-tag {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .tag-live { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+  .tag-ai { background: rgba(139, 92, 246, 0.15); color: #A78BFA; }
+  .tag-scored { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+
+  /* Result comparison */
+  .result-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  .result-box {
+    padding: 20px;
+    border-radius: 14px;
+    text-align: center;
+  }
+  .result-box.bad {
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+  }
+  .result-box.good {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+  .result-number {
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .result-box.bad .result-number { color: #EF4444; }
+  .result-box.good .result-number { color: #10B981; }
+  .result-label {
+    font-size: 12px;
+    color: #64748B;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .result-desc {
+    font-size: 11px;
+    color: #475569;
+    margin-top: 4px;
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 24px 80px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+  }
+  .bottom-quote {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .bottom-quote .dim { color: #334155; }
+  .bottom-quote .bright { color: #EF4444; }
+  .bottom-quote .eq {
+    color: #475569;
+    padding: 0 10px;
+    font-size: 32px;
+  }
+  .bottom-right {
+    font-size: 12px;
+    color: #475569;
+    text-align: right;
+  }
+  .bottom-right span {
+    display: block;
+    color: #64748B;
+    font-weight: 600;
+  }
+
+  /* Footer brand bar */
+  .footer-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #EF4444, #F59E0B, #10B981, #3B82F6, #8B5CF6);
+  }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="glow-red"></div>
+  <div class="glow-green"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">T</div>
+      <div>
+        <div class="logo-text">TOPLINE</div>
+        <div class="logo-sub">ENTERPRISE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Title -->
+  <div class="title-area">
+    <h1><span class="white">Why More Data </span><span class="red">Isn't Fixing Sales</span></h1>
+    <p class="subtitle">Companies stack tools hoping it creates better sales. It doesn't.</p>
+  </div>
+
+  <!-- Main Content -->
+  <div class="content">
+    <!-- LEFT: The Problem -->
+    <div class="problem-side">
+      <div class="col-header">
+        <span class="col-badge-red">TODAY'S REALITY</span>
+        <span class="col-title">What Companies Stack</span>
+      </div>
+
+      <div class="tool-stack">
+        <div class="tool-item">
+          <div class="tool-icon zi">Z</div>
+          <span class="tool-name">ZoomInfo / Apollo</span>
+          <span class="tool-cost">$25K+/yr</span>
+        </div>
+        <div class="tool-item">
+          <div class="tool-icon intent">B</div>
+          <span class="tool-name">Bombora / 6sense Intent</span>
+          <span class="tool-cost">$72K+/yr</span>
+        </div>
+        <div class="tool-item">
+          <div class="tool-icon clay">C</div>
+          <span class="tool-name">Clay / Enrichment</span>
+          <span class="tool-cost">$12K+/yr</span>
+        </div>
+        <div class="tool-item">
+          <div class="tool-icon ai">AI</div>
+          <span class="tool-name">AI SDRs / Outreach Tools</span>
+          <span class="tool-cost">$18K+/yr</span>
+        </div>
+      </div>
+
+      <div class="cascade">
+        <div class="cascade-arrow"></div>
+        <div class="cascade-label">But the result is always the same</div>
+        <div class="cascade-arrow"></div>
+      </div>
+
+      <div class="pain-points">
+        <div class="pain">
+          <span class="pain-x">✕</span>
+          <span class="pain-text">Reps still don't know <strong style="color:#EF4444">who to call</strong></span>
+        </div>
+        <div class="pain">
+          <span class="pain-x">✕</span>
+          <span class="pain-text">No answer for <strong style="color:#EF4444">why now</strong></span>
+        </div>
+        <div class="pain">
+          <span class="pain-x">✕</span>
+          <span class="pain-text">Low conversion despite <strong style="color:#EF4444">$127K+ in tools</strong></span>
+        </div>
+        <div class="pain">
+          <span class="pain-x">✕</span>
+          <span class="pain-text">More data → more complexity → <strong style="color:#EF4444">same results</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: VS -->
+    <div class="divider-col">
+      <div class="divider-line"></div>
+      <div class="vs-badge">VS</div>
+      <div class="divider-line"></div>
+    </div>
+
+    <!-- RIGHT: What Reps Actually Need -->
+    <div class="reality-side">
+      <div class="col-header">
+        <span class="col-badge-green">WHAT REPS NEED</span>
+        <span class="col-title">Decisions, Not Data</span>
+      </div>
+
+      <div class="signal-list">
+        <div class="signal-item">
+          <div class="signal-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="signal-text">Who is spending or growing <em>right now</em></span>
+          <span class="signal-tag tag-live">LIVE</span>
+        </div>
+        <div class="signal-item">
+          <div class="signal-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="signal-text">Who is missing your channel (the wedge)</span>
+          <span class="signal-tag tag-scored">GAP</span>
+        </div>
+        <div class="signal-item">
+          <div class="signal-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="signal-text">Who to call <em>this week</em> — scored & ranked</span>
+          <span class="signal-tag tag-scored">SCORED</span>
+        </div>
+        <div class="signal-item">
+          <div class="signal-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <span class="signal-text">The reason + pitch — ready to use</span>
+          <span class="signal-tag tag-ai">AI</span>
+        </div>
+      </div>
+
+      <!-- Output comparison -->
+      <div class="result-compare">
+        <div class="result-box bad">
+          <div class="result-number">1,000</div>
+          <div class="result-label">ZoomInfo Leads</div>
+          <div class="result-desc">Rep-driven filtering</div>
+        </div>
+        <div class="result-box good">
+          <div class="result-number">10–25</div>
+          <div class="result-label">TopLine Targets</div>
+          <div class="result-desc">Decision-ready</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom -->
+  <div class="bottom-bar">
+    <div class="bottom-quote">
+      <span class="dim">More data</span>
+      <span class="eq">≠</span>
+      <span class="bright">more revenue</span>
+    </div>
+    <div class="bottom-right">
+      <span>© 2026 TopLine Enterprise</span>
+      All Rights Reserved
+    </div>
+  </div>
+
+  <div class="footer-bar"></div>
+</div>
+</body>
+</html>
