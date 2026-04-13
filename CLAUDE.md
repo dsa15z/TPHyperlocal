@@ -1,5 +1,32 @@
 # TopicPulse — Broadcast Newsroom Intelligence Platform
 
+## Product Philosophy — Think Like the Greats
+
+Channel the mindset of the people who changed industries. Every decision — from architecture to a button label — should pass through these lenses:
+
+### Steve Jobs — Obsessive Focus & Taste
+- **Say no to 1,000 things.** The features we don't build are as important as the ones we do. Every screen, every endpoint, every worker must justify its existence. If it doesn't make the product meaningfully better, kill it.
+- **Insanely great or don't bother.** "Good enough" is the enemy. If a feature ships at 70% quality, it damages the whole product. Ship fewer things at 100% rather than many things at 70%.
+- **Simplicity is the ultimate sophistication.** The best interface is one the user doesn't have to think about. The best architecture is one a new engineer can understand in minutes. Complexity is a sign you haven't thought hard enough.
+- **Live at the intersection of technology and the humanities.** We're not building software — we're building tools for journalists who serve communities. Every technical decision must connect back to a newsroom editor catching a breaking story faster and telling it better.
+
+### Jony Ive — Craft & Intentional Design
+- **Care about the parts no one sees.** The Prisma schema, the worker queue logic, the scoring algorithm, the error messages — treat them with the same care as the dashboard UI. Quality is holistic. If the backend is ugly, the product is ugly — you just can't see it yet.
+- **Remove everything unnecessary.** Every field, every option, every configuration toggle is a burden. If you can derive it, don't ask for it. If you can default it, don't expose it. The goal is inevitable design — so obvious it feels like it couldn't be any other way. A newsroom editor has 30 seconds to decide if a story is worth covering — don't waste any of those seconds.
+- **Obsess over details.** The score tooltip. The loading state. The empty state when no stories match a filter. The pipeline health animation. These "small" things are the product. Users don't experience your architecture — they experience these moments.
+- **Materials matter.** PostgreSQL for truth, Redis for speed, BullMQ for reliability, Prisma for clarity. Don't use a technology because it's trendy — use it because its properties match the problem.
+
+### Tony Robbins — Massive Action & Relentless Standards
+- **Raise your standards.** The quality bar is not "does it work?" — it's "would I be proud to demo this to a news director?" What you tolerate becomes your standard. Tolerate no broken windows, no stale knowledge base docs, no flaky sources left unfixed.
+- **Resourcefulness over resources.** Don't wait for the perfect NLP model or the perfect API. Jaccard similarity ships today. Keyword extraction ships today. Build the best possible version with what's available now, then upgrade.
+- **Progress equals happiness.** Ship continuously. Small commits, frequent deploys to Railway and Vercel, visible progress. Momentum creates quality — long branches and big-bang releases create bugs.
+- **Model excellence.** When faced with a design decision, ask: "How would the best newsroom intelligence platform handle this?" Then do that. Don't invent from scratch when proven patterns exist.
+
+**Apply these lenses to every TopicPulse decision in this order:**
+1. **Should we build this at all?** (Jobs — does it help an editor catch a story faster?)
+2. **What's the simplest version that's genuinely great?** (Ive — remove the unnecessary)
+3. **Build it now, build it right, ship it today.** (Robbins — massive action, heuristics before ML)
+
 ## Engineering Principles
 
 1. **Signal over noise** — Every feature must increase the signal-to-noise ratio of breaking local news. If it doesn't help a newsroom editor catch a story faster, it doesn't ship.
