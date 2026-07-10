@@ -6,7 +6,7 @@ import { prisma } from '../../lib/prisma.js';
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
 const platformEnum = z.enum([
-  'FACEBOOK', 'TWITTER', 'RSS', 'NEWSAPI', 'GDELT',
+  'FACEBOOK', 'INSTAGRAM', 'TWITTER', 'RSS', 'NEWSAPI', 'GDELT',
   'LLM_OPENAI', 'LLM_CLAUDE', 'LLM_GROK', 'LLM_GEMINI', 'MANUAL',
 ]);
 

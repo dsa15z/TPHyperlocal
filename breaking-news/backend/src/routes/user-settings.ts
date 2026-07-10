@@ -157,9 +157,9 @@ export async function userSettingsRoutes(app: FastifyInstance, _opts: FastifyPlu
         INSERT INTO "UserTickerSettings" ("userId", speed, "viewId", "activeViewId", "updatedAt")
         VALUES (${payload.userId}, ${speed}, ${viewId}, ${activeViewId}, NOW())
         ON CONFLICT ("userId") DO UPDATE SET
-          speed = COALESCE(${speed}, speed),
-          "viewId" = COALESCE(${viewId}, "viewId"),
-          "activeViewId" = COALESCE(${activeViewId}, "activeViewId"),
+          speed = COALESCE(${speed}, "UserTickerSettings".speed),
+          "viewId" = COALESCE(${viewId}, "UserTickerSettings"."viewId"),
+          "activeViewId" = COALESCE(${activeViewId}, "UserTickerSettings"."activeViewId"),
           "updatedAt" = NOW()
       `;
       return reply.send({ message: 'Settings saved', speed, viewId, activeViewId });
